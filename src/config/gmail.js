@@ -20,4 +20,4 @@ export const GMAIL_SCOPES = [
 ];
 
 // Gmail API discovery document
-export const GMAIL_DISCOVERY_DOC = 'https://www.googleapis.com/$discovery/rest?version=v1'; 
+export const GMAIL_DISCOVERY_DOC = 'https://gmail.googleapis.com/$discovery/rest?version=v1'; 
