@@ -128,8 +128,11 @@ export const sendOrderEmail = async (orderData, customerEmail) => {
         emailHtml
     ].join('\r\n');
     
-    // Encode email for Gmail API using proper Unicode-safe base64url encoding
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+    // Encode email for Gmail API - FIXED Unicode encoding
+    const safeEmailContent = emailContent.replace(/[\u0080-\uFFFF]/g, function(match) {
+        return '&#' + match.charCodeAt(0) + ';';
+    });
+    const encodedEmail = btoa(safeEmailContent)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
@@ -253,8 +256,11 @@ export const sendDepositEmail = async (orderData, customerEmail) => {
         emailHtml
     ].join('\r\n');
     
-    // Encode email for Gmail API using proper Unicode-safe base64url encoding
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+    // Encode email for Gmail API - FIXED Unicode encoding
+    const safeEmailContent = emailContent.replace(/[\u0080-\uFFFF]/g, function(match) {
+        return '&#' + match.charCodeAt(0) + ';';
+    });
+    const encodedEmail = btoa(safeEmailContent)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
