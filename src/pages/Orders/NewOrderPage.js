@@ -606,6 +606,22 @@ const NewOrderPage = () => {
           showSuccess('Order updated successfully!');
         }
       } else {
+        // Get default invoice status from database
+        let defaultInvoiceStatus = 'in_progress';
+        try {
+          const statusesRef = collection(db, 'invoiceStatuses');
+          const statusesSnapshot = await getDocs(statusesRef);
+          const defaultStatus = statusesSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .find(status => status.isDefault);
+          
+          if (defaultStatus) {
+            defaultInvoiceStatus = defaultStatus.value;
+          }
+        } catch (error) {
+          console.warn('Could not fetch default status, using fallback');
+        }
+
         // Create new order
         const orderData = {
           personalInfo,
@@ -615,7 +631,7 @@ const NewOrderPage = () => {
           },
           paymentData: paymentDetails,
           workflowStatus: 'Inprogress', // Add workflowStatus
-          invoiceStatus: 'in_progress', // Add default invoice status
+          invoiceStatus: defaultInvoiceStatus, // Use dynamic default invoice status
           createdAt: new Date(),
           updatedAt: new Date()
         };

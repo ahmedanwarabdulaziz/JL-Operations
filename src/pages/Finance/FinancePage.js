@@ -40,7 +40,8 @@ import {
   PictureAsPdf as PdfIcon,
   Refresh as RefreshIcon,
   DateRange as DateRangeIcon,
-  FilterList as FilterListIcon
+  FilterList as FilterListIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -48,20 +49,12 @@ import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit } from '../../utils/orderCalculations';
 
-// Invoice status options
-const INVOICE_STATUSES = [
-  { value: 'remaining_pickup', label: 'Remaining Pickup', color: '#ff9800' },
-  { value: 'in_progress', label: 'In Progress', color: '#2196f3' },
-  { value: 'done_pending_pickup', label: 'Done Pending Pickup', color: '#9c27b0' },
-  { value: 'done_pending_delivery', label: 'Done Pending Delivery', color: '#673ab7' },
-  { value: 'done_pending_payment', label: 'Done Pending Payment', color: '#f44336' },
-  { value: 'shift_to_next_month', label: 'Shift to Next Month', color: '#607d8b' },
-  { value: 'done', label: 'Done', color: '#4caf50' }
-];
+// Invoice statuses will be loaded dynamically from database
 
 const FinancePage = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -91,10 +84,12 @@ const FinancePage = () => {
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
 
-  // Fetch orders from Firebase
+  // Fetch orders and statuses from Firebase
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      
+      // Fetch orders
       const ordersRef = collection(db, 'orders');
       const q = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
       const querySnapshot = await getDocs(q);
@@ -113,6 +108,29 @@ const FinancePage = () => {
       showError('Failed to fetch orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch invoice statuses from database
+  const fetchInvoiceStatuses = async () => {
+    try {
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const querySnapshot = await getDocs(statusesRef);
+      const statusesData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Sort by sortOrder
+      statusesData.sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1));
+      setInvoiceStatuses(statusesData);
+    } catch (error) {
+      console.error('Error fetching invoice statuses:', error);
+      // Fallback to default statuses if database fetch fails
+      setInvoiceStatuses([
+        { value: 'in_progress', label: 'In Progress', color: '#2196f3' },
+        { value: 'done', label: 'Done', color: '#4caf50' }
+      ]);
     }
   };
 
@@ -223,7 +241,7 @@ const FinancePage = () => {
 
   // Get status info
   const getStatusInfo = (status) => {
-    return INVOICE_STATUSES.find(s => s.value === status) || 
+    return invoiceStatuses.find(s => s.value === status) || 
            { value: status, label: status, color: '#757575' };
   };
 
@@ -241,6 +259,7 @@ const FinancePage = () => {
 
   useEffect(() => {
     fetchOrders();
+    fetchInvoiceStatuses();
   }, []);
 
   if (loading) {
@@ -262,9 +281,24 @@ const FinancePage = () => {
           </Typography>
         </Box>
         <Button
+          variant="outlined"
+          startIcon={<SettingsIcon />}
+          onClick={() => navigate('/status-management')}
+          sx={{ 
+            color: '#274290',
+            borderColor: '#274290',
+            '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
+          }}
+        >
+          Manage Statuses
+        </Button>
+        <Button
           variant="contained"
           startIcon={<RefreshIcon />}
-          onClick={fetchOrders}
+          onClick={() => {
+            fetchOrders();
+            fetchInvoiceStatuses();
+          }}
           sx={{ 
             backgroundColor: '#f27921',
             '&:hover': { backgroundColor: '#e66a1a' }
@@ -273,6 +307,25 @@ const FinancePage = () => {
           Refresh Data
         </Button>
       </Box>
+
+      {/* Status Integration Info */}
+      {invoiceStatuses.length === 0 && (
+        <Alert 
+          severity="info" 
+          sx={{ mb: 3 }}
+          action={
+            <Button 
+              size="small" 
+              onClick={() => navigate('/status-management')}
+              sx={{ color: '#274290' }}
+            >
+              Setup Statuses
+            </Button>
+          }
+        >
+          <strong>No custom statuses found.</strong> Create custom invoice statuses in Status Management for better workflow control.
+        </Alert>
+      )}
 
       {/* Financial Summary Cards - Compact Single Row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -511,7 +564,7 @@ const FinancePage = () => {
                     All Statuses
                   </Box>
                 </MenuItem>
-                {INVOICE_STATUSES.map(status => (
+                {invoiceStatuses.map(status => (
                   <MenuItem key={status.value} value={status.value}>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Box
@@ -586,7 +639,7 @@ const FinancePage = () => {
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {statusFilter !== 'all' && (
                 <Chip
-                  label={`Status: ${INVOICE_STATUSES.find(s => s.value === statusFilter)?.label}`}
+                  label={`Status: ${invoiceStatuses.find(s => s.value === statusFilter)?.label}`}
                   onDelete={() => setStatusFilter('all')}
                   color="primary"
                   size="small"
@@ -826,22 +879,22 @@ const FinancePage = () => {
               onChange={(e) => setEditingStatus(e.target.value)}
               label="Invoice Status"
             >
-              {INVOICE_STATUSES.map(status => (
-                <MenuItem key={status.value} value={status.value}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: '50%',
-                        backgroundColor: status.color,
-                        mr: 2
-                      }}
-                    />
-                    {status.label}
-                  </Box>
-                </MenuItem>
-              ))}
+                          {invoiceStatuses.map(status => (
+              <MenuItem key={status.value} value={status.value}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Box
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      backgroundColor: status.color,
+                      mr: 2
+                    }}
+                  />
+                  {status.label}
+                </Box>
+              </MenuItem>
+            ))}
             </Select>
           </FormControl>
         </DialogContent>
