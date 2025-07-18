@@ -18,6 +18,8 @@ import TreatmentPage from './pages/Treatment/TreatmentPage';
 import MaterialCompaniesPage from './pages/MaterialCompanies/MaterialCompaniesPage';
 import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './pages/Invoice/InvoicePage';
+import FinancePage from './pages/Finance/FinancePage';
+import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
 import RapidInvoiceSettingsPage from './pages/RapidInvoice/RapidInvoiceSettingsPage';
 
@@ -54,6 +56,8 @@ const AppContent = () => {
         <Route path="/material-companies" element={<MaterialCompaniesPage />} />
         <Route path="/platforms" element={<PlatformsPage />} />
         <Route path="/invoices" element={<InvoicePage />} />
+        <Route path="/finance" element={<FinancePage />} />
+        <Route path="/status-management" element={<StatusManagementPage />} />
         <Route path="/data-management" element={<DataManagementPage />} />
         <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>

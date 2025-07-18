@@ -79,6 +79,70 @@ export const getOrderCostBreakdown = (order) => {
 };
 
 /**
+ * Calculate JL internal costs (actual costs to the business)
+ */
+export const calculateOrderCost = (order) => {
+  let totalCost = 0;
+
+  if (order.furnitureData?.groups) {
+    order.furnitureData.groups.forEach(group => {
+      // JL Material costs with tax
+      const jlMaterialPrice = parseFloat(group.materialJLPrice) || 0;
+      const jlMaterialQnty = parseFloat(group.materialJLQnty) || 0;
+      const jlMaterialSubtotal = jlMaterialPrice * jlMaterialQnty;
+      
+      // Get tax rate based on material company
+      let taxRate = 0.13; // Default 13%
+      if (group.materialCompany && group.materialCompany.toLowerCase().includes('charlotte')) {
+        taxRate = 0.02; // 2% for Charlotte
+      }
+      
+      const materialTax = jlMaterialSubtotal * taxRate;
+      const materialTotal = jlMaterialSubtotal + materialTax;
+      totalCost += materialTotal;
+
+      // JL Foam costs (no tax)
+      const jlFoamPrice = parseFloat(group.foamJLPrice) || 0;
+      const foamQnty = parseFloat(group.foamQnty) || 1;
+      totalCost += jlFoamPrice * foamQnty;
+
+      // Other expenses (no tax)
+      totalCost += parseFloat(group.otherExpenses) || 0;
+
+      // Shipping costs (no tax)
+      totalCost += parseFloat(group.shipping) || 0;
+    });
+  }
+
+  // Add extra expenses
+  if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
+    const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
+      return sum + (parseFloat(exp.total) || 0);
+    }, 0);
+    totalCost += extraExpensesTotal;
+  }
+
+  return totalCost;
+};
+
+/**
+ * Calculate profit and profit percentage
+ */
+export const calculateOrderProfit = (order) => {
+  const revenue = calculateOrderTotal(order);
+  const cost = calculateOrderCost(order);
+  const profit = revenue - cost;
+  const profitPercentage = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  return {
+    revenue,
+    cost,
+    profit,
+    profitPercentage
+  };
+};
+
+/**
  * Format furniture details for display across all pages
  */
 export const formatFurnitureDetails = (furnitureGroup) => {

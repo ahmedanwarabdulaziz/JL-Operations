@@ -548,6 +548,7 @@ const NewOrderPage = () => {
             groups: furnitureGroups
           },
           paymentData: paymentDetails,
+          invoiceStatus: orderToEdit.invoiceStatus || 'in_progress', // Preserve invoice status
           updatedAt: new Date()
         };
         
@@ -614,6 +615,7 @@ const NewOrderPage = () => {
           },
           paymentData: paymentDetails,
           workflowStatus: 'Inprogress', // Add workflowStatus
+          invoiceStatus: 'in_progress', // Add default invoice status
           createdAt: new Date(),
           updatedAt: new Date()
         };

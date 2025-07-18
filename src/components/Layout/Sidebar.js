@@ -26,6 +26,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
 const menuItems = [
@@ -37,6 +39,8 @@ const menuItems = [
   { text: 'Material Companies', path: '/material-companies', icon: <BusinessIcon /> },
   { text: 'Platforms', path: '/platforms', icon: <PublicIcon /> },
   { text: 'Invoices', path: '/invoices', icon: <DescriptionIcon /> },
+  { text: 'Finance', path: '/finance', icon: <AccountBalanceIcon /> },
+  { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
   { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
   { text: 'Rapid Invoice Settings', path: '/rapid-invoice-settings', icon: <FlashOnIcon /> },
   { text: 'Data Management', path: '/data-management', icon: <SettingsIcon /> },
