@@ -56,6 +56,7 @@ import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
 import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { calculateOrderTotal } from '../../utils/orderCalculations';
 
 const WorkshopPage = () => {
   const [orders, setOrders] = useState([]);
@@ -172,26 +173,7 @@ const WorkshopPage = () => {
     setFilteredOrders(filtered);
   };
 
-  // Calculate total order value (old method)
-  const calculateOrderTotal = (order) => {
-    let total = 0;
-    
-    if (order.furnitureData?.groups) {
-      order.furnitureData.groups.forEach(group => {
-        total += (parseFloat(group.materialPrice) || 0) * (parseInt(group.materialQnty) || 0);
-        total += (parseFloat(group.labourPrice) || 0) * (parseInt(group.labourQnty) || 0);
-        if (group.foamEnabled) {
-          total += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
-        }
-      });
-    }
-
-    if (order.paymentData?.pickupDeliveryEnabled) {
-      total += parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-    }
-
-    return total;
-  };
+  // Using shared calculateOrderTotal utility for consistency
 
   // Calculate invoice totals (same as Invoice page)
   const calculateInvoiceTotals = (order) => {

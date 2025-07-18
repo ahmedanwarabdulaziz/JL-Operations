@@ -46,6 +46,7 @@ import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc } from 'fir
 import { db } from '../../firebase/config';
 import Step5Review from './steps/Step5Review';
 import FastOrderModal from '../../components/FastOrder/FastOrderModal';
+import { calculateOrderTotal, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -193,28 +194,7 @@ const OrdersPage = () => {
     }
   };
 
-  // Calculate total order value
-  const calculateOrderTotal = (order) => {
-    let total = 0;
-    
-    // Add furniture costs
-    if (order.furnitureData?.groups) {
-      order.furnitureData.groups.forEach(group => {
-        total += (parseFloat(group.materialPrice) || 0) * (parseInt(group.materialQnty) || 0);
-        total += (parseFloat(group.labourPrice) || 0) * (parseInt(group.labourQnty) || 0);
-        if (group.foamEnabled) {
-          total += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
-        }
-      });
-    }
-
-    // Add pickup & delivery cost
-    if (order.paymentData?.pickupDeliveryEnabled) {
-      total += parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-    }
-
-    return total;
-  };
+  // Using shared calculateOrderTotal utility for consistency
 
   // Format date
   const formatDate = (date) => {

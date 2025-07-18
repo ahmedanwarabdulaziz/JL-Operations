@@ -183,8 +183,8 @@ const Step5Review = ({
                       <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
                       <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour || '-'}</Typography>
                     </Box>
-                    {/* Foam Row - all fields in one row, if enabled */}
-                    {group.foamEnabled && (
+                    {/* Foam Row - all fields in one row, if has foam data */}
+                    {(group.foamEnabled || group.foamPrice || group.foamQnty) && (
                       <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Price:</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.foamPrice ? `$${group.foamPrice}` : '-'}</Typography>

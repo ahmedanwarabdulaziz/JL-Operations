@@ -48,6 +48,7 @@ import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/fi
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
+import { calculateOrderTotal, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
 import autoTable from 'jspdf-autotable';
 
 // Register the autoTable plugin
