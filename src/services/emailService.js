@@ -148,7 +148,21 @@ export const sendOrderEmail = async (orderData, customerEmail) => {
     };
   } catch (error) {
     console.error('Error sending email:', error);
-    return { success: false, message: error.message || 'Failed to send email' };
+    console.error('Error details:', {
+      status: error.status,
+      statusText: error.statusText,
+      result: error.result,
+      body: error.body
+    });
+    
+    let errorMessage = 'Failed to send email';
+    if (error.result && error.result.error) {
+      errorMessage = `Gmail API Error: ${error.result.error.message}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    return { success: false, message: errorMessage };
   }
 };
 
