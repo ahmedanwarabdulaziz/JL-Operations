@@ -148,11 +148,15 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
     }
   };
 
-  // Calculate total amount (basic calculation)
+  // Calculate total amount (matches normal order workflow)
   const calculateTotal = () => {
-    const labourWork = orderData.furnitureData.groups[0]?.labourWork || 0;
-    const quantity = orderData.furnitureData.groups[0]?.quantity || 1;
-    return labourWork * quantity;
+    const furniture = orderData.furnitureData.groups[0] || {};
+    
+    const materialTotal = (furniture.materialQnty || 0) * (furniture.materialPrice || 0);
+    const labourTotal = (furniture.labourQnty || 0) * (furniture.labourPrice || 0);
+    const foamTotal = (furniture.foamQnty || 0) * (furniture.foamPrice || 0);
+    
+    return materialTotal + labourTotal + foamTotal;
   };
 
   // Handle modal close

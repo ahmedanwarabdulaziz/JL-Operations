@@ -27,9 +27,24 @@ const RapidInvoiceSettingsPage = () => {
     
     // Furniture Details
     furnitureType: { enabled: true, label: 'Furniture Type', category: 'Furniture' },
-    materialCompany: { enabled: true, label: 'Material Company', category: 'Furniture' },
-    quantity: { enabled: true, label: 'Quantity', category: 'Furniture' },
-    labourWork: { enabled: true, label: 'Labour Work', category: 'Furniture' },
+    
+    // Material Group (grouped toggle)
+    materialGroup: { enabled: true, label: 'Material Section', category: 'Material', isGroup: true },
+    materialCompany: { enabled: true, label: 'Material Company', category: 'Material', parentGroup: 'materialGroup' },
+    materialCode: { enabled: true, label: 'Material Code', category: 'Material', parentGroup: 'materialGroup' },
+    materialQnty: { enabled: true, label: 'Material Quantity', category: 'Material', parentGroup: 'materialGroup' },
+    materialPrice: { enabled: true, label: 'Material Price', category: 'Material', parentGroup: 'materialGroup' },
+    
+    // Labour Group (grouped toggle)
+    labourGroup: { enabled: true, label: 'Labour Section', category: 'Labour', isGroup: true },
+    labourPrice: { enabled: true, label: 'Labour Price', category: 'Labour', parentGroup: 'labourGroup' },
+    labourNote: { enabled: false, label: 'Labour Note', category: 'Labour', parentGroup: 'labourGroup' },
+    labourQnty: { enabled: true, label: 'Labour Quantity', category: 'Labour', parentGroup: 'labourGroup' },
+    
+    // Foam Group (grouped toggle)
+    foamGroup: { enabled: false, label: 'Foam Section', category: 'Foam', isGroup: true },
+    foamPrice: { enabled: false, label: 'Foam Price', category: 'Foam', parentGroup: 'foamGroup' },
+    foamQnty: { enabled: false, label: 'Foam Quantity', category: 'Foam', parentGroup: 'foamGroup' },
     
     // Payment
     deposit: { enabled: true, label: 'Deposit Amount', category: 'Payment' },
@@ -52,15 +67,56 @@ const RapidInvoiceSettingsPage = () => {
     }
   }, []);
 
-  // Handle field toggle
+  // Handle field toggle with group logic
   const handleFieldToggle = (fieldKey) => {
-    setFieldSettings(prev => ({
-      ...prev,
-      [fieldKey]: {
-        ...prev[fieldKey],
-        enabled: !prev[fieldKey].enabled
+    setFieldSettings(prev => {
+      const newSettings = { ...prev };
+      const field = newSettings[fieldKey];
+      const newEnabled = !field.enabled;
+      
+      // Update the toggled field
+      newSettings[fieldKey] = {
+        ...field,
+        enabled: newEnabled
+      };
+      
+      // If this is a group toggle, update all child fields
+      if (field.isGroup) {
+        Object.keys(newSettings).forEach(key => {
+          if (newSettings[key].parentGroup === fieldKey) {
+            newSettings[key] = {
+              ...newSettings[key],
+              enabled: newEnabled
+            };
+          }
+        });
       }
-    }));
+      
+      // If this is a child field being disabled, check if parent should be disabled
+      if (!newEnabled && field.parentGroup) {
+        const siblings = Object.keys(newSettings).filter(key => 
+          newSettings[key].parentGroup === field.parentGroup && key !== fieldKey
+        );
+        const anyChildEnabled = siblings.some(key => newSettings[key].enabled);
+        
+        if (!anyChildEnabled) {
+          newSettings[field.parentGroup] = {
+            ...newSettings[field.parentGroup],
+            enabled: false
+          };
+        }
+      }
+      
+      // If this is a child field being enabled, make sure parent is enabled
+      if (newEnabled && field.parentGroup) {
+        newSettings[field.parentGroup] = {
+          ...newSettings[field.parentGroup],
+          enabled: true
+        };
+      }
+      
+      return newSettings;
+    });
   };
 
   // Save settings
@@ -144,8 +200,11 @@ const RapidInvoiceSettingsPage = () => {
                     sx={{ 
                       display: 'block', 
                       mb: 1,
+                      ml: field.parentGroup ? 3 : 0, // Indent child fields
                       '& .MuiFormControlLabel-label': {
-                        fontSize: '0.9rem'
+                        fontSize: field.isGroup ? '1rem' : '0.9rem',
+                        fontWeight: field.isGroup ? 'bold' : 'normal',
+                        color: field.isGroup ? '#274290' : 'inherit'
                       }
                     }}
                   />
