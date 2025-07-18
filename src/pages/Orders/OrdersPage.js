@@ -37,13 +37,15 @@ import {
   Receipt as ReceiptIcon,
   CalendarToday as CalendarIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon
+  Phone as PhoneIcon,
+  FlashOn as FlashOnIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
-import { collection, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import Step5Review from './steps/Step5Review';
+import FastOrderModal from '../../components/FastOrder/FastOrderModal';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -55,6 +57,7 @@ const OrdersPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [fastOrderModalOpen, setFastOrderModalOpen] = useState(false);
 
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
@@ -245,6 +248,24 @@ const OrdersPage = () => {
     }
   };
 
+  // Handle fast order submission
+  const handleFastOrderSubmit = async (orderData) => {
+    try {
+      // Add the order to Firebase
+      const docRef = await addDoc(collection(db, 'orders'), orderData);
+      
+      // Refresh the orders list
+      await fetchOrders();
+      
+      showSuccess('Fast order created successfully!');
+      setFastOrderModalOpen(false);
+    } catch (error) {
+      console.error('Error creating fast order:', error);
+      showError('Failed to create fast order. Please try again.');
+      throw error; // Re-throw to let the modal handle it
+    }
+  };
+
   // Get status chip color
   const getStatusColor = (order) => {
     const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
@@ -315,22 +336,40 @@ const OrdersPage = () => {
             Manage and review all customer orders • Click column headers to sort
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/orders/new')}
-          sx={{
-            minWidth: 150,
-            px: 3,
-            backgroundColor: '#274290',
-            '&:hover': {
-              backgroundColor: '#1e2d5a'
-            },
-            flexShrink: 0
-          }}
-        >
-          Add Order
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<FlashOnIcon />}
+            onClick={() => setFastOrderModalOpen(true)}
+            sx={{
+              minWidth: 150,
+              px: 3,
+              backgroundColor: '#f27921',
+              '&:hover': {
+                backgroundColor: '#e06810'
+              },
+              flexShrink: 0
+            }}
+          >
+            Fast Order
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/orders/new')}
+            sx={{
+              minWidth: 150,
+              px: 3,
+              backgroundColor: '#274290',
+              '&:hover': {
+                backgroundColor: '#1e2d5a'
+              },
+              flexShrink: 0
+            }}
+          >
+            Add Order
+          </Button>
+        </Box>
       </Box>
 
       {/* Search and Stats */}
@@ -611,6 +650,13 @@ const OrdersPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Fast Order Modal */}
+      <FastOrderModal
+        open={fastOrderModalOpen}
+        onClose={() => setFastOrderModalOpen(false)}
+        onSubmit={handleFastOrderSubmit}
+      />
     </Box>
   );
 };

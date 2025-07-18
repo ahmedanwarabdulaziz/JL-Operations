@@ -19,6 +19,7 @@ import MaterialCompaniesPage from './pages/MaterialCompanies/MaterialCompaniesPa
 import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './pages/Invoice/InvoicePage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
+import RapidInvoiceSettingsPage from './pages/RapidInvoice/RapidInvoiceSettingsPage';
 
 const AppContent = () => {
   const { user, loading } = useAuth();
@@ -54,6 +55,7 @@ const AppContent = () => {
         <Route path="/platforms" element={<PlatformsPage />} />
         <Route path="/invoices" element={<InvoicePage />} />
         <Route path="/data-management" element={<DataManagementPage />} />
+        <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>
     </MainLayout>
   );
