@@ -118,19 +118,22 @@ export const sendOrderEmail = async (orderData, customerEmail) => {
     // Generate the email HTML content
     const emailHtml = generateOrderEmailTemplate(orderData);
     
-    // Create email content with HTML
+    // Create email content with proper RFC2822 format
     const emailContent = [
         `From: "${GMAIL_CONFIG.FROM_NAME}" <${gmailUser?.email || GMAIL_CONFIG.FROM_EMAIL}>`,
-        'Content-Type: text/html; charset="UTF-8"',
-        'MIME-Version: 1.0',
         `To: ${customerEmail}`,
         `Subject: Your JL Upholstery Service Quote - Invoice #${orderData.orderDetails.billInvoice}`,
-        '',
+        'MIME-Version: 1.0',
+        'Content-Type: text/html; charset="UTF-8"',
+        '', // Empty line to separate headers from body
         emailHtml
     ].join('\r\n');
     
-    // Encode email for Gmail API (handle Unicode characters)
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // Encode email for Gmail API using proper base64url encoding
+    const encodedEmail = btoa(emailContent)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
     
     // Send email using Gmail API
     const response = await window.gapi.client.gmail.users.messages.send({
