@@ -45,7 +45,6 @@ const initializeGmailAPI = async () => {
       try {
         clearTimeout(timeout);
         await window.gapi.client.init({
-          apiKey: GMAIL_CONFIG.API_KEY,
           discoveryDocs: [GMAIL_DISCOVERY_DOC],
         });
         resolve();
