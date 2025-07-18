@@ -128,8 +128,8 @@ export const sendOrderEmail = async (orderData, customerEmail) => {
         emailHtml
     ].join('\r\n');
     
-    // Encode email for Gmail API using proper base64url encoding
-    const encodedEmail = btoa(emailContent)
+    // Encode email for Gmail API using proper Unicode-safe base64url encoding
+    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
@@ -253,8 +253,11 @@ export const sendDepositEmail = async (orderData, customerEmail) => {
         emailHtml
     ].join('\r\n');
     
-    // Encode email for Gmail API (handle Unicode characters)
-    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // Encode email for Gmail API using proper Unicode-safe base64url encoding
+    const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
     
     // Send email using Gmail API
     const response = await window.gapi.client.gmail.users.messages.send({
