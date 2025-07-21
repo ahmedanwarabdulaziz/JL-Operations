@@ -48,11 +48,161 @@ import {
   Save as SaveIcon,
   Refresh as RefreshIcon,
   Warning as WarningIcon,
-  MonetizationOn as MonetizationOnIcon
+  MonetizationOn as MonetizationOnIcon,
+  DragIndicator as DragIndicatorIcon
 } from '@mui/icons-material';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNotification } from '../../components/Common/NotificationSystem';
+
+// Sortable Table Row Component
+const SortableTableRow = ({ 
+  status, 
+  statusStats, 
+  handleEditStatus, 
+  handleDeleteStatus, 
+  deleting 
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: status.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow 
+      ref={setNodeRef} 
+      style={style} 
+      hover={!isDragging}
+      sx={{ 
+        cursor: isDragging ? 'grabbing' : 'default',
+        backgroundColor: isDragging ? '#f5f5f5' : 'inherit'
+      }}
+    >
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <IconButton
+            {...attributes}
+            {...listeners}
+            size="small"
+            sx={{ 
+              cursor: 'grab',
+              color: '#666',
+              mr: 1,
+              '&:active': { cursor: 'grabbing' }
+            }}
+          >
+            <DragIndicatorIcon />
+          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Chip
+              label={status.label}
+              sx={{
+                backgroundColor: status.color,
+                color: 'white',
+                fontWeight: 'bold',
+                mr: 1
+              }}
+            />
+            {status.isEndState && (
+              <Tooltip title={`End State: ${status.endStateType}`}>
+                {status.endStateType === 'done' ? 
+                  <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 16 }} /> :
+                  <CancelIcon sx={{ color: '#f44336', fontSize: 16 }} />
+                }
+              </Tooltip>
+            )}
+          </Box>
+        </Box>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2">
+          {status.description || 'No description'}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        {status.isEndState ? (
+          <Chip 
+            label={`END: ${status.endStateType}`}
+            size="small"
+            color={status.endStateType === 'done' ? 'success' : 'error'}
+          />
+        ) : (
+          <Chip 
+            label="ACTIVE" 
+            size="small" 
+            sx={{ backgroundColor: '#2196f3', color: 'white' }}
+          />
+        )}
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+          {statusStats[status.value] || 0} orders
+        </Typography>
+      </TableCell>
+      <TableCell>
+        {status.isDefault && (
+          <Chip 
+            label="DEFAULT" 
+            size="small" 
+            sx={{ backgroundColor: '#f27921', color: 'white' }}
+          />
+        )}
+      </TableCell>
+      <TableCell align="center">
+        <IconButton 
+          size="small" 
+          onClick={() => handleEditStatus(status)}
+          sx={{ color: '#274290' }}
+        >
+          <EditIcon />
+        </IconButton>
+        <IconButton 
+          size="small" 
+          onClick={() => handleDeleteStatus(status)}
+          disabled={deleting === status.id}
+          sx={{ 
+            color: deleting === status.id ? '#ccc' : '#f44336',
+            '&:disabled': { color: '#ccc' }
+          }}
+        >
+          {deleting === status.id ? (
+            <CircularProgress size={16} />
+          ) : (
+            <DeleteIcon />
+          )}
+        </IconButton>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 const StatusManagementPage = () => {
   const [statuses, setStatuses] = useState([]);
@@ -65,6 +215,8 @@ const StatusManagementPage = () => {
   const [selectedOrderForStatusChange, setSelectedOrderForStatusChange] = useState(null);
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState('');
 
   const [statusForm, setStatusForm] = useState({
     label: '',
@@ -78,6 +230,14 @@ const StatusManagementPage = () => {
   });
 
   const { showSuccess, showError, showConfirm } = useNotification();
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Predefined colors for status selection
   const statusColors = [
@@ -150,6 +310,7 @@ const StatusManagementPage = () => {
 
   const handleCreateStatus = () => {
     setEditingStatus(null);
+    const maxSortOrder = statuses.length > 0 ? Math.max(...statuses.map(s => s.sortOrder || 0)) : 0;
     setStatusForm({
       label: '',
       value: '',
@@ -158,7 +319,7 @@ const StatusManagementPage = () => {
       isEndState: false,
       endStateType: '',
       isDefault: false,
-      sortOrder: statuses.length + 1
+      sortOrder: maxSortOrder + 1
     });
     setDialogOpen(true);
   };
@@ -179,11 +340,24 @@ const StatusManagementPage = () => {
   };
 
   const handleSaveStatus = async () => {
+    if (saving) return; // Prevent double-clicks
+    
     try {
+      setSaving(true);
+      console.log('Save button clicked, form data:', statusForm);
+      
       // Validation
       if (!statusForm.label || !statusForm.value) {
         showError('Label and value are required');
         return;
+      }
+
+      // Auto-generate value from label if empty
+      if (!statusForm.value && statusForm.label) {
+        setStatusForm(prev => ({
+          ...prev,
+          value: prev.label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+        }));
       }
 
       // Check for duplicate values
@@ -202,9 +376,18 @@ const StatusManagementPage = () => {
       }
 
       const statusData = {
-        ...statusForm,
+        label: statusForm.label.trim(),
+        value: statusForm.value.trim(),
+        color: statusForm.color,
+        description: statusForm.description.trim(),
+        isEndState: Boolean(statusForm.isEndState),
+        endStateType: statusForm.isEndState ? statusForm.endStateType : '',
+        isDefault: Boolean(statusForm.isDefault),
+        sortOrder: parseInt(statusForm.sortOrder) || 1,
         updatedAt: new Date()
       };
+
+      console.log('Saving status data:', statusData);
 
       if (editingStatus) {
         // Update existing status
@@ -227,7 +410,9 @@ const StatusManagementPage = () => {
       fetchStatuses();
     } catch (error) {
       console.error('Error saving status:', error);
-      showError('Failed to save status');
+      showError(`Failed to save status: ${error.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -237,47 +422,62 @@ const StatusManagementPage = () => {
       
       // Remove default from all statuses
       statuses.forEach(status => {
-        if (status.isDefault) {
+        if (status.isDefault && status.id !== currentStatusId) {
           const statusRef = doc(db, 'invoiceStatuses', status.id);
           batch.update(statusRef, { isDefault: false });
         }
       });
 
-      // Set new default (only if not editing current status)
-      if (currentStatusId) {
-        const statusRef = doc(db, 'invoiceStatuses', currentStatusId);
-        batch.update(statusRef, { isDefault: true });
-      }
-
       await batch.commit();
+      console.log('Default status updated successfully');
     } catch (error) {
       console.error('Error setting default status:', error);
+      throw error; // Re-throw to handle in calling function
     }
   };
 
   const handleDeleteStatus = async (status) => {
+    if (deleting === status.id) return; // Prevent double-clicks
+    
     try {
+      setDeleting(status.id);
+      console.log('Delete status clicked:', status);
+      
       // Check if status is in use
       const ordersUsingStatus = orders.filter(order => order.invoiceStatus === status.value);
+      console.log('Orders using this status:', ordersUsingStatus.length);
       
       if (ordersUsingStatus.length > 0) {
-        showError(`Cannot delete status. It's currently used by ${ordersUsingStatus.length} orders.`);
+        showError(`Cannot delete status "${status.label}". It's currently used by ${ordersUsingStatus.length} orders.`);
+        return;
+      }
+
+      // Check if it's the default status
+      if (status.isDefault) {
+        showError('Cannot delete the default status. Please set another status as default first.');
         return;
       }
 
       const confirmed = await showConfirm(
         'Delete Status',
-        `Are you sure you want to delete the status "${status.label}"?`
+        `Are you sure you want to delete the status "${status.label}"? This action cannot be undone.`
       );
 
+      console.log('User confirmed deletion:', confirmed);
+
       if (confirmed) {
+        console.log('Attempting to delete status with ID:', status.id);
         await deleteDoc(doc(db, 'invoiceStatuses', status.id));
-        showSuccess('Status deleted successfully');
+        showSuccess(`Status "${status.label}" deleted successfully`);
         fetchStatuses();
+      } else {
+        console.log('User cancelled deletion');
       }
     } catch (error) {
       console.error('Error deleting status:', error);
-      showError('Failed to delete status');
+      showError(`Failed to delete status: ${error.message}`);
+    } finally {
+      setDeleting('');
     }
   };
 
@@ -330,6 +530,38 @@ const StatusManagementPage = () => {
     } catch (error) {
       console.error('Error updating order status:', error);
       showError('Failed to update order status');
+    }
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = statuses.findIndex((status) => status.id === active.id);
+      const newIndex = statuses.findIndex((status) => status.id === over.id);
+
+      const newStatuses = arrayMove(statuses, oldIndex, newIndex);
+      
+      // Update local state immediately for smooth UI
+      setStatuses(newStatuses);
+
+      try {
+        // Update sort orders in database
+        const batch = writeBatch(db);
+        
+        newStatuses.forEach((status, index) => {
+          const statusRef = doc(db, 'invoiceStatuses', status.id);
+          batch.update(statusRef, { sortOrder: index + 1 });
+        });
+
+        await batch.commit();
+        showSuccess('Status order updated successfully');
+      } catch (error) {
+        console.error('Error updating status order:', error);
+        showError('Failed to update status order');
+        // Revert local state if database update fails
+        fetchStatuses();
+      }
     }
   };
 
@@ -427,101 +659,62 @@ const StatusManagementPage = () => {
         {/* Status List */}
         <Grid item xs={12} lg={8}>
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ mb: 3, color: '#274290', fontWeight: 'bold' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
               Invoice Statuses
             </Typography>
             
-            <TableContainer>
-              <Table>
-                <TableHead sx={{ backgroundColor: '#274290' }}>
-                  <TableRow>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Usage</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Default</TableCell>
-                    <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {statuses.map((status) => (
-                    <TableRow key={status.id} hover>
-                      <TableCell>
+            <Alert 
+              severity="info" 
+              sx={{ mb: 3 }}
+              icon={<DragIndicatorIcon />}
+            >
+              <strong>Drag & Drop:</strong> You can reorder statuses by dragging the 
+              <DragIndicatorIcon sx={{ fontSize: 16, mx: 0.5, verticalAlign: 'middle' }} /> 
+              handle next to each status name.
+            </Alert>
+            
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <TableContainer>
+                <Table>
+                  <TableHead sx={{ backgroundColor: '#274290' }}>
+                    <TableRow>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Chip
-                            label={status.label}
-                            sx={{
-                              backgroundColor: status.color,
-                              color: 'white',
-                              fontWeight: 'bold',
-                              mr: 1
-                            }}
-                          />
-                          {status.isEndState && (
-                            <Tooltip title={`End State: ${status.endStateType}`}>
-                              {status.endStateType === 'done' ? 
-                                <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 16 }} /> :
-                                <CancelIcon sx={{ color: '#f44336', fontSize: 16 }} />
-                              }
-                            </Tooltip>
-                          )}
+                          <DragIndicatorIcon sx={{ mr: 1, opacity: 0.7 }} />
+                          Status
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {status.description || 'No description'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {status.isEndState ? (
-                          <Chip 
-                            label={`END: ${status.endStateType}`}
-                            size="small"
-                            color={status.endStateType === 'done' ? 'success' : 'error'}
-                          />
-                        ) : (
-                          <Chip 
-                            label="ACTIVE" 
-                            size="small" 
-                            sx={{ backgroundColor: '#2196f3', color: 'white' }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                          {statusStats[status.value] || 0} orders
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {status.isDefault && (
-                          <Chip 
-                            label="DEFAULT" 
-                            size="small" 
-                            sx={{ backgroundColor: '#f27921', color: 'white' }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleEditStatus(status)}
-                          sx={{ color: '#274290' }}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleDeleteStatus(status)}
-                          sx={{ color: '#f44336' }}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Usage</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Default</TableCell>
+                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <SortableContext 
+                    items={statuses.map(status => status.id)} 
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <TableBody>
+                      {statuses.map((status) => (
+                        <SortableTableRow
+                          key={status.id}
+                          status={status}
+                          statusStats={statusStats}
+                          handleEditStatus={handleEditStatus}
+                          handleDeleteStatus={handleDeleteStatus}
+                          deleting={deleting}
+                        />
+                      ))}
+                    </TableBody>
+                  </SortableContext>
+                </Table>
+              </TableContainer>
+            </DndContext>
           </Paper>
         </Grid>
 
@@ -592,7 +785,15 @@ const StatusManagementPage = () => {
       </Grid>
 
       {/* Status Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={dialogOpen} 
+        onClose={() => {
+          setDialogOpen(false);
+          setSaving(false);
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>
           {editingStatus ? 'Edit Status' : 'Create New Status'}
         </DialogTitle>
@@ -603,7 +804,15 @@ const StatusManagementPage = () => {
                 fullWidth
                 label="Status Label"
                 value={statusForm.label}
-                onChange={(e) => setStatusForm({ ...statusForm, label: e.target.value })}
+                onChange={(e) => {
+                  const label = e.target.value;
+                  const autoValue = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                  setStatusForm({ 
+                    ...statusForm, 
+                    label: label,
+                    value: autoValue
+                  });
+                }}
                 placeholder="e.g., In Progress"
                 required
               />
@@ -614,10 +823,10 @@ const StatusManagementPage = () => {
                 fullWidth
                 label="Status Value"
                 value={statusForm.value}
-                onChange={(e) => setStatusForm({ ...statusForm, value: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                onChange={(e) => setStatusForm({ ...statusForm, value: e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') })}
                 placeholder="e.g., in_progress"
                 required
-                helperText="Auto-generated from label"
+                helperText="Auto-generated from label (can be edited)"
               />
             </Grid>
 
@@ -729,18 +938,27 @@ const StatusManagementPage = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>
+          <Button 
+            onClick={() => {
+              setDialogOpen(false);
+              setSaving(false);
+            }}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button 
             onClick={handleSaveStatus}
             variant="contained"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
             sx={{ 
               backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' }
+              '&:hover': { backgroundColor: '#e66a1a' },
+              '&:disabled': { backgroundColor: '#ccc' }
             }}
           >
-            {editingStatus ? 'Update' : 'Create'} Status
+            {saving ? 'Saving...' : (editingStatus ? 'Update' : 'Create')} Status
           </Button>
         </DialogActions>
       </Dialog>

@@ -27,7 +27,11 @@ import {
   Card,
   CardContent,
   InputAdornment,
-  Divider
+  Divider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -44,7 +48,9 @@ import {
   Web as WebIcon,
   Percent as PercentIcon,
   LocationOn as LocationIcon,
-  Notes as NotesIcon
+  Notes as NotesIcon,
+  AccountBox as AccountBoxIcon,
+  Remove as RemoveIcon
 } from '@mui/icons-material';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -84,11 +90,23 @@ const MaterialCompaniesPage = () => {
     address: '',
     website: '',
     taxRate: 13,
-    notes: ''
+    notes: '',
+    customerIds: []
   });
 
   // Form validation
   const [errors, setErrors] = useState({});
+
+  // Customer ID types
+  const customerIdTypes = [
+    { value: 'account_number', label: 'Account Number' },
+    { value: 'customer_id', label: 'Customer ID' },
+    { value: 'vendor_code', label: 'Vendor Code' },
+    { value: 'reference_number', label: 'Reference Number' },
+    { value: 'client_code', label: 'Client Code' },
+    { value: 'partner_id', label: 'Partner ID' },
+    { value: 'other', label: 'Other' }
+  ];
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -236,7 +254,8 @@ const MaterialCompaniesPage = () => {
         address: company.address || '',
         website: company.website || '',
         taxRate: company.taxRate || 13,
-        notes: company.notes || ''
+        notes: company.notes || '',
+        customerIds: company.customerIds || []
       });
     } else {
       setEditingCompany(null);
@@ -248,7 +267,8 @@ const MaterialCompaniesPage = () => {
         address: '',
         website: '',
         taxRate: 13,
-        notes: ''
+        notes: '',
+        customerIds: []
       });
     }
     setErrors({});
@@ -266,7 +286,8 @@ const MaterialCompaniesPage = () => {
       address: '',
       website: '',
       taxRate: 13,
-      notes: ''
+      notes: '',
+      customerIds: []
     });
     setErrors({});
   };
@@ -276,6 +297,33 @@ const MaterialCompaniesPage = () => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  // Customer ID management functions
+  const addCustomerId = () => {
+    setFormData(prev => ({
+      ...prev,
+      customerIds: [
+        ...prev.customerIds,
+        { id: Date.now(), type: 'account_number', value: '', notes: '' }
+      ]
+    }));
+  };
+
+  const removeCustomerId = (idToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      customerIds: prev.customerIds.filter(item => item.id !== idToRemove)
+    }));
+  };
+
+  const updateCustomerId = (id, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      customerIds: prev.customerIds.map(item =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    }));
   };
 
   const handleSubmit = async () => {
@@ -913,6 +961,168 @@ const MaterialCompaniesPage = () => {
                 </Card>
               </Grid>
 
+              {/* Customer Account Information Section */}
+              <Grid item xs={12}>
+                <Card 
+                  variant="outlined" 
+                  sx={{ 
+                    border: '2px solid #e3f2fd',
+                    borderRadius: 2
+                  }}
+                >
+                  <CardContent sx={{ pb: '16px !important' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography 
+                        variant="subtitle1" 
+                        sx={{ 
+                          fontWeight: 600,
+                          color: '#274290',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1
+                        }}
+                      >
+                        <AccountBoxIcon sx={{ fontSize: 20 }} />
+                        Customer Account Information
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<AddIcon />}
+                        onClick={addCustomerId}
+                        sx={{
+                          borderColor: '#274290',
+                          color: '#274290',
+                          '&:hover': {
+                            borderColor: '#1e2d5a',
+                            backgroundColor: '#f5f8ff'
+                          }
+                        }}
+                      >
+                        Add ID
+                      </Button>
+                    </Box>
+                    
+                    {formData.customerIds.length === 0 ? (
+                      <Alert severity="info" sx={{ mt: 1 }}>
+                        Add your customer IDs, account numbers, or reference codes for this company. 
+                        You can have multiple IDs for different purposes.
+                      </Alert>
+                    ) : (
+                      <Grid container spacing={2}>
+                        {formData.customerIds.map((customerId, index) => (
+                          <Grid item xs={12} key={customerId.id}>
+                            <Card 
+                              variant="outlined" 
+                              sx={{ 
+                                border: '1px solid #e0e0e0',
+                                borderRadius: 1,
+                                backgroundColor: '#fafafa'
+                              }}
+                            >
+                              <CardContent sx={{ pb: '8px !important', p: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                    Customer ID #{index + 1}
+                                  </Typography>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => removeCustomerId(customerId.id)}
+                                    sx={{ color: '#f44336', ml: 1 }}
+                                  >
+                                    <RemoveIcon />
+                                  </IconButton>
+                                </Box>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} sm={4}>
+                                    <TextField
+                                      fullWidth
+                                      select
+                                      label="ID Type"
+                                      value={customerId.type}
+                                      onChange={(e) => updateCustomerId(customerId.id, 'type', e.target.value)}
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                          '&:hover fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                          '&.Mui-focused fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                        },
+                                        '& .MuiInputLabel-root.Mui-focused': {
+                                          color: '#274290',
+                                        },
+                                      }}
+                                    >
+                                      {customerIdTypes.map((option) => (
+                                        <MenuItem key={option.value} value={option.value}>
+                                          {option.label}
+                                        </MenuItem>
+                                      ))}
+                                    </TextField>
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <TextField
+                                      fullWidth
+                                      label="ID Value"
+                                      value={customerId.value}
+                                      onChange={(e) => updateCustomerId(customerId.id, 'value', e.target.value)}
+                                      size="small"
+                                      placeholder="Enter your ID/account number"
+                                      variant="outlined"
+                                      sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                          '&:hover fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                          '&.Mui-focused fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                        },
+                                        '& .MuiInputLabel-root.Mui-focused': {
+                                          color: '#274290',
+                                        },
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} sm={4}>
+                                    <TextField
+                                      fullWidth
+                                      label="Notes (Optional)"
+                                      value={customerId.notes}
+                                      onChange={(e) => updateCustomerId(customerId.id, 'notes', e.target.value)}
+                                      size="small"
+                                      placeholder="Additional details"
+                                      variant="outlined"
+                                      sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                          '&:hover fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                          '&.Mui-focused fieldset': {
+                                            borderColor: '#274290',
+                                          },
+                                        },
+                                        '& .MuiInputLabel-root.Mui-focused': {
+                                          color: '#274290',
+                                        },
+                                      }}
+                                    />
+                                  </Grid>
+                                </Grid>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+
               {/* Address & Notes Section */}
               <Grid item xs={12}>
                 <Card 
@@ -1127,6 +1337,32 @@ const MaterialCompaniesPage = () => {
                     <Typography variant="body1" gutterBottom>
                       {viewingCompany.notes}
                     </Typography>
+                  </Box>
+                )}
+                {viewingCompany.customerIds && viewingCompany.customerIds.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                      Customer Account Information
+                    </Typography>
+                    <Box sx={{ mt: 1 }}>
+                      {viewingCompany.customerIds.map((customerId, index) => (
+                        <Card key={index} variant="outlined" sx={{ mb: 1, border: '1px solid #e0e0e0' }}>
+                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
+                              {customerIdTypes.find(type => type.value === customerId.type)?.label || customerId.type}
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
+                              {customerId.value}
+                            </Typography>
+                            {customerId.notes && (
+                              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                {customerId.notes}
+                              </Typography>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
                   </Box>
                 )}
                 <Box sx={{ mt: 2 }}>

@@ -50,12 +50,14 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  const showConfirm = (title, message, onConfirm) => {
-    setConfirmDialog({
-      open: true,
-      title,
-      message,
-      onConfirm
+  const showConfirm = (title, message) => {
+    return new Promise((resolve) => {
+      setConfirmDialog({
+        open: true,
+        title,
+        message,
+        onConfirm: resolve
+      });
     });
   };
 
@@ -64,14 +66,17 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const handleConfirmClose = () => {
+    if (confirmDialog.onConfirm) {
+      confirmDialog.onConfirm(false); // User cancelled
+    }
     setConfirmDialog(prev => ({ ...prev, open: false }));
   };
 
   const handleConfirm = () => {
     if (confirmDialog.onConfirm) {
-      confirmDialog.onConfirm();
+      confirmDialog.onConfirm(true); // User confirmed
     }
-    handleConfirmClose();
+    setConfirmDialog(prev => ({ ...prev, open: false }));
   };
 
   const value = {

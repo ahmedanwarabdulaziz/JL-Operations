@@ -183,11 +183,11 @@ const Step5Review = ({
                       <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
                       <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour || '-'}</Typography>
                     </Box>
-                    {/* Foam Row - all fields in one row, if has foam data */}
-                    {(group.foamEnabled || group.foamPrice || group.foamQnty) && (
+                    {/* Foam Row - all fields in one row, only if foam price has value */}
+                    {group.foamPrice && (
                       <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Price:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.foamPrice ? `$${group.foamPrice}` : '-'}</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.foamPrice}</Typography>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Thickness:</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamThickness || '-'}</Typography>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Note:</Typography>
@@ -196,11 +196,13 @@ const Step5Review = ({
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam || '-'}</Typography>
                       </Box>
                     )}
-                    {/* Customer Note */}
-                    <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e3f2fd', width: '100%' }}>
-                      <Typography variant="caption" color="grey.700" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, mb: 1, textAlign: 'left', fontSize: 13 }}>Customer Note</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: 'italic', color: 'grey.900', mt: 0.5, textAlign: 'left', fontSize: 15 }}>{group.customerNote || '-'}</Typography>
-                    </Box>
+                    {/* Customer Note - only if has value */}
+                    {group.customerNote && (
+                      <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e3f2fd', width: '100%' }}>
+                        <Typography variant="caption" color="grey.700" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, mb: 1, textAlign: 'left', fontSize: 13 }}>Customer Note</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: 'italic', color: 'grey.900', mt: 0.5, textAlign: 'left', fontSize: 15 }}>{group.customerNote}</Typography>
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               </Box>
