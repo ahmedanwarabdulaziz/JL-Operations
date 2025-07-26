@@ -9,8 +9,8 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Google as GoogleIcon } from '@mui/icons-material';
-import { signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleProvider } from '../../firebase/config';
+import { signInWithPopup, signOut, GoogleAuthProvider } from 'firebase/auth';
+import { auth } from '../../firebase/config';
 
 // List of authorized email addresses
 const AUTHORIZED_EMAILS = [
@@ -27,15 +27,47 @@ const LoginPage = ({ onLoginSuccess }) => {
     setError('');
     
     try {
-      // Configure Google provider to get profile picture
+      // Check if user is already signed in
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        console.log('⚠️ User already signed in. Signing out to get Gmail permissions...');
+        await signOut(auth);
+      }
+      
+      // Create a new Google provider with Gmail scopes
+      const googleProvider = new GoogleAuthProvider();
+      
+      // Add basic scopes
+      googleProvider.addScope('profile');
+      googleProvider.addScope('email');
+      googleProvider.addScope('openid');
+      
+      // Add Gmail scopes for email sending
+      googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+      googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
+      
+      // Configure Google provider to force consent
       googleProvider.setCustomParameters({
-        prompt: 'select_account'
+        prompt: 'consent',
+        access_type: 'offline'
       });
+      
+      console.log('🔄 Starting Google sign-in with Gmail scopes...');
       
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
+      // Get the access token for Gmail API
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+      
+      console.log('Sign-in result:', result);
+      console.log('Credential:', credential);
+      console.log('Access token available:', !!accessToken);
+      console.log('Access token length:', accessToken?.length || 0);
+      
       console.log('User signed in:', user.email);
+      console.log('Access token received:', !!accessToken);
       console.log('Full user object:', {
         displayName: user.displayName,
         email: user.email,
@@ -43,6 +75,31 @@ const LoginPage = ({ onLoginSuccess }) => {
         uid: user.uid,
         providerData: user.providerData
       });
+      
+      // Store the access token for email service
+      if (accessToken) {
+        localStorage.setItem('gmailAccessToken', accessToken);
+        localStorage.setItem('gmailUser', JSON.stringify({
+          email: user.email,
+          name: user.displayName,
+          picture: user.photoURL,
+        }));
+        console.log('✅ Gmail access token stored for email sending');
+        console.log('📧 Real email sending is now enabled!');
+        
+        // Check what scopes were granted
+        try {
+          const tokenInfo = await fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${accessToken}`);
+          const tokenData = await tokenInfo.json();
+          console.log('🔍 Token scopes granted:', tokenData.scope);
+        } catch (error) {
+          console.log('Could not check token scopes:', error);
+        }
+      } else {
+        console.log('⚠️ No Gmail access token received - email simulation will be used');
+        console.log('💡 To enable real emails, sign out and sign in again');
+        console.log('🔧 This might be because Gmail scopes were not requested in previous sign-in');
+      }
       
       // Log detailed provider information
       if (user.providerData && user.providerData.length > 0) {

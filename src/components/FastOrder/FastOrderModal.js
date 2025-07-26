@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import {
   Dialog,
   DialogTitle,
@@ -11,18 +13,23 @@ import {
   Box,
   Typography,
   IconButton,
-  Alert
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Divider
 } from '@mui/material';
 import { 
   Close as CloseIcon, 
   ArrowBack as ArrowBackIcon,
   ArrowForward as ArrowForwardIcon,
-  FlashOn as FlashOnIcon
+  FlashOn as FlashOnIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material';
 import FastOrderStep1 from './FastOrderStep1';
 import FastOrderStep2 from './FastOrderStep2';
 
-const FastOrderModal = ({ open, onClose, onSubmit }) => {
+const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [orderData, setOrderData] = useState({
     // Step 1: Customer Info
@@ -32,34 +39,138 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
       email: '',
       address: ''
     },
-    // Step 2: Configurable Fields (based on settings)
-    orderDetails: {},
-    furnitureData: { groups: [{ furnitureType: '', materialCompany: '', quantity: 1, labourWork: 0 }] },
-    paymentData: {}
+    // Step 2: Configurable Fields with toggles
+    orderDetails: {
+      billInvoice: '',
+      description: '',
+      platform: '',
+      startDate: new Date().toISOString().split('T')[0], // Today's date as default
+      timeline: ''
+    },
+    furnitureData: { 
+      groups: [{ 
+        furnitureType: '',
+        materialCompany: '',
+        materialCode: '',
+        materialQnty: '',
+        materialPrice: '',
+        labourPrice: '',
+        labourNote: '',
+        labourQnty: 1,
+        foamEnabled: false,
+        foamPrice: '',
+        foamQnty: 1,
+        foamNote: '',
+        customerNote: ''
+      }] 
+    },
+    paymentData: {
+      deposit: 0, // Required deposit amount
+      amountPaid: 0, // Actual amount paid by customer
+      pickupDeliveryEnabled: false,
+      pickupDeliveryCost: '',
+      notes: ''
+    }
   });
-  const [fieldSettings, setFieldSettings] = useState({});
+  
+  // Toggle states for Step 2
+  const [toggles, setToggles] = useState({
+    orderDetails: false,
+    materials: false,
+    labour: false,
+    foam: false,
+    customerNote: false,
+    pickupDelivery: false
+  });
+  
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateCustomers, setDuplicateCustomers] = useState([]);
 
   const steps = ['Customer Information', 'Order Details'];
 
-  // Load field settings from localStorage
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('rapidInvoiceSettings');
-    if (savedSettings) {
-      setFieldSettings(JSON.parse(savedSettings));
+  // Get next bill number function
+  const getNextBillNumber = async () => {
+    try {
+      const ordersRef = collection(db, 'orders');
+      const q = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return '100001';
+      }
+      
+      const orders = querySnapshot.docs.map(doc => doc.data());
+      const billNumbers = orders
+        .map(order => order.orderDetails?.billInvoice)
+        .filter(bill => bill && !isNaN(parseInt(bill)))
+        .map(bill => parseInt(bill));
+      
+      const maxBillNumber = Math.max(...billNumbers, 100000);
+      const nextNumber = maxBillNumber + 1;
+      
+      // Ensure it's 6 digits by padding with zeros if needed
+      return nextNumber.toString().padStart(6, '0');
+    } catch (error) {
+      console.error('Error getting next bill number:', error);
+      return '100001';
     }
-  }, []);
+  };
 
   // Reset form when modal opens/closes
   useEffect(() => {
     if (open) {
       setActiveStep(0);
-      setOrderData({
-        personalInfo: { customerName: '', phone: '', email: '', address: '' },
-        orderDetails: {},
-        furnitureData: { groups: [{ furnitureType: '', materialCompany: '', quantity: 1, labourWork: 0 }] },
-        paymentData: {}
+      
+      // Set default values including bill number
+      const initializeForm = async () => {
+        const nextBillNumber = await getNextBillNumber();
+        setOrderData({
+          personalInfo: { customerName: '', phone: '', email: '', address: '' },
+          orderDetails: {
+            billInvoice: nextBillNumber,
+            description: '',
+            platform: '',
+            startDate: new Date().toISOString().split('T')[0], // Today's date as default
+            timeline: ''
+          },
+          furnitureData: { 
+            groups: [{ 
+              furnitureType: '',
+              materialCompany: '',
+              materialCode: '',
+              materialQnty: '',
+              materialPrice: '',
+              labourPrice: '',
+              labourNote: '',
+              labourQnty: 1,
+              foamEnabled: false,
+              foamPrice: '',
+              foamQnty: 1,
+              foamNote: '',
+              customerNote: ''
+            }] 
+          },
+          paymentData: {
+            deposit: 0, // Required deposit amount
+            amountPaid: 0, // Actual amount paid by customer
+            pickupDeliveryEnabled: false,
+            pickupDeliveryCost: '',
+            notes: ''
+          }
+        });
+      };
+      
+      initializeForm();
+      
+      setToggles({
+        orderDetails: false,
+        materials: false,
+        labour: false,
+        foam: false,
+        customerNote: false,
+        pickupDelivery: false
       });
       setErrors({});
     }
@@ -71,6 +182,76 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
     setErrors({}); // Clear errors when user makes changes
   };
 
+  // Handle using existing customer
+  const handleUseExistingCustomer = (customer) => {
+    setOrderData(prev => ({
+      ...prev,
+      personalInfo: {
+        customerName: customer.name,
+        phone: customer.phone || '',
+        email: customer.email,
+        address: customer.address || ''
+      }
+    }));
+    setErrors({});
+    setDuplicateDialogOpen(false);
+    setDuplicateCustomers([]);
+  };
+
+  // Handle toggle changes
+  const handleToggleChange = (toggleName, value) => {
+    setToggles(prev => ({ ...prev, [toggleName]: value }));
+  };
+
+  // Check for duplicate customers
+  const checkForDuplicates = () => {
+    const { customerName, phone, email } = orderData.personalInfo;
+    
+    // Only check for duplicates if we have meaningful data
+    const hasName = customerName && customerName.trim().length > 0;
+    const hasPhone = phone && phone.trim().length > 0;
+    const hasEmail = email && email.trim().length > 0;
+    
+    // Need at least name and email to check for duplicates
+    if (!hasName || !hasEmail) {
+      return false;
+    }
+
+    const duplicates = customers.filter(customer => {
+      let hasMatch = false;
+      
+      // Check name match only if we have a name
+      if (hasName && customer.name) {
+        const nameMatch = customer.name.toLowerCase().trim() === customerName.toLowerCase().trim();
+        if (nameMatch) hasMatch = true;
+      }
+      
+      // Check phone match only if BOTH have a non-empty value and are equal
+      const phoneMatch =
+        phone && phone.trim().length > 0 &&
+        customer.phone && customer.phone.trim().length > 0 &&
+        customer.phone.trim() === phone.trim();
+      if (phoneMatch) hasMatch = true;
+      
+      // Check email match only if we have an email
+      if (hasEmail && customer.email) {
+        const emailMatch = customer.email.toLowerCase().trim() === email.toLowerCase().trim();
+        if (emailMatch) hasMatch = true;
+      }
+      
+      return hasMatch;
+    });
+
+    if (duplicates.length > 0) {
+      // Show dialog with duplicates
+      setDuplicateCustomers(duplicates);
+      setDuplicateDialogOpen(true);
+      return true;
+    }
+
+    return false;
+  };
+
   // Validate current step
   const validateStep = (stepIndex) => {
     const newErrors = {};
@@ -80,25 +261,63 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
       if (!orderData.personalInfo.customerName.trim()) {
         newErrors.customerName = 'Customer name is required';
       }
-      if (!orderData.personalInfo.phone.trim()) {
-        newErrors.phone = 'Phone number is required';
+      if (!orderData.personalInfo.email.trim()) {
+        newErrors.email = 'Email is required';
       }
     } else if (stepIndex === 1) {
-      // Validate enabled fields based on settings
-      Object.entries(fieldSettings).forEach(([fieldKey, field]) => {
-        if (field.enabled) {
-          // Add validation logic for each field type
-          if (fieldKey === 'billInvoice' && !orderData.orderDetails.billInvoice?.trim()) {
-            newErrors.billInvoice = 'Bill Invoice is required';
-          }
-          if (fieldKey === 'furnitureType' && !orderData.furnitureData.groups[0]?.furnitureType?.trim()) {
-            newErrors.furnitureType = 'Furniture Type is required';
-          }
-          if (fieldKey === 'quantity' && (!orderData.furnitureData.groups[0]?.quantity || orderData.furnitureData.groups[0]?.quantity < 1)) {
-            newErrors.quantity = 'Quantity must be at least 1';
-          }
+      // Validate bill invoice (always required)
+      if (!orderData.orderDetails.billInvoice?.trim()) {
+        newErrors.billInvoice = 'Bill Invoice is required';
+      }
+      
+      // Validate enabled fields based on toggles
+      if (toggles.orderDetails) {
+        if (!orderData.orderDetails.platform?.trim()) {
+          newErrors.platform = 'Platform is required when Order Details is enabled';
         }
-      });
+        if (!orderData.orderDetails.startDate?.trim()) {
+          newErrors.startDate = 'Start Date is required when Order Details is enabled';
+        }
+      }
+      
+      if (toggles.materials) {
+        if (!orderData.furnitureData.groups[0]?.materialCompany?.trim()) {
+          newErrors.materialCompany = 'Material Company is required when Materials is enabled';
+        }
+        if (!orderData.furnitureData.groups[0]?.materialCode?.trim()) {
+          newErrors.materialCode = 'Material Code is required when Materials is enabled';
+        }
+        if (!orderData.furnitureData.groups[0]?.materialQnty) {
+          newErrors.materialQnty = 'Material Quantity is required when Materials is enabled';
+        }
+        if (!orderData.furnitureData.groups[0]?.materialPrice) {
+          newErrors.materialPrice = 'Material Price is required when Materials is enabled';
+        }
+      }
+      
+      if (toggles.labour) {
+        if (!orderData.furnitureData.groups[0]?.labourPrice) {
+          newErrors.labourPrice = 'Labour Price is required when Labour is enabled';
+        }
+        if (!orderData.furnitureData.groups[0]?.labourQnty) {
+          newErrors.labourQnty = 'Labour Quantity is required when Labour is enabled';
+        }
+      }
+      
+      if (toggles.foam) {
+        if (!orderData.furnitureData.groups[0]?.foamPrice) {
+          newErrors.foamPrice = 'Foam Price is required when Foam is enabled';
+        }
+        if (!orderData.furnitureData.groups[0]?.foamQnty) {
+          newErrors.foamQnty = 'Foam Quantity is required when Foam is enabled';
+        }
+      }
+      
+      if (toggles.pickupDelivery) {
+        if (!orderData.paymentData.pickupDeliveryCost) {
+          newErrors.pickupDeliveryCost = 'Pickup & Delivery Cost is required when Pickup & Delivery is enabled';
+        }
+      }
     }
 
     setErrors(newErrors);
@@ -107,8 +326,19 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
 
   // Handle next step
   const handleNext = () => {
-    if (validateStep(activeStep)) {
-      setActiveStep(prev => prev + 1);
+    if (activeStep === 0) {
+      // For Step 1, check for duplicates before proceeding
+      if (validateStep(activeStep)) {
+        const hasDuplicates = checkForDuplicates();
+        if (hasDuplicates) {
+          return; // Don't proceed if duplicates found
+        }
+        setActiveStep(prev => prev + 1);
+      }
+    } else {
+      if (validateStep(activeStep)) {
+        setActiveStep(prev => prev + 1);
+      }
     }
   };
 
@@ -129,9 +359,10 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
       // Prepare final order data
       const finalOrderData = {
         ...orderData,
+        toggles, // Include toggle states
         createdAt: new Date(),
         status: 'pending',
-        isRapidOrder: true, // Flag to identify fast orders
+        isFastOrder: true, // Flag to identify fast orders
         totalAmount: calculateTotal()
       };
 
@@ -148,15 +379,17 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
     }
   };
 
-  // Calculate total amount (matches normal order workflow)
+  // Calculate total amount
   const calculateTotal = () => {
     const furniture = orderData.furnitureData.groups[0] || {};
     
     const materialTotal = (furniture.materialQnty || 0) * (furniture.materialPrice || 0);
     const labourTotal = (furniture.labourQnty || 0) * (furniture.labourPrice || 0);
     const foamTotal = (furniture.foamQnty || 0) * (furniture.foamPrice || 0);
+    const pickupDeliveryTotal = orderData.paymentData.pickupDeliveryEnabled ? 
+      (orderData.paymentData.pickupDeliveryCost || 0) : 0;
     
-    return materialTotal + labourTotal + foamTotal;
+    return materialTotal + labourTotal + foamTotal + pickupDeliveryTotal;
   };
 
   // Handle modal close
@@ -220,6 +453,8 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
           <FastOrderStep1
             data={orderData.personalInfo}
             onUpdate={(personalInfo) => handleDataUpdate({ personalInfo })}
+            customers={customers}
+            onUseExistingCustomer={handleUseExistingCustomer}
             errors={errors}
           />
         )}
@@ -228,7 +463,8 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
           <FastOrderStep2
             data={orderData}
             onUpdate={handleDataUpdate}
-            fieldSettings={fieldSettings}
+            toggles={toggles}
+            onToggleChange={handleToggleChange}
             errors={errors}
           />
         )}
@@ -278,10 +514,92 @@ const FastOrderModal = ({ open, onClose, onSubmit }) => {
               '&:hover': { backgroundColor: '#e06810' }
             }}
           >
-            {isSubmitting ? 'Creating Order...' : 'Create Fast Order'}
+            {isSubmitting ? 'Creating Order...' : 'Save Order'}
           </Button>
         )}
       </DialogActions>
+
+      {/* Duplicate Customer Dialog */}
+      <Dialog 
+        open={duplicateDialogOpen} 
+        onClose={() => setDuplicateDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <WarningIcon color="warning" sx={{ mr: 1 }} />
+            <Typography variant="h6">
+              {duplicateCustomers.length === 1 ? 'Existing Customer Found' : 'Multiple Customers Found'}
+            </Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {duplicateCustomers.length === 1 
+              ? 'A customer with similar information already exists. You can use the existing customer or create a new one.'
+              : `${duplicateCustomers.length} customers with similar information found. Please choose one or create a new customer.`
+            }
+          </Alert>
+          
+          <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>
+            Existing Customers:
+          </Typography>
+          
+          <List>
+            {duplicateCustomers.map((customer, index) => (
+              <React.Fragment key={customer.id}>
+                <ListItem>
+                  <ListItemText
+                    primary={
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                          {customer.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Email: {customer.email}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Phone: {customer.phone}
+                        </Typography>
+                        {customer.address && (
+                          <Typography variant="body2" color="text.secondary">
+                            Address: {customer.address}
+                          </Typography>
+                        )}
+                      </Box>
+                    }
+                  />
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => handleUseExistingCustomer(customer)}
+                  >
+                    Use This Customer
+                  </Button>
+                </ListItem>
+                {index < duplicateCustomers.length - 1 && <Divider />}
+              </React.Fragment>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setDuplicateDialogOpen(false);
+              setDuplicateCustomers([]);
+              // Allow proceeding to next step when creating new customer
+              setActiveStep(prev => prev + 1);
+            }} 
+            color="primary"
+          >
+            Create New Customer
+          </Button>
+          <Button onClick={() => setDuplicateDialogOpen(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

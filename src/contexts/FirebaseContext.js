@@ -23,14 +23,25 @@ export const FirebaseProvider = ({ children }) => {
         // This is more reliable than a test collection
         await getDocs(collection(db, 'customers'));
         setIsConnected(true);
+        console.log('✅ Firebase connection successful');
       } catch (error) {
         console.error('Firebase connection check failed:', error);
-        // If customers collection doesn't exist, try a simple connection test
-        try {
-          await getDocs(collection(db, 'test'));
+        
+        // Check if it's a permissions issue
+        if (error.code === 'permission-denied') {
+          console.log('⚠️ Firebase permissions issue - this might be normal if not authenticated');
+          // For now, assume connection is working but permissions are restricted
           setIsConnected(true);
-        } catch (testError) {
-          setIsConnected(false);
+        } else {
+          // Try a simple connection test
+          try {
+            await getDocs(collection(db, 'test'));
+            setIsConnected(true);
+            console.log('✅ Firebase connection successful (via test collection)');
+          } catch (testError) {
+            console.error('Firebase test collection also failed:', testError);
+            setIsConnected(false);
+          }
         }
       } finally {
         setIsChecking(false);

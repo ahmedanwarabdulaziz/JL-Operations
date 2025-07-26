@@ -22,6 +22,8 @@ import FinancePage from './pages/Finance/FinancePage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
 import RapidInvoiceSettingsPage from './pages/RapidInvoice/RapidInvoiceSettingsPage';
+import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
+
 
 const AppContent = () => {
   const { user, loading } = useAuth();
@@ -59,6 +61,8 @@ const AppContent = () => {
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/status-management" element={<StatusManagementPage />} />
         <Route path="/data-management" element={<DataManagementPage />} />
+        <Route path="/email-settings" element={<EmailSettingsPage />} />
+
         <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>
     </MainLayout>

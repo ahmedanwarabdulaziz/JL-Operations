@@ -51,6 +51,7 @@ import { calculateOrderTotal, formatFurnitureDetails, isRapidOrder } from '../..
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -71,6 +72,22 @@ const OrdersPage = () => {
       return billB - billA; // Descending order (highest first)
     });
   };
+
+  // Fetch customers from Firebase
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const customersRef = collection(db, 'customers');
+      const customersSnapshot = await getDocs(customersRef);
+      const customersData = customersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCustomers(customersData);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      showError('Failed to fetch customers');
+    }
+  }, [showError]);
 
   // Fetch orders from Firebase
   const fetchOrders = useCallback(async () => {
@@ -112,7 +129,8 @@ const OrdersPage = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+    fetchCustomers();
+  }, [fetchOrders, fetchCustomers]);
 
   // Global search function
   const handleSearch = (searchValue) => {
@@ -231,13 +249,37 @@ const OrdersPage = () => {
   // Handle fast order submission
   const handleFastOrderSubmit = async (orderData) => {
     try {
+      // Check if this is a new customer (not using existing customer)
+      const { personalInfo } = orderData;
+      const isNewCustomer = !customers.some(customer => 
+        customer.name === personalInfo.customerName && 
+        customer.email === personalInfo.email
+      );
+
+      // If this is a new customer, save to customers collection
+      if (isNewCustomer) {
+        const customerData = {
+          name: personalInfo.customerName,
+          phone: personalInfo.phone || '',
+          email: personalInfo.email,
+          address: personalInfo.address || '',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        
+        await addDoc(collection(db, 'customers'), customerData);
+        showSuccess('New customer created and fast order saved successfully!');
+      } else {
+        showSuccess('Fast order created successfully!');
+      }
+      
       // Add the order to Firebase
       const docRef = await addDoc(collection(db, 'orders'), orderData);
       
-      // Refresh the orders list
+      // Refresh both orders and customers lists
       await fetchOrders();
+      await fetchCustomers();
       
-      showSuccess('Fast order created successfully!');
       setFastOrderModalOpen(false);
     } catch (error) {
       console.error('Error creating fast order:', error);
@@ -636,6 +678,7 @@ const OrdersPage = () => {
         open={fastOrderModalOpen}
         onClose={() => setFastOrderModalOpen(false)}
         onSubmit={handleFastOrderSubmit}
+        customers={customers}
       />
     </Box>
   );

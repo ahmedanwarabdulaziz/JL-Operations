@@ -24,7 +24,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { sendOrderEmail } from '../../services/emailService';
+import { sendEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';
 import Step1PersonalInfo from './steps/Step1PersonalInfo';
 import Step2OrderDetails from './steps/Step2OrderDetails';
 import Step3Furniture from './steps/Step3Furniture';
@@ -671,7 +671,9 @@ const NewOrderPage = () => {
             paymentData: paymentDetails
           };
           
-          const emailResult = await sendOrderEmail(orderDataForEmail, personalInfo.email);
+          // Auto-check and authorize Gmail if needed
+          await ensureGmailAuthorized();
+          const emailResult = await sendEmailWithConfig(orderDataForEmail, personalInfo.email);
           if (emailResult.success) {
             const action = isEditMode ? 'updated' : 'created';
             showSuccess(`Order ${action} and email sent successfully!`);

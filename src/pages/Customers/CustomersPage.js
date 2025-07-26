@@ -11,13 +11,24 @@ import {
   Paper,
   IconButton,
   Tooltip,
-  useTheme
+  useTheme,
+  Card,
+  CardContent,
+  Chip,
+  Alert,
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Refresh as RefreshIcon,
+  Person as PersonIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -100,46 +111,23 @@ const CustomersPage = () => {
     setOpenDialog(true);
   };
 
-  // Find all orders for a specific customer
+  // Find customer orders before deletion
   const findCustomerOrders = async (customerData) => {
     try {
       const ordersRef = collection(db, 'orders');
-      const orders = [];
-      const querySnapshot = await getDocs(ordersRef);
-      
-      querySnapshot.forEach(doc => {
-        const orderData = doc.data();
-        const orderCustomer = orderData.personalInfo;
-        
-        if (orderCustomer) {
-          let hasMatch = false;
-          
-          // Check name match only if we have meaningful data
-          if (orderCustomer.customerName && customerData.name) {
-            const nameMatch = orderCustomer.customerName.toLowerCase().trim() === customerData.name.toLowerCase().trim();
-            if (nameMatch) hasMatch = true;
-          }
-          
-          // Check phone match only if BOTH have a non-empty value and are equal
-          const phoneMatch =
-            orderCustomer.phone && orderCustomer.phone.trim().length > 0 &&
-            customerData.phone && customerData.phone.trim().length > 0 &&
-            orderCustomer.phone.trim() === customerData.phone.trim();
-          if (phoneMatch) hasMatch = true;
-          
-          // Check email match only if we have meaningful data
-          if (orderCustomer.email && customerData.email) {
-            const emailMatch = orderCustomer.email.toLowerCase().trim() === customerData.email.toLowerCase().trim();
-            if (emailMatch) hasMatch = true;
-          }
-          
-          if (hasMatch) {
-            orders.push({ id: doc.id, ...orderData });
-          }
-        }
-      });
-      
-      return orders;
+      const ordersSnapshot = await getDocs(ordersRef);
+      const orders = ordersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Check if customer has any orders
+      const customerOrders = orders.filter(order => 
+        order.personalInfo?.customerName === customerData.name &&
+        order.personalInfo?.email === customerData.email
+      );
+
+      return customerOrders;
     } catch (error) {
       console.error('Error finding customer orders:', error);
       return [];
@@ -149,8 +137,19 @@ const CustomersPage = () => {
   // Handle delete customer
   const handleDelete = async (id) => {
     try {
+      const customer = customers.find(c => c.id === id);
+      if (!customer) return;
+
+      const customerOrders = await findCustomerOrders(customer);
+      
+      if (customerOrders.length > 0) {
+        showError(`Cannot delete customer. They have ${customerOrders.length} order(s) associated with them.`);
+        return;
+      }
+
       await deleteDocument('customers', id);
-      setCustomers(prev => prev.filter(customer => customer.id !== id));
+      setCustomers(prev => prev.filter(c => c.id !== id));
+      setFilteredCustomers(prev => prev.filter(c => c.id !== id));
       showSuccess('Customer deleted successfully');
     } catch (error) {
       console.error('Error deleting customer:', error);
@@ -199,56 +198,48 @@ const CustomersPage = () => {
 
     try {
       setCrudLoading(true);
-      
+
+      const customerData = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim() || '',
+        address: formData.address.trim() || '',
+        createdAt: editingCustomer ? editingCustomer.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
       if (editingCustomer) {
-        // Create a batch to update multiple documents atomically
-        const batch = writeBatch(db);
-        
-        // 1. Update customer record
-        const customerRef = doc(db, 'customers', editingCustomer.id);
-        const customerUpdateData = {
-          ...formData,
-          updatedAt: new Date()
-        };
-        batch.update(customerRef, customerUpdateData);
-        
-        // 2. Find and update ALL orders for this customer
-        const customerOrders = await findCustomerOrders(editingCustomer);
-        
-        customerOrders.forEach(order => {
-          const orderRef = doc(db, 'orders', order.id);
-          const updatedOrderData = {
-            ...order,
-            personalInfo: {
-              customerName: formData.name,
-              phone: formData.phone,
-              email: formData.email,
-              address: formData.address
-            },
-            updatedAt: new Date()
-          };
-          batch.update(orderRef, updatedOrderData);
-        });
-        
-        // Execute all updates atomically
-        await batch.commit();
-        
-        // Update local state
-        setCustomers(prev => prev.map(customer => 
-          customer.id === editingCustomer.id 
-            ? { ...customer, ...formData }
-            : customer
+        // Update existing customer
+        await updateDocument('customers', editingCustomer.id, customerData);
+        setCustomers(prev => prev.map(c => 
+          c.id === editingCustomer.id 
+            ? { ...c, ...customerData }
+            : c
         ));
-        
-        const orderCount = customerOrders.length;
-        showSuccess(`Customer updated successfully! Updated ${orderCount} order${orderCount > 1 ? 's' : ''} for this customer.`);
+        setFilteredCustomers(prev => prev.map(c => 
+          c.id === editingCustomer.id 
+            ? { ...c, ...customerData }
+            : c
+        ));
+        showSuccess('Customer updated successfully');
       } else {
-        await addDocument('customers', formData);
-        await fetchCustomers(); // Refresh the list
+        // Add new customer
+        const newCustomerId = await addDocument('customers', customerData);
+        const newCustomer = { id: newCustomerId, ...customerData };
+        setCustomers(prev => [...prev, newCustomer]);
+        setFilteredCustomers(prev => [...prev, newCustomer]);
         showSuccess('Customer added successfully');
       }
-      
+
       setOpenDialog(false);
+      setEditingCustomer(null);
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        address: ''
+      });
+      setFormErrors({});
     } catch (error) {
       console.error('Error saving customer:', error);
       showError('Failed to save customer');
@@ -274,12 +265,13 @@ const CustomersPage = () => {
   const columns = [
     {
       field: 'name',
-      headerName: 'Name',
+      headerName: 'Customer Name',
       flex: 1,
       minWidth: 200,
       renderCell: (params) => (
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+          <PersonIcon sx={{ fontSize: 20, mr: 1, color: 'primary.main' }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
             {params.value}
           </Typography>
         </Box>
@@ -291,9 +283,12 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 250,
       renderCell: (params) => (
-        <Typography variant="body2" color="text.secondary">
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <EmailIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+          <Typography variant="body2" color="text.secondary">
+            {params.value}
+          </Typography>
+        </Box>
       )
     },
     {
@@ -302,9 +297,12 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
-        <Typography variant="body2" color="text.secondary">
-          {params.value || 'N/A'}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <PhoneIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+          <Typography variant="body2" color="text.secondary">
+            {params.value || 'N/A'}
+          </Typography>
+        </Box>
       )
     },
     {
@@ -313,13 +311,16 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 200,
       renderCell: (params) => (
-        <Typography variant="body2" color="text.secondary" sx={{ 
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
-          {params.value || 'N/A'}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <LocationIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+          <Typography variant="body2" color="text.secondary" sx={{ 
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {params.value || 'N/A'}
+          </Typography>
+        </Box>
       )
     },
     {
@@ -329,20 +330,30 @@ const CustomersPage = () => {
       sortable: false,
       renderCell: (params) => (
         <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Tooltip title="Edit">
+          <Tooltip title="Edit Customer">
             <IconButton
               size="small"
               color="primary"
               onClick={() => handleEdit(params.row)}
+              sx={{
+                '&:hover': {
+                  backgroundColor: '#e3f2fd'
+                }
+              }}
             >
               <EditIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
+          <Tooltip title="Delete Customer">
             <IconButton
               size="small"
               color="error"
               onClick={() => handleDelete(params.row.id)}
+              sx={{
+                '&:hover': {
+                  backgroundColor: '#ffebee'
+                }
+              }}
             >
               <DeleteIcon />
             </IconButton>
@@ -352,67 +363,130 @@ const CustomersPage = () => {
     }
   ];
 
-  return (
-    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3,
-        flexWrap: 'wrap',
-        gap: 2
-      }}>
-        <Typography variant="h4" component="h1" sx={{ minWidth: 0, flexShrink: 1 }}>
-          Customers
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAdd}
-          sx={{ flexShrink: 0 }}
-        >
-          Add Customer
-        </Button>
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <CircularProgress size={60} />
       </Box>
+    );
+  }
 
-      {/* Search Bar */}
-      <Paper sx={{ p: 2, mb: 3, flexShrink: 0 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: 2,
-          alignItems: { xs: 'stretch', sm: 'center' }
-        }}>
-          <TextField
-            fullWidth
-            placeholder="Search customers..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-            }}
-            sx={{ minWidth: 0 }}
-          />
-          <Typography 
-            variant="body2" 
-            color="text.secondary"
-            sx={{ 
-              whiteSpace: 'nowrap',
-              textAlign: { xs: 'center', sm: 'left' }
-            }}
-          >
-            {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''} found
-          </Typography>
-        </Box>
-      </Paper>
+  return (
+    <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
+      {/* Professional Header */}
+      <Card sx={{ 
+        mb: 3,
+        backgroundColor: '#274290',
+        color: 'white',
+        borderRadius: 2
+      }}>
+        <CardContent sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 2
+          }}>
+            <Box>
+              <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                Customer Management
+              </Typography>
+              <Typography variant="body1" sx={{ opacity: 0.9 }}>
+                Manage your customer database and contact information
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleAdd}
+              sx={{ 
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                }
+              }}
+            >
+              Add Customer
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Search and Stats Section */}
+      <Card sx={{ mb: 3, borderRadius: 2 }}>
+        <CardContent sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 3,
+            alignItems: { xs: 'stretch', sm: 'center' }
+          }}>
+            {/* Search Bar */}
+            <TextField
+              fullWidth
+              placeholder="Search customers by name, email, or phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchTerm && (
+                  <InputAdornment position="end">
+                    <IconButton 
+                      size="small" 
+                      onClick={() => setSearchTerm('')}
+                      sx={{ color: 'text.secondary' }}
+                    >
+                      <RefreshIcon />
+                    </IconButton>
+                  </InputAdornment>
+                )
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  backgroundColor: 'background.paper'
+                }
+              }}
+            />
+            
+            {/* Stats */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 2,
+              flexShrink: 0
+            }}>
+              <Chip
+                label={`${filteredCustomers.length} customer${filteredCustomers.length !== 1 ? 's' : ''}`}
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 'bold' }}
+              />
+              {searchTerm && (
+                <Chip
+                  label="Filtered"
+                  color="secondary"
+                  size="small"
+                />
+              )}
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* Data Grid */}
-      <Paper sx={{ 
+      <Card sx={{ 
         flex: 1, 
         minHeight: 0,
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        borderRadius: 2
       }}>
         <Box sx={{ flex: 1, minHeight: 0 }}>
           <DataGrid
@@ -430,7 +504,8 @@ const CustomersPage = () => {
             components={{
               LoadingOverlay: () => (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                  <Typography>Loading customers...</Typography>
+                  <CircularProgress size={40} />
+                  <Typography sx={{ ml: 2 }}>Loading customers...</Typography>
                 </Box>
               ),
               NoRowsOverlay: () => (
@@ -438,7 +513,7 @@ const CustomersPage = () => {
                   <Typography variant="h6" color="text.secondary" gutterBottom>
                     No customers found
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" textAlign="center">
+                  <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mb: 2 }}>
                     {searchTerm ? 'No customers match your search criteria.' : 'Get started by adding your first customer.'}
                   </Typography>
                   {!searchTerm && (
@@ -446,7 +521,12 @@ const CustomersPage = () => {
                       variant="contained"
                       startIcon={<AddIcon />}
                       onClick={handleAdd}
-                      sx={{ mt: 2 }}
+                                             sx={{ 
+                         backgroundColor: '#274290',
+                         '&:hover': {
+                           backgroundColor: '#1e2d5a'
+                         }
+                       }}
                     >
                       Add First Customer
                     </Button>
@@ -460,7 +540,8 @@ const CustomersPage = () => {
               },
               '& .MuiDataGrid-columnHeaders': {
                 backgroundColor: theme.palette.grey[50],
-                borderBottom: '2px solid #e0e0e0'
+                borderBottom: '2px solid #e0e0e0',
+                fontWeight: 'bold'
               },
               '& .MuiDataGrid-root': {
                 border: 'none'
@@ -476,46 +557,70 @@ const CustomersPage = () => {
               },
               '& .MuiDataGrid-virtualScrollerRenderZone': {
                 width: '100% !important'
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: '#f5f5f5'
               }
             }}
           />
         </Box>
-      </Paper>
+      </Card>
 
       {/* Add/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCancel} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+        <DialogTitle sx={{ 
+          backgroundColor: '#274290',
+          color: 'white'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <PersonIcon sx={{ mr: 1 }} />
+            {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+          </Box>
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+        <DialogContent sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 1 }}>
             <TextField
               fullWidth
-              label="Name"
+              label="Customer Name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               error={!!formErrors.name}
               helperText={formErrors.name}
               required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
             />
             <TextField
               fullWidth
-              label="Email"
+              label="Email Address"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               error={!!formErrors.email}
               helperText={formErrors.email}
               required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
             />
             <TextField
               fullWidth
-              label="Phone"
+              label="Phone Number"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               error={!!formErrors.phone}
               helperText={formErrors.phone}
               placeholder="+1 (555) 123-4567"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
             />
             <TextField
               fullWidth
@@ -527,17 +632,36 @@ const CustomersPage = () => {
               error={!!formErrors.address}
               helperText={formErrors.address}
               placeholder="Enter full address"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2
+                }
+              }}
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancel} disabled={crudLoading}>Cancel</Button>
+        <DialogActions sx={{ p: 3, gap: 1 }}>
+          <Button 
+            onClick={handleCancel} 
+            disabled={crudLoading}
+            variant="outlined"
+            sx={{ borderRadius: 2 }}
+          >
+            Cancel
+          </Button>
           <Button 
             onClick={handleSubmit} 
             variant="contained" 
             disabled={crudLoading}
+                          sx={{ 
+                borderRadius: 2,
+                backgroundColor: '#274290',
+                '&:hover': {
+                  backgroundColor: '#1e2d5a'
+                }
+              }}
           >
-            {crudLoading ? 'Saving...' : (editingCustomer ? 'Update' : 'Add')}
+            {crudLoading ? 'Saving...' : (editingCustomer ? 'Update Customer' : 'Add Customer')}
           </Button>
         </DialogActions>
       </Dialog>

@@ -8,7 +8,6 @@ import {
   ListItemButton,
   ListItemText,
   Divider,
-  Grid,
   Card,
   CardContent,
   Chip,
@@ -31,6 +30,8 @@ import {
   Switch,
   FormControlLabel
 } from '@mui/material';
+import { Grid } from '@mui/material';
+
 import {
   Person as PersonIcon,
   Email as EmailIcon,
@@ -50,11 +51,11 @@ import {
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { useGmailAuth } from '../../contexts/GmailAuthContext';
-import { sendOrderEmail, sendDepositEmail } from '../../services/emailService';
+import { sendEmailWithConfig, sendDepositEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';
 import { useTreatments } from '../../hooks/useTreatments';
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
-import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateOrderTotal } from '../../utils/orderCalculations';
 
@@ -82,15 +83,19 @@ const WorkshopPage = () => {
     paymentNotes: ''
   });
   const { showError, showSuccess } = useNotification();
-  const { gmailSignedIn, signIn } = useGmailAuth();
+  const { gmailSignedIn, gmailUser, signIn } = useGmailAuth();
   const { treatments, loading: treatmentsLoading } = useTreatments();
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
 
-  // Fetch orders from Firebase
-  const fetchOrders = useCallback(async () => {
+  // Fetch orders from Firebase with debouncing
+  const fetchOrders = useCallback(async (forceRefresh = false) => {
+          // Prevent excessive calls during email sending
+      if (!forceRefresh && (sendingEmail || processingDeposit)) {
+        return;
+      }
+
     try {
-      console.log('Starting to fetch orders for workshop...');
       setLoading(true);
       
       const ordersRef = collection(db, 'orders');
@@ -100,8 +105,6 @@ const WorkshopPage = () => {
         id: doc.id,
         ...doc.data()
       }));
-      
-      console.log('Workshop orders data received:', ordersData);
       
       // Sort by bill number (highest to lowest)
       const sortedOrders = ordersData.sort((a, b) => {
@@ -125,11 +128,43 @@ const WorkshopPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [showError]);
+  }, [showError, sendingEmail, processingDeposit, selectedOrder]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Add a refresh mechanism when the page gains focus with improved debouncing
+  useEffect(() => {
+    let focusTimeout;
+    let lastRefreshTime = 0;
+    
+    const handleFocus = () => {
+      // Skip refresh if email operations are in progress
+      if (sendingEmail || processingDeposit) {
+        return;
+      }
+      
+      const now = Date.now();
+      // Prevent multiple refreshes within 2 seconds
+      if (now - lastRefreshTime < 2000) {
+        return;
+      }
+      
+      // Debounce the focus event to prevent excessive calls
+      clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(() => {
+        lastRefreshTime = Date.now();
+        fetchOrders(true); // Force refresh on focus
+      }, 1000); // 1 second debounce
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearTimeout(focusTimeout);
+    };
+  }, [fetchOrders, sendingEmail, processingDeposit]);
 
   // Search function
   const handleSearch = (searchValue) => {
@@ -315,6 +350,28 @@ const WorkshopPage = () => {
       console.error('Error formatting date:', error, 'Date value:', date);
       return 'Invalid Date';
     }
+  };
+
+  // Calculate deposit status based on amount paid vs required deposit
+  const getDepositStatus = (order) => {
+    if (!order) return { isReceived: false, status: 'No deposit set' };
+    
+    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    
+    if (requiredDeposit <= 0) {
+      return { isReceived: false, status: 'No deposit required' };
+    }
+    
+    if (amountPaid >= requiredDeposit) {
+      return { isReceived: true, status: '✓ Deposit Received' };
+    }
+    
+    if (amountPaid > 0) {
+      return { isReceived: false, status: `Partial payment: $${amountPaid.toFixed(2)}` };
+    }
+    
+    return { isReceived: false, status: 'No deposit paid' };
   };
 
   // Handle edit personal information
@@ -592,13 +649,18 @@ const WorkshopPage = () => {
         paymentData: selectedOrder.paymentData
       };
 
-      // Send the email directly (same as NewOrderPage)
-      const result = await sendOrderEmail(orderDataForEmail, selectedOrder.personalInfo.email);
+      // Progress callback for email sending
+      const onEmailProgress = (message) => {
+        showSuccess(`📧 ${message}`);
+      };
+
+      // Send the email with progress tracking
+      const result = await sendEmailWithConfig(orderDataForEmail, selectedOrder.personalInfo.email, onEmailProgress);
       
       if (result.success) {
-        showSuccess('Email sent successfully!');
+        showSuccess('✅ Email sent successfully!');
       } else {
-        showError(`Failed to send email: ${result.message}`);
+        showError(`❌ Failed to send email: ${result.message}`);
       }
     } catch (error) {
       console.error('Error sending email:', error);
@@ -608,7 +670,10 @@ const WorkshopPage = () => {
         showError(`Failed to send email: ${error.message}`);
       }
     } finally {
-      setSendingEmail(false);
+      // Add a small delay before allowing refreshes
+      setTimeout(() => {
+        setSendingEmail(false);
+      }, 500);
     }
   };
 
@@ -630,14 +695,11 @@ const WorkshopPage = () => {
       return;
     }
 
-    // Check Gmail authentication before proceeding
-    if (!gmailSignedIn) {
-      showError('Please sign in to Gmail first to send deposit confirmation emails');
-      return;
-    }
-
     try {
       setProcessingDeposit(true);
+      
+      // Auto-check and authorize Gmail if needed
+      await ensureGmailAuthorized();
 
       // Update the order with deposit received
       const orderRef = doc(db, 'orders', selectedOrder.id);
@@ -663,27 +725,58 @@ const WorkshopPage = () => {
         paymentData: updatedPaymentData
       };
 
+      // Progress callback for deposit email
+      const onDepositEmailProgress = (message) => {
+        showSuccess(`💰 ${message}`);
+      };
+
       // Try to send deposit confirmation email
       try {
-        const emailResult = await sendDepositEmail(orderDataForEmail, selectedOrder.personalInfo.email);
+        const emailResult = await sendDepositEmailWithConfig(orderDataForEmail, selectedOrder.personalInfo.email, onDepositEmailProgress);
         
         if (emailResult.success) {
-          showSuccess('Deposit received and confirmation email sent successfully!');
+          showSuccess('✅ Deposit received and confirmation email sent successfully!');
         } else {
-          showSuccess(`Deposit received successfully! Email not sent: ${emailResult.message}`);
+          showSuccess(`✅ Deposit received successfully! Email not sent: ${emailResult.message}`);
         }
       } catch (emailError) {
         console.error('Email sending failed:', emailError);
-        showSuccess(`Deposit received successfully! Email not sent: ${emailError.message}`);
+        showSuccess(`✅ Deposit received successfully! Email not sent: ${emailError.message}`);
       }
 
-      // Refresh the orders to show updated data
+      // Immediately update the selectedOrder state with the new data
+      const updatedSelectedOrder = {
+        ...selectedOrder,
+        paymentData: updatedPaymentData,
+        orderDetails: {
+          ...selectedOrder.orderDetails,
+          financialStatus: 'Deposit Paid',
+        }
+      };
+      setSelectedOrder(updatedSelectedOrder);
+      
+      // Refresh the orders list to ensure consistency
       await fetchOrders();
+      
+      // Update the selected order again with the fresh data from the database
+      const refreshedOrders = await getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc')));
+      const refreshedOrdersData = refreshedOrders.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      const finalUpdatedOrder = refreshedOrdersData.find(order => order.id === selectedOrder.id);
+      if (finalUpdatedOrder) {
+        setSelectedOrder(finalUpdatedOrder);
+      }
     } catch (error) {
       console.error('Error processing deposit:', error);
       showError(`Failed to process deposit: ${error.message}`);
     } finally {
-      setProcessingDeposit(false);
+      // Add a small delay before allowing refreshes
+      setTimeout(() => {
+        setProcessingDeposit(false);
+      }, 500);
     }
   };
 
@@ -695,6 +788,32 @@ const WorkshopPage = () => {
       paymentNotes: ''
     });
     setPaymentDialog(true);
+  };
+
+  // Handle order selection with data refresh
+  const handleOrderSelection = async (order) => {
+    // First set the selected order immediately for responsive UI
+    setSelectedOrder(order);
+    
+    // Then refresh the entire orders list to ensure we have the latest information
+    try {
+      await fetchOrders();
+      
+      // Find the updated order in the refreshed list
+      const refreshedOrders = await getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc')));
+      const refreshedOrdersData = refreshedOrders.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      const updatedOrder = refreshedOrdersData.find(o => o.id === order.id);
+      if (updatedOrder) {
+        setSelectedOrder(updatedOrder);
+      }
+    } catch (error) {
+      console.error('Error refreshing order data:', error);
+      // If refresh fails, keep the original order data
+    }
   };
 
   // Force refresh of selected order data when dialog opens
@@ -833,8 +952,40 @@ const WorkshopPage = () => {
   }
 
   return (
-    <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex' }}>
-      {/* Left Sidebar - Orders List */}
+    <>
+      {/* Email Operation Overlay */}
+      {(sendingEmail || processingDeposit) && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white'
+          }}
+        >
+          <CircularProgress size={60} sx={{ color: '#DAA520', mb: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            {sendingEmail ? 'Sending Email...' : 'Processing Deposit...'}
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8, textAlign: 'center', maxWidth: 400 }}>
+            Please wait while we process your request. This may take a few moments.
+          </Typography>
+        </Box>
+      )}
+      
+      <Box sx={{ 
+        height: 'calc(100vh - 100px)', 
+        display: 'flex'
+      }}>
+        {/* Left Sidebar - Orders List */}
       <Paper 
         sx={{ 
           width: 350, 
@@ -897,7 +1048,7 @@ const WorkshopPage = () => {
                 <ListItem disablePadding>
                   <ListItemButton
                     selected={selectedOrder?.id === order.id}
-                    onClick={() => setSelectedOrder(order)}
+                    onClick={() => handleOrderSelection(order)}
                     sx={{
                       '&.Mui-selected': {
                         backgroundColor: 'primary.light',
@@ -1198,17 +1349,17 @@ const WorkshopPage = () => {
                     >
                       Add Payment
                     </Button>
-                    {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && (
+                    {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && !getDepositStatus(selectedOrder).isReceived && (
                       <Button
                         variant="contained"
                         size="small"
                         onClick={handleDepositReceived}
-                        disabled={processingDeposit || selectedOrder.paymentData?.depositReceived}
+                        disabled={processingDeposit}
                         sx={{
-                          backgroundColor: selectedOrder.paymentData?.depositReceived ? '#4caf50' : '#f27921',
+                          backgroundColor: '#f27921',
                           color: 'white',
                           '&:hover': {
-                            backgroundColor: selectedOrder.paymentData?.depositReceived ? '#45a049' : '#e65100'
+                            backgroundColor: '#e65100'
                           }
                         }}
                       >
@@ -1217,8 +1368,6 @@ const WorkshopPage = () => {
                             <CircularProgress size={12} color="inherit" sx={{ mr: 0.5 }} />
                             Processing...
                           </>
-                        ) : selectedOrder.paymentData?.depositReceived ? (
-                          'Deposit Received ✓'
                         ) : (
                           'Mark Deposit Received'
                         )}
@@ -1252,7 +1401,7 @@ const WorkshopPage = () => {
                                     ${selectedOrder.paymentData?.deposit || '0.00'}
                                   </Typography>
                                 </Box>
-                                {selectedOrder.paymentData?.depositReceived && (
+                                {getDepositStatus(selectedOrder).isReceived && (
                                   <Box sx={{ 
                                     display: 'flex', 
                                     alignItems: 'center', 
@@ -1267,11 +1416,16 @@ const WorkshopPage = () => {
                                   </Box>
                                 )}
                               </Box>
-                              {selectedOrder.paymentData?.depositReceived && (
-                                <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold', mt: 1 }}>
-                                  ✓ Deposit Received
-                                </Typography>
-                              )}
+                              <Typography 
+                                variant="body2" 
+                                sx={{ 
+                                  fontWeight: 'bold', 
+                                  mt: 1,
+                                  color: getDepositStatus(selectedOrder).isReceived ? '#4caf50' : '#f44336'
+                                }}
+                              >
+                                {getDepositStatus(selectedOrder).status}
+                              </Typography>
                             </CardContent>
                           </Card>
                         </Grid>
@@ -1391,32 +1545,18 @@ const WorkshopPage = () => {
                     </Card>
                   )}
                   
-                  {/* Gmail Sign-in Status */}
-                  {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && !gmailSignedIn && (
+                  {/* Email Status Indicator */}
+                  {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && (
                     <Box sx={{ mt: 3 }}>
                       <Alert 
-                        severity="warning" 
-                        action={
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={signIn}
-                            startIcon={<GoogleIcon />}
-                            sx={{ 
-                              borderColor: '#f57c00',
-                              color: '#f57c00',
-                              '&:hover': {
-                                borderColor: '#ef6c00',
-                                backgroundColor: 'rgba(245, 124, 0, 0.04)'
-                              }
-                            }}
-                          >
-                            Sign in Gmail
-                          </Button>
-                        }
+                        severity={gmailSignedIn ? "success" : "info"}
+                        icon={gmailSignedIn ? <CheckIcon /> : <EmailIcon />}
                       >
                         <Typography variant="body2">
-                          Sign in to Gmail to send deposit confirmation emails to customers
+                          {gmailSignedIn 
+                            ? `Ready to send emails using ${gmailUser?.email || 'your Google account'}`
+                            : 'Email functionality will be available once you sign in with your Google account'
+                          }
                         </Typography>
                       </Alert>
                     </Box>
@@ -2448,7 +2588,8 @@ const WorkshopPage = () => {
         </DialogActions>
       </Dialog>
 
-    </Box>
+      </Box>
+    </>
   );
 };
 

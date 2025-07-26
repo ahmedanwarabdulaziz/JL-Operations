@@ -22,6 +22,7 @@ import PublicIcon from '@mui/icons-material/Public';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
+import StorageIcon from '@mui/icons-material/Storage';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PushPinIcon from '@mui/icons-material/PushPin';
@@ -41,7 +42,9 @@ const menuItems = [
   { text: 'Invoices', path: '/invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/finance', icon: <AccountBalanceIcon /> },
   { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
+  { text: 'Email Settings', path: '/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
+
   { text: 'Rapid Invoice Settings', path: '/rapid-invoice-settings', icon: <FlashOnIcon /> },
   { text: 'Data Management', path: '/data-management', icon: <SettingsIcon /> },
 ];

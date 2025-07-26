@@ -1,126 +1,112 @@
-# Email Setup Guide
+# Email Setup Guide for JL Operations
 
-This guide will help you set up the email functionality for sending order details to customers.
+## Overview
+The application supports multiple email sending methods. You can configure one or more of these options:
 
-## Gmail API Setup
+1. **Gmail API** (Recommended) - Uses your Google account to send emails
+2. **EmailJS** (Alternative) - Uses a third-party service to send emails
+3. **Simulation** (Fallback) - Shows what would be sent (for testing)
 
-The app uses **Gmail API with Google Identity Services** to send emails from your Gmail account (`jlupholstery@gmail.com`). This is the same system used in the Test Email page.
+## Option 1: Gmail API Setup (Recommended)
 
-### 1. Google Cloud Console Setup
+### Step 1: Create Google Cloud Project
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
+2. Create a new project or select existing one
 3. Enable the Gmail API for your project
-4. Create OAuth 2.0 credentials:
-   - Go to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "OAuth 2.0 Client IDs"
-   - Choose "Web application"
-   - Add authorized JavaScript origins: `http://localhost:3000`, `http://localhost:3001`
-   - Add authorized redirect URIs: `http://localhost:3000`, `http://localhost:3001`
-   - Note down your **Client ID**
 
-### 2. Configure the App
-1. Open `src/config/gmail.js`
-2. Update the CLIENT_ID with your actual Google OAuth Client ID:
-   ```javascript
-   export const GMAIL_CONFIG = {
-     CLIENT_ID: 'your_oauth_client_id_here',
-     // ... other settings
-   };
-   ```
+### Step 2: Create OAuth 2.0 Credentials
+1. Go to "APIs & Services" > "Credentials"
+2. Click "Create Credentials" > "OAuth 2.0 Client IDs"
+3. Choose "Web application"
+4. Add authorized JavaScript origins:
+   - `http://localhost:3000` (for development)
+   - `https://your-domain.com` (for production)
+5. Copy the Client ID
 
-### 3. Test the Setup
-1. Go to the "Test Email" page in your app
-2. Click "Sign in with Google"
-3. Authorize the app to send emails
-4. Send a test email to verify everything works
+### Step 3: Configure Environment Variables
+Create a `.env` file in your project root and add:
 
-## How It Works
+```env
+# Gmail API Configuration
+REACT_APP_GMAIL_CLIENT_ID=your_oauth_client_id_here
+REACT_APP_GMAIL_API_KEY=your_api_key_here
+REACT_APP_FROM_EMAIL=your-email@gmail.com
+```
 
-### Email Toggle in Step 6
-- When creating or editing an order, users will see a toggle switch in Step 6 (Submit)
-- Users must first sign in with their Gmail account to enable email sending
-- The toggle allows them to choose whether to send an email to the customer
-- The email will include all order details, pricing, and payment information
+### Step 4: Test Gmail API
+1. Start the application
+2. Sign in with your Google account
+3. Try sending an email - it should work automatically
 
-### Gmail Sign-in Process
-- Users click "Sign in with Google" in Step 6
-- Google OAuth popup appears for authorization
-- Once authorized, the user can enable email sending
-- Emails are sent from the signed-in Gmail account
+## Option 2: EmailJS Setup (Alternative)
 
-### Email Content
-The email template includes:
-- Professional styling with your business branding
-- Complete order details and furniture specifications
-- Pricing breakdown (materials, labour, foam, pickup/delivery)
-- Payment instructions and deposit requirements
-- E-transfer security information
-- Business contact details
+### Step 1: Create EmailJS Account
+1. Go to [EmailJS](https://www.emailjs.com/)
+2. Sign up for a free account
+3. Create a new email service (Gmail, Outlook, etc.)
 
-### Email Template Structure
-The email is generated using the template in `src/utils/emailTemplate.js` which includes:
-- Customer greeting with personalized name
-- Quote summary with invoice number
-- Detailed furniture specifications
-- Payment and deposit information
-- Business policies and scheduling notes
-- Professional signature and footer
+### Step 2: Create Email Template
+1. In EmailJS dashboard, go to "Email Templates"
+2. Create a new template with variables:
+   - `{{to_email}}` - recipient email
+   - `{{from_email}}` - sender email
+   - `{{subject}}` - email subject
+   - `{{message}}` - email content
+   - `{{order_data}}` - order information
 
-## Testing the Email Functionality
+### Step 3: Configure Environment Variables
+Add to your `.env` file:
 
-1. Create a new order with customer email
-2. Go through all steps to Step 6
-3. Click "Sign in with Google" and authorize the app
-4. Enable the "Send Order Details Email" toggle
-5. Click "Create Order"
-6. Check the customer's email for the quote
+```env
+# EmailJS Configuration
+REACT_APP_EMAILJS_PUBLIC_KEY=your_public_key
+REACT_APP_EMAILJS_SERVICE_ID=your_service_id
+REACT_APP_EMAILJS_TEMPLATE_ID=your_template_id
+```
+
+## Option 3: Simulation Mode (Testing)
+
+If you don't configure any email service, the app will simulate email sending. You'll see:
+- Console logs showing what would be sent
+- Success messages indicating simulated sending
+- No actual emails sent
 
 ## Troubleshooting
 
-### Email Not Sending
-- Verify Google OAuth Client ID is correct
-- Check browser console for error messages
-- Ensure customer email is valid
-- Make sure user is signed in with Gmail
-- Verify Gmail API is enabled in Google Cloud Console
+### Gmail API Issues
+- **"Gmail access denied"**: Make sure you're signed in with the correct Google account
+- **"No user signed in"**: Sign in to the app first before trying to send emails
+- **"Google API loading timeout"**: Check your internet connection and refresh the page
 
-### Gmail Sign-in Issues
-- Check that Google Identity Services is loaded
-- Verify OAuth Client ID is properly configured
-- Ensure authorized origins include your domain
-- Check browser console for OAuth errors
+### EmailJS Issues
+- **"EmailJS failed"**: Check your EmailJS credentials and template
+- **"Service not found"**: Verify your service ID in EmailJS dashboard
 
-### Configuration Issues
-- Double-check Google Cloud Console settings
-- Verify Gmail API is enabled
-- Ensure OAuth consent screen is configured
-- Check that redirect URIs are correct
+### General Issues
+- **Emails not sending**: Check browser console for error messages
+- **Authentication problems**: Try signing out and back in
+- **Configuration issues**: Verify all environment variables are set correctly
 
-## Security Notes
+## Current Status
 
-- Gmail API uses OAuth 2.0 for secure authentication
-- User must explicitly authorize the app to send emails
-- No credentials are stored in the frontend code
-- Emails are sent from the user's own Gmail account
-- Gmail API has generous quotas for personal use
+The application will try these methods in order:
+1. **Gmail API** (if configured and user is signed in)
+2. **EmailJS** (if configured)
+3. **Simulation** (always available as fallback)
 
-## Customization
+## Quick Test
 
-### Business Information
-Edit `src/config/gmail.js` to update:
-- Business name and email settings
-- Default subject lines and messages
+To test if emails are working:
+1. Go to the Workshop page
+2. Select an order with a customer email
+3. Click "Mark Deposit Received"
+4. Check if you see a success message
+5. Check browser console for detailed logs
 
-### Email Template
-Modify `src/utils/emailTemplate.js` to customize:
-- Email styling and colors
-- Content layout
-- Business policies
-- Contact information
+## Support
 
-### Gmail API Settings
-The Gmail API configuration in `src/config/gmail.js` can be extended to:
-- Add different scopes for more permissions
-- Configure different OAuth settings
-- Add multiple Gmail accounts
-- Set up email templates 
+If you need help setting up email functionality:
+1. Check the browser console for error messages
+2. Verify all environment variables are set
+3. Ensure you're signed in with the correct account
+4. Try the simulation mode first to test the flow 

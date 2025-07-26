@@ -1,12 +1,24 @@
-export const generateDepositEmailTemplate = (data) => {
+export const generateDepositEmailTemplate = (orderData) => {
   const {
-    customerSalutationName = 'Customer',
-    formattedDeposit = '0',
-    billNo = 'N/A',
-    currentYear = new Date().getFullYear(),
-    YOUR_BUSINESS_EMAIL_SIGNATURE = 'ANWAR JL Upholstery',
-    YOUR_BUSINESS_NAME = 'ANWAR JL Upholstery'
-  } = data;
+    personalInfo,
+    orderDetails,
+    paymentData
+  } = orderData;
+
+  // Extract customer name (first name only)
+  const customerFirstName = personalInfo?.customerName?.split(' ')[0] || 'Customer';
+  
+  // Extract invoice number
+  const billNo = orderDetails?.billInvoice || 'N/A';
+  
+  // Extract deposit amount
+  const depositAmount = parseFloat(paymentData?.deposit) || 0;
+  const formattedDeposit = depositAmount.toFixed(2);
+  
+  // Business constants
+  const currentYear = new Date().getFullYear();
+  const YOUR_BUSINESS_EMAIL_SIGNATURE = 'JL Team';
+  const YOUR_BUSINESS_NAME = 'JL Upholstery';
 
   return `
 <!DOCTYPE html>
@@ -38,7 +50,7 @@ export const generateDepositEmailTemplate = (data) => {
                 <h1>Deposit Received</h1>
             </div>
             <div class="email-body">
-                <p class="greeting">Dear ${customerSalutationName},</p>
+                <p class="greeting">Dear ${customerFirstName},</p>
                 <p>Thank you for your payment. We're pleased to confirm that your deposit has been received.</p>
                 <div class="deposit-details">
                     <p>We received your deposit with amount <span class="deposit-amount">$${formattedDeposit}</span> for invoice # <span class="invoice-number">${billNo}</span>.</p>

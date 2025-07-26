@@ -7,15 +7,17 @@ import {
   Box, 
   Avatar,
   Chip,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import { useAuth } from '../Auth/AuthContext';
-import { useGmailAuth } from '../../contexts/GmailAuthContext';
 import { Google as GoogleIcon } from '@mui/icons-material';
+import { isGmailConfigured, getCurrentGmailConfig, requestGmailPermissions, signOutGmail } from '../../services/emailService';
 
 const Header = () => {
   const { user, logout } = useAuth();
-  const { gmailSignedIn, gmailUser, signIn, signOut } = useGmailAuth();
+  const [gmailConfig, setGmailConfig] = useState(getCurrentGmailConfig());
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
 
 
   
@@ -32,6 +34,23 @@ const Header = () => {
 
   const handleLogout = () => {
     logout();
+  };
+
+  const handleGmailSignIn = async () => {
+    setIsAuthorizing(true);
+    try {
+      const result = await requestGmailPermissions();
+      setGmailConfig(result);
+    } catch (error) {
+      console.error('Gmail authorization failed:', error);
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
+  const handleGmailSignOut = () => {
+    signOutGmail();
+    setGmailConfig(getCurrentGmailConfig());
   };
 
   return (
@@ -52,24 +71,25 @@ const Header = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* Gmail Sign-in Status */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {gmailSignedIn ? (
+            {gmailConfig.isConfigured ? (
               <Chip
                 icon={<GoogleIcon />}
-                label={`Gmail: ${gmailUser?.email || 'Signed In'}`}
+                label={`Gmail: ${gmailConfig.userEmail || 'Authorized'}`}
                 color="success"
                 size="small"
-                onClick={signOut}
+                onClick={handleGmailSignOut}
                 sx={{ cursor: 'pointer' }}
               />
             ) : (
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<GoogleIcon />}
-                onClick={signIn}
+                startIcon={isAuthorizing ? <CircularProgress size={16} /> : <GoogleIcon />}
+                onClick={handleGmailSignIn}
+                disabled={isAuthorizing}
                 sx={{ textTransform: 'none' }}
               >
-                Sign in Gmail
+                {isAuthorizing ? 'Authorizing...' : 'Authorize Gmail'}
               </Button>
             )}
           </Box>

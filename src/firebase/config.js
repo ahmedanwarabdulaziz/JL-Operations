@@ -5,12 +5,12 @@ import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+  apiKey: "AIzaSyCVZ-C2ezeuOhgHtCTQVi234Fhc4ZGX8Qs",
+  authDomain: "jl-operation.firebaseapp.com",
+  projectId: "jl-operation",
+  storageBucket: "jl-operation.firebasestorage.app",
+  messagingSenderId: "118256366160",
+  appId: "1:118256366160:web:b44f0592501796c0ef1755"
 };
 
 // Initialize Firebase
@@ -19,9 +19,13 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Add scopes to get profile information
+// Add scopes to get profile information and Gmail access
 googleProvider.addScope('profile');
 googleProvider.addScope('email');
 googleProvider.addScope('openid');
 googleProvider.addScope('https://www.googleapis.com/auth/userinfo.profile');
-googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email'); 
+googleProvider.addScope('https://www.googleapis.com/auth/userinfo.email');
+
+// Add Gmail scopes for email sending
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
+googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose'); 
