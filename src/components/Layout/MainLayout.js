@@ -42,9 +42,9 @@ const MainLayout = ({ children }) => {
           component="main" 
           sx={{ 
             flexGrow: 1, 
-            p: 3,
             backgroundColor: '#f5f5f5',
             overflow: 'auto', // Allow scrolling
+            p: 3, // Professional padding for all pages
           }}
         >
           {children}

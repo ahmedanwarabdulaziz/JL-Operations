@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -28,6 +28,11 @@ const FastOrderStep1 = ({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateCustomers, setDuplicateCustomers] = useState([]);
 
+  // Auto-select functionality
+  const handleFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
+
   const handleInputChange = (field, value) => {
     onUpdate({ ...data, [field]: value });
   };
@@ -40,8 +45,8 @@ const FastOrderStep1 = ({
     const hasPhone = phone && phone.trim().length > 0;
     const hasEmail = email && email.trim().length > 0;
     
-    // Need at least name and email to check for duplicates
-    if (!hasName || !hasEmail) {
+    // Need at least name to check for duplicates (email is optional)
+    if (!hasName) {
       return false;
     }
 
@@ -167,6 +172,7 @@ const FastOrderStep1 = ({
           label="Customer Name *"
           value={data.customerName}
           onChange={(e) => handleInputChange('customerName', e.target.value)}
+          onFocus={handleFocus}
           error={!!errors.customerName}
           helperText={errors.customerName}
           placeholder="Enter customer's full name"
@@ -189,14 +195,14 @@ const FastOrderStep1 = ({
 
         <TextField
           fullWidth
-          label="Email Address *"
+          label="Email Address"
           type="email"
           value={data.email}
           onChange={(e) => handleInputChange('email', e.target.value)}
+          onFocus={handleFocus}
           error={!!errors.email}
           helperText={errors.email}
-          placeholder="Enter email address"
-          required
+          placeholder="Enter email address (optional)"
           sx={{
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
@@ -218,6 +224,7 @@ const FastOrderStep1 = ({
           label="Phone Number"
           value={data.phone}
           onChange={(e) => handleInputChange('phone', e.target.value)}
+          onFocus={handleFocus}
           error={!!errors.phone}
           helperText={errors.phone}
           placeholder="Enter phone number"
@@ -244,6 +251,7 @@ const FastOrderStep1 = ({
           rows={3}
           value={data.address}
           onChange={(e) => handleInputChange('address', e.target.value)}
+          onFocus={handleFocus}
           error={!!errors.address}
           helperText={errors.address}
           placeholder="Enter complete address"

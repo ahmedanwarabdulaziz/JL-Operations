@@ -31,6 +31,7 @@ import Step3Furniture from './steps/Step3Furniture';
 import Step4PaymentNotes from './steps/Step4PaymentNotes';
 import Step5Review from './steps/Step5Review';
 import Step6Submit from './steps/Step6Submit';
+import { useAutoSelect } from '../../hooks/useAutoSelect';
 
 const steps = [
   'Personal Info',
@@ -45,6 +46,7 @@ const NewOrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { showSuccess, showError } = useNotification();
+  const { onFocus: handleAutoSelect } = useAutoSelect();
   
   // Check if we're in edit mode
   const isEditMode = location.state?.editMode || false;
@@ -101,8 +103,10 @@ const NewOrderPage = () => {
   const [paymentDetails, setPaymentDetails] = useState({
     deposit: 0, // Required deposit amount
     amountPaid: 0, // Actual amount paid by customer
+    amountPaidEnabled: false, // Toggle for amount paid field
     pickupDeliveryEnabled: false,
     pickupDeliveryCost: '',
+    pickupDeliveryServiceType: 'both', // Default to both for backward compatibility
     notes: ''
   });
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -29,6 +29,37 @@ const FastOrderStep2 = ({
 }) => {
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
+
+  // Auto-select functionality
+  const handleFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
+
+  // Calculate pickup & delivery cost based on service type
+  const calculatePickupDeliveryCost = (baseCost, serviceType) => {
+    const cost = parseFloat(baseCost) || 0;
+    switch (serviceType) {
+      case 'pickup':
+      case 'delivery':
+        return cost; // Single service
+      case 'both':
+        return cost * 2; // Both services
+      default:
+        return cost;
+    }
+  };
+
+  // Handle pickup & delivery service type change
+  const handleServiceTypeChange = (serviceType) => {
+    // Don't change the base cost in the field, just update service type
+    handlePaymentChange('pickupDeliveryServiceType', serviceType);
+  };
+
+  // Handle pickup & delivery cost change
+  const handlePickupDeliveryCostChange = (cost) => {
+    // Store the base cost directly
+    handlePaymentChange('pickupDeliveryCost', cost);
+  };
 
   const handleOrderDetailsChange = (field, value) => {
     onUpdate({
@@ -65,6 +96,10 @@ const FastOrderStep2 = ({
       foamPrice: '',
       foamQnty: 1,
       foamNote: '',
+      paintingEnabled: false,
+      paintingLabour: '',
+      paintingNote: '',
+      paintingQnty: 1,
       customerNote: ''
     };
     
@@ -680,7 +715,109 @@ const FastOrderStep2 = ({
               )}
             </Card>
 
-            {/* Toggle 4: Customer Note */}
+            {/* Toggle 5: Painting */}
+            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={toggles.painting}
+                    onChange={(e) => {
+                      const newValue = e.target.checked;
+                      onToggleChange('painting', newValue);
+                      // Set default painting quantity to 1 when enabled
+                      if (newValue && !group.paintingQnty) {
+                        updateFurnitureGroup(index, 'paintingQnty', 1);
+                      }
+                    }}
+                  />
+                }
+                label="Painting"
+              />
+              
+              {toggles.painting && (
+                <Grid container spacing={2} sx={{ mt: 2 }}>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Painting Labour"
+                      type="number"
+                      value={group.paintingLabour}
+                      onChange={(e) => updateFurnitureGroup(index, 'paintingLabour', parseFloat(e.target.value) || 0)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      placeholder="Labour price"
+                      error={!!errors.paintingLabour}
+                      helperText={errors.paintingLabour}
+                      sx={{
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: '2px',
+                          borderColor: errors.paintingLabour ? 'error.main' : 'grey.300',
+                          borderRadius: 2,
+                        },
+                        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: errors.paintingLabour ? 'error.main' : 'primary.main',
+                        },
+                        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: errors.paintingLabour ? 'error.main' : 'primary.main',
+                          borderWidth: '2px',
+                        },
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Painting Note"
+                      value={group.paintingNote}
+                      onChange={(e) => updateFurnitureGroup(index, 'paintingNote', e.target.value)}
+                      placeholder="Painting notes"
+                      sx={{
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: '2px',
+                          borderColor: 'grey.300',
+                          borderRadius: 2,
+                        },
+                        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                        },
+                        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                          borderWidth: '2px',
+                        },
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <TextField
+                      fullWidth
+                      label="Painting Quantity"
+                      type="number"
+                      value={group.paintingQnty}
+                      onChange={(e) => updateFurnitureGroup(index, 'paintingQnty', parseFloat(e.target.value) || 0)}
+                      inputProps={{ min: 0, step: 0.1 }}
+                      placeholder="Qty"
+                      error={!!errors.paintingQnty}
+                      helperText={errors.paintingQnty}
+                      sx={{
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: '2px',
+                          borderColor: errors.paintingQnty ? 'error.main' : 'grey.300',
+                          borderRadius: 2,
+                        },
+                        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: errors.paintingQnty ? 'error.main' : 'primary.main',
+                        },
+                        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: errors.paintingQnty ? 'error.main' : 'primary.main',
+                          borderWidth: '2px',
+                        },
+                      }}
+                    />
+                  </Grid>
+                </Grid>
+              )}
+            </Card>
+
+            {/* Toggle 6: Customer Note */}
             <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
               <FormControlLabel
                 control={
@@ -700,9 +837,10 @@ const FastOrderStep2 = ({
                   rows={3}
                   value={group.customerNote}
                   onChange={(e) => updateFurnitureGroup(index, 'customerNote', e.target.value)}
+                  onFocus={handleFocus}
                   placeholder="Enter customer notes for this furniture item"
-                  sx={{ mt: 2 }}
                   sx={{
+                    mt: 2,
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderWidth: '2px',
                       borderColor: 'grey.300',
@@ -751,6 +889,7 @@ const FastOrderStep2 = ({
               type="number"
               value={data.paymentData.deposit}
               onChange={(e) => handlePaymentChange('deposit', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+              onFocus={handleFocus}
               inputProps={{ min: 0, step: 0.01 }}
               placeholder="Enter required deposit amount"
               helperText="Amount the customer needs to pay"
@@ -771,33 +910,49 @@ const FastOrderStep2 = ({
             />
           </Box>
 
-          {/* Amount Paid */}
+          {/* Amount Paid Toggle */}
           <Box sx={{ mb: 3 }}>
-            <TextField
-              fullWidth
-              label="Amount Paid by Customer"
-              type="number"
-              value={data.paymentData.amountPaid}
-              onChange={(e) => handlePaymentChange('amountPaid', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
-              inputProps={{ min: 0, step: 0.01 }}
-              placeholder="Enter amount actually paid"
-              helperText="Amount the customer has actually paid"
-              sx={{
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderWidth: '2px',
-                  borderColor: 'grey.300',
-                  borderRadius: 2,
-                },
-                '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
-                },
-                '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
-                  borderWidth: '2px',
-                },
-              }}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={Boolean(data.paymentData.amountPaidEnabled)}
+                  onChange={(e) => handlePaymentChange('amountPaidEnabled', e.target.checked)}
+                />
+              }
+              label="Enable Amount Paid by Customer"
             />
           </Box>
+
+          {/* Amount Paid */}
+          {data.paymentData.amountPaidEnabled && (
+            <Box sx={{ mb: 3 }}>
+              <TextField
+                fullWidth
+                label="Amount Paid by Customer"
+                type="number"
+                value={data.paymentData.amountPaid}
+                onChange={(e) => handlePaymentChange('amountPaid', e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+                onFocus={handleFocus}
+                inputProps={{ min: 0, step: 0.01 }}
+                placeholder="Enter amount actually paid"
+                helperText="Amount the customer has actually paid"
+                sx={{
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderWidth: '2px',
+                    borderColor: 'grey.300',
+                    borderRadius: 2,
+                  },
+                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.main',
+                  },
+                  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.main',
+                    borderWidth: '2px',
+                  },
+                }}
+              />
+            </Box>
+          )}
 
           {/* Toggle 5: Pickup & Delivery */}
           <Box sx={{ mb: 3 }}>
@@ -805,7 +960,11 @@ const FastOrderStep2 = ({
               control={
                 <Switch
                   checked={toggles.pickupDelivery}
-                  onChange={(e) => onToggleChange('pickupDelivery', e.target.checked)}
+                  onChange={(e) => {
+                    onToggleChange('pickupDelivery', e.target.checked);
+                    // Also update the payment data to match the toggle
+                    handlePaymentChange('pickupDeliveryEnabled', e.target.checked);
+                  }}
                 />
               }
               label="Enable Pickup & Delivery"
@@ -815,31 +974,64 @@ const FastOrderStep2 = ({
           {/* Pickup & Delivery Cost */}
           {toggles.pickupDelivery && (
             <Box sx={{ mb: 3 }}>
-              <TextField
-                fullWidth
-                label="Pickup & Delivery Cost"
-                type="number"
-                value={data.paymentData.pickupDeliveryCost}
-                onChange={(e) => handlePaymentChange('pickupDeliveryCost', parseFloat(e.target.value) || 0)}
-                error={!!errors.pickupDeliveryCost}
-                helperText={errors.pickupDeliveryCost}
-                inputProps={{ min: 0, step: 0.01 }}
-                placeholder="Enter pickup & delivery cost"
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderWidth: '2px',
-                    borderColor: errors.pickupDeliveryCost ? 'error.main' : 'grey.300',
-                    borderRadius: 2,
-                  },
-                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
-                  },
-                  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
-                    borderWidth: '2px',
-                  },
-                }}
-              />
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <Select
+                      value={data.paymentData.pickupDeliveryServiceType || 'both'}
+                      onChange={(e) => handleServiceTypeChange(e.target.value)}
+                      displayEmpty
+                      sx={{
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: '2px',
+                          borderColor: 'grey.300',
+                          borderRadius: 2,
+                        },
+                        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                        },
+                        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'primary.main',
+                          borderWidth: '2px',
+                        },
+                      }}
+                    >
+                      <MenuItem value="pickup">🚚 Pickup Only</MenuItem>
+                      <MenuItem value="delivery">🚚 Delivery Only</MenuItem>
+                      <MenuItem value="both">🚚 Pickup & Delivery</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Service Cost"
+                    type="number"
+                    value={data.paymentData.pickupDeliveryCost || 0}
+                    onChange={(e) => handlePickupDeliveryCostChange(parseFloat(e.target.value) || 0)}
+                    onFocus={handleFocus}
+                    error={!!errors.pickupDeliveryCost}
+                    helperText={errors.pickupDeliveryCost || 
+                      `Total: $${calculatePickupDeliveryCost(data.paymentData.pickupDeliveryCost || 0, data.paymentData.pickupDeliveryServiceType || 'both')} (${data.paymentData.pickupDeliveryServiceType === 'both' ? '2x service' : '1x service'})`}
+                    inputProps={{ min: 0, step: 0.01 }}
+                    placeholder="Enter service cost"
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'grey.300',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
+                        borderWidth: '2px',
+                      },
+                    }}
+                  />
+                </Grid>
+              </Grid>
             </Box>
           )}
 

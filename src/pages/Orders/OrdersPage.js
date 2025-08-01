@@ -109,9 +109,29 @@ const OrdersPage = () => {
       
       console.log('Orders data received:', ordersData);
       
+      // Get invoice statuses to identify end states
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const statusesSnapshot = await getDocs(statusesRef);
+      const statusesData = statusesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Filter out orders with end state statuses
+      const endStateStatuses = statusesData.filter(status => 
+        status.isEndState
+      );
+      const endStateValues = endStateStatuses.map(status => status.value);
+
+      const activeOrders = ordersData.filter(order => 
+        !endStateValues.includes(order.invoiceStatus)
+      );
+      
+      console.log('Filtered active orders:', activeOrders);
+      
       // Sort by bill number (highest to lowest)
-      const sortedOrders = sortOrdersByBillNumber(ordersData);
-      console.log('Sorted orders:', sortedOrders);
+      const sortedOrders = sortOrdersByBillNumber(activeOrders);
+      console.log('Sorted active orders:', sortedOrders);
       
       setOrders(sortedOrders);
       setFilteredOrders(sortedOrders);

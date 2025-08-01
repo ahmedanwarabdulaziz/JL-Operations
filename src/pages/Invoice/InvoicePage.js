@@ -48,7 +48,8 @@ import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/fi
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
-import { calculateOrderTotal, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderTax, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
+import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../utils/materialTaxRates';
 import autoTable from 'jspdf-autotable';
 
 // Register the autoTable plugin
@@ -69,10 +70,12 @@ const InvoicePage = () => {
     total: '',
   });
   const [expenseList, setExpenseList] = useState([]);
+  const [materialTaxRates, setMaterialTaxRates] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchOrders();
+    fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
   }, []);
 
   const fetchOrders = async () => {
@@ -125,93 +128,92 @@ const InvoicePage = () => {
     });
   };
 
+  // Use consistent calculation functions from orderCalculations
   const calculateInvoiceTotals = (order) => {
-    let itemsSubtotal = 0;
-    let taxableAmount = 0;
-    let jlGrandTotal = 0;
+    const revenue = calculateOrderTotal(order); // Includes tax
+    const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
+    const taxAmount = calculateOrderTax(order);
+    
+
+    
+    const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
+      calculatePickupDeliveryCost(
+        parseFloat(order.paymentData.pickupDeliveryCost) || 0,
+        order.paymentData.pickupDeliveryServiceType || 'both'
+      ) : 0;
+    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const balanceDue = revenue - amountPaid;
+
+    // Calculate JL internal costs properly
     let jlSubtotalBeforeTax = 0;
+    let jlGrandTotal = 0;
 
     if (order.furnitureData?.groups) {
       order.furnitureData.groups.forEach(group => {
-        const qntyFoam = parseFloat(group.foamQnty) || 1;
-        // Customer-facing calculations
-        const labourPrice = parseFloat(group.labourPrice) || 0;
-        const labourQnty = parseFloat(group.labourQnty) || 1;
-        const labourTotal = labourPrice * labourQnty;
-        itemsSubtotal += labourTotal;
-
-        const materialPrice = parseFloat(group.materialPrice) || 0;
-        const materialQnty = parseFloat(group.materialQnty) || 1;
-        const materialTotal = materialPrice * materialQnty;
-        itemsSubtotal += materialTotal;
-        taxableAmount += materialTotal; // Materials are taxable
-
-        const foamPrice = parseFloat(group.foamPrice) || 0;
-        const foamTotal = foamPrice * qntyFoam;
-        itemsSubtotal += foamTotal;
-        taxableAmount += foamTotal; // Foam is taxable
-
-        // JL Internal calculations - FIXED FIELD NAMES
-        const jlMaterialPrice = parseFloat(group.materialJLPrice) || 0;
-        const jlQuantity = parseFloat(group.materialJLQnty) || 0;
-        const jlMaterialTotal = jlMaterialPrice * jlQuantity;
-        jlSubtotalBeforeTax += jlMaterialTotal;
-        
-        // Get tax rate from material company (default 13%)
-        const materialCompany = group.materialCompany;
-        let taxRate = 0.13; // Default tax rate
-        if (materialCompany && materialCompany.toLowerCase().includes('charlotte')) {
-          taxRate = 0.02; // Special rate for Charlotte
+        // JL Material costs
+        if (group.materialJLPrice && parseFloat(group.materialJLPrice) > 0) {
+          const qty = parseFloat(group.materialJLQnty) || 0;
+          const price = parseFloat(group.materialJLPrice) || 0;
+          const subtotal = qty * price;
+          jlSubtotalBeforeTax += subtotal;
+          
+          // Get tax rate from material company settings
+          const taxRate = getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates);
+          jlGrandTotal += subtotal + (subtotal * taxRate);
         }
-        
-        const materialTax = jlMaterialTotal * taxRate;
-        const materialLineTotal = jlMaterialTotal + materialTax;
-        jlGrandTotal += materialLineTotal;
 
-        const jlFoamPrice = parseFloat(group.foamJLPrice) || 0;
-        const jlFoamTotal = jlFoamPrice * qntyFoam;
-        jlSubtotalBeforeTax += jlFoamTotal;
-        jlGrandTotal += jlFoamTotal;
+        // JL Foam costs (no tax)
+        if (group.foamJLPrice && parseFloat(group.foamJLPrice) > 0) {
+          const qty = parseFloat(group.foamQnty) || 1;
+          const price = parseFloat(group.foamJLPrice) || 0;
+          const subtotal = qty * price;
+          jlSubtotalBeforeTax += subtotal;
+          jlGrandTotal += subtotal; // No tax on foam
+        }
 
-        const otherExpenses = parseFloat(group.otherExpenses) || 0;
-        jlSubtotalBeforeTax += otherExpenses;
-        jlGrandTotal += otherExpenses;
+        // JL Painting costs (no tax - labour) - EXCLUDED from JL cost calculations
+        // if (group.paintingLabour && parseFloat(group.paintingLabour) > 0) {
+        //   const qty = parseFloat(group.paintingQnty) || 1;
+        //   const price = parseFloat(group.paintingLabour) || 0;
+        //   const subtotal = qty * price;
+        //   jlSubtotalBeforeTax += subtotal;
+        //   jlGrandTotal += subtotal; // No tax on labour
+        // }
 
-        const shipping = parseFloat(group.shipping) || 0;
-        jlSubtotalBeforeTax += shipping;
-        jlGrandTotal += shipping;
+        // Other expenses
+        if (group.otherExpenses && parseFloat(group.otherExpenses) > 0) {
+          const expense = parseFloat(group.otherExpenses) || 0;
+          jlSubtotalBeforeTax += expense;
+          jlGrandTotal += expense;
+        }
+
+        // Shipping
+        if (group.shipping && parseFloat(group.shipping) > 0) {
+          const shipping = parseFloat(group.shipping) || 0;
+          jlSubtotalBeforeTax += shipping;
+          jlGrandTotal += shipping;
+        }
       });
     }
 
-    // Add extraExpenses to JL Subtotal and JL Grand Total
-    let extraExpensesTotal = 0;
-    let extraExpensesSubtotal = 0;
-    if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
-      extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => sum + (parseFloat(exp.total) || 0), 0);
-      extraExpensesSubtotal = order.extraExpenses.reduce((sum, exp) => {
-        const price = parseFloat(exp.price) || 0;
-        const unit = isNaN(Number(exp.unit)) ? 1 : parseFloat(exp.unit) || 1;
-        return sum + price * unit;
-      }, 0);
-      jlSubtotalBeforeTax += extraExpensesSubtotal;
-      jlGrandTotal += extraExpensesTotal;
+    // Add extra expenses
+    if (order.extraExpenses && order.extraExpenses.length > 0) {
+      order.extraExpenses.forEach(exp => {
+        const expenseTotal = parseFloat(exp.total) || 0;
+        jlSubtotalBeforeTax += expenseTotal;
+        jlGrandTotal += expenseTotal;
+      });
     }
 
-    const taxAmount = taxableAmount * 0.13; // 13% tax on materials and foam
-    const pickupDeliveryCost = (parseFloat(order.paymentData?.pickupDeliveryCost) || 0) * 2;
-    const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const balanceDue = grandTotal - amountPaid;
-
     return {
-      itemsSubtotal,
+      itemsSubtotal: revenue - taxAmount - pickupDeliveryCost, // Subtract pickupDeliveryCost from itemsSubtotal
       taxAmount,
       pickupDeliveryCost,
-      grandTotal,
+      grandTotal: revenue, // Grand total includes pickup & delivery
       amountPaid,
       balanceDue,
       jlGrandTotal,
-      extraExpensesTotal,
+      extraExpensesTotal: 0, // Will be calculated separately if needed
       jlSubtotalBeforeTax,
     };
   };
@@ -349,6 +351,18 @@ const InvoicePage = () => {
             doc.text(`$${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
             currentY += 6;
           }
+          
+          // Painting
+          if (group.paintingLabour && parseFloat(group.paintingLabour) > 0) {
+            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
+            doc.setFont('helvetica', 'normal');
+            const paintingDesc = `Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}`;
+            doc.text(paintingDesc, leftMargin + 2, currentY + 4);
+            doc.text(`$${(parseFloat(group.paintingLabour) || 0).toFixed(2)}`, leftMargin + 120, currentY + 4);
+            doc.text(`${group.paintingQnty || 1}`, leftMargin + 145, currentY + 4);
+            doc.text(`$${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
+            currentY += 6;
+          }
         });
       }
       
@@ -469,7 +483,7 @@ const InvoicePage = () => {
             const jlQty = parseFloat(group.materialJLQnty) || 0;
             const jlPrice = parseFloat(group.materialJLPrice) || 0;
             const jlSubtotal = jlQty * jlPrice;
-            const jlTax = jlSubtotal * 0.13; // 13% tax
+            const jlTax = jlSubtotal * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates);
             const jlTotal = jlSubtotal + jlTax;
             
             doc.text(`Material (${group.materialCode || 'N/A'})`, leftMargin + 2, currentY + 4);
@@ -647,509 +661,439 @@ const InvoicePage = () => {
     }
 
     const totals = calculateInvoiceTotals(selectedOrder);
-    console.log('DEBUG JL Subtotal Before Tax:', totals.jlSubtotalBeforeTax);
-    console.log('DEBUG JL Grand Total:', totals.jlGrandTotal);
 
     return (
-      <Box sx={{ p: 3 }}>
-        {/* Invoice Header Card */}
-        <Card sx={{ mb: 3, border: '2px solid #e3f2fd' }}>
-          <CardContent sx={{ p: 0 }}>
-            {/* Header */}
-            <Box sx={{
-              backgroundColor: '#274290',
-              color: 'white',
-              p: 2,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
+      <Box sx={{ 
+        p: 3, 
+        backgroundColor: 'white',
+        minHeight: '297mm',
+        width: '210mm',
+        margin: '0 auto',
+        boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+        fontFamily: 'Arial, sans-serif'
+      }}>
+        {/* PDF-Style Invoice Header */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'flex-start',
+          mb: 3,
+          pb: 2,
+          borderBottom: '1px solid #ccc'
+        }}>
+          {/* Left Side - Customer Info */}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Name: {selectedOrder.personalInfo?.customerName || 'N/A'}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Email: {selectedOrder.personalInfo?.email || 'N/A'}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Phone: {selectedOrder.personalInfo?.phone || 'N/A'}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Platform: {selectedOrder.orderDetails?.platform || 'N/A'}
+            </Typography>
+            <Typography variant="body2">
+              Address: {selectedOrder.personalInfo?.address || 'N/A'}
+            </Typography>
+          </Box>
+
+          {/* Right Side - Invoice Number and Date */}
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography variant="h4" sx={{ 
+              fontWeight: 'bold', 
+              color: '#274290',
+              mb: 1
             }}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <ReceiptIcon sx={{ mr: 1 }} />
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  Customer Information
-                </Typography>
-              </Box>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#f27921' }}>
-                #{selectedOrder.orderDetails?.billInvoice || 'N/A'}
-              </Typography>
-            </Box>
-
-            {/* Content */}
-            <Box sx={{ p: 3 }}>
-              <Grid container spacing={3}>
-                {/* Left Column */}
-                <Grid item xs={12} md={6}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                      👤 Name
-                    </Typography>
-                    <Typography variant="body1" sx={{ fontSize: '1.1rem' }}>
-                      {selectedOrder.personalInfo?.customerName || 'N/A'}
-                    </Typography>
-                  </Box>
-                  
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                      ✉️ Email
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedOrder.personalInfo?.email || 'N/A'}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                      📍 Address
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedOrder.personalInfo?.address || 'N/A'}
-                    </Typography>
-                  </Box>
-                </Grid>
-
-                {/* Right Column */}
-                <Grid item xs={12} md={6}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                      📞 Phone
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedOrder.personalInfo?.phone || 'N/A'}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                      🏪 Platform
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedOrder.orderDetails?.platform || 'N/A'}
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* Section 2: Items & Services */}
-        <Card sx={{ mb: 3, border: '2px solid #e3f2fd' }}>
-          <CardContent sx={{ p: 0 }}>
-            {/* Header */}
-            <Box sx={{
-              backgroundColor: '#274290',
-              color: 'white',
-              p: 2,
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                📋 Items & Services
-              </Typography>
-            </Box>
-
-            {/* Content */}
-            <Box sx={{ p: 3 }}>
-              <TableContainer>
-                <Table sx={{ width: '100%' }}>
-                  <TableHead sx={{ backgroundColor: '#274290' }}>
-                    <TableRow>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold', width: '40%' }}>Description</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Qty</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Unit Price</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Tax</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedOrder.furnitureData?.groups?.map((group, index) => (
-                      <React.Fragment key={index}>
-                        <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                          <TableCell colSpan={5}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#274290' }}>
-                              🪑 {group.furnitureType || 'Furniture Group'}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                        
-                        {/* Material */}
-                        {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
-                          <TableRow sx={{ '& td': { py: 0.5 } }}>
-                            <TableCell>
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                Material - {group.materialCompany} {group.materialCode ? `(${group.materialCode})` : ''}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              {group.materialQnty || 1}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(group.materialPrice)}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1) * 0.13)}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                {formatCurrency((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1) * 1.13)}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        )}
-
-                        {/* Foam */}
-                        {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
-                          <TableRow sx={{ '& td': { py: 0.5 } }}>
-                            <TableCell>
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                Foam{group.foamThickness ? ` - ${group.foamThickness}" thick` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              {group.foamQnty || 1}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(group.foamPrice)}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1) * 0.13)}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                {formatCurrency((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1) * 1.13)}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        )}
-
-                        {/* Labour */}
-                        {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
-                          <TableRow sx={{ '& td': { py: 0.5 } }}>
-                            <TableCell>
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                Labour{group.labourNote ? ` - ${group.labourNote}` : ''}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              {group.labourQnty || 1}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(group.labourPrice)}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(0)}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                {formatCurrency((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1))}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </React.Fragment>
-                    )) || (
-                      <TableRow>
-                        <TableCell colSpan={4} align="center">
-                          <Typography variant="body1" color="text.secondary">
-                            No items found
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {/* Totals */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                <Paper elevation={1} sx={{ p: 2, minWidth: 300 }}>
-                  <Table sx={{ width: 'auto' }}>
-                    <TableBody>
-                      {/* Subtotal Group */}
-                      <TableRow sx={{ '& td': { py: 0.5 } }}>
-                        <TableCell><Typography variant="body1">Items Subtotal:</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="body1">{formatCurrency(totals.itemsSubtotal)}</Typography></TableCell>
-                      </TableRow>
-                      <TableRow sx={{ '& td': { py: 0.5 } }}>
-                        <TableCell><Typography variant="body1">Tax (13% on M&F):</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="body1">{formatCurrency(totals.taxAmount)}</Typography></TableCell>
-                      </TableRow>
-                      <TableRow sx={{ '& td': { py: 0.5 } }}>
-                        <TableCell><Typography variant="body1">Pickup & Delivery:</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="body1">{formatCurrency(totals.pickupDeliveryCost)}</Typography></TableCell>
-                      </TableRow>
-                      
-                      {/* Grand Total Group */}
-                      <TableRow sx={{ borderTop: 2, borderColor: 'grey.300', '& td': { py: 1 } }}>
-                        <TableCell><Typography variant="h6" sx={{ fontWeight: 'bold' }}>Grand Total:</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>{formatCurrency(totals.grandTotal)}</Typography></TableCell>
-                      </TableRow>
-                      <TableRow sx={{ '& td': { py: 0.5 } }}>
-                        <TableCell><Typography variant="body1">Amount Paid:</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="body1" color="success.main">-{formatCurrency(totals.amountPaid)}</Typography></TableCell>
-                      </TableRow>
-                      <TableRow sx={{ backgroundColor: 'grey.200', '& td': { py: 1 } }}>
-                        <TableCell><Typography variant="h6" sx={{ fontWeight: 'bold' }}>Balance Due:</Typography></TableCell>
-                        <TableCell align="right"><Typography variant="h6" sx={{ fontWeight: 'bold', color: 'grey.800' }}>{formatCurrency(totals.balanceDue)}</Typography></TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </Paper>
-              </Box>
-            </Box>
-          </CardContent>
-        </Card>
-
-        {/* Section 3: Notes */}
-        <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
-          {/* Customer Notes Card */}
-          <Card sx={{ 
-            flex: 1, 
-            border: '2px solid #e3f2fd'
-          }}>
-            <CardContent sx={{ p: 0 }}>
-              {/* Header */}
-              <Box sx={{
-                backgroundColor: '#274290',
-                color: 'white',
-                p: 2,
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  💬 Customer Notes
-                </Typography>
-              </Box>
-
-              {/* Content */}
-              <Box sx={{ p: 3 }}>
-                {selectedOrder.paymentData?.customerNotes?.trim() && (
-                  <Typography variant="body1" sx={{ 
-                    p: 2, 
-                    backgroundColor: '#f5f5f5', 
-                    borderRadius: 1, 
-                    border: '1px solid #e0e0e0',
-                    minHeight: 120,
-                    whiteSpace: 'pre-wrap',
-                    color: 'text.primary'
-                  }}>
-                    {selectedOrder.paymentData.customerNotes}
-                  </Typography>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* General Notes Card */}
-          <Card sx={{ 
-            flex: 1, 
-            border: '2px solid #e3f2fd'
-          }}>
-            <CardContent sx={{ p: 0 }}>
-              {/* Header */}
-              <Box sx={{
-                backgroundColor: '#274290',
-                color: 'white',
-                p: 2,
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  📝 General Notes
-                </Typography>
-              </Box>
-
-              {/* Content */}
-              <Box sx={{ p: 3 }}>
-                {selectedOrder.paymentData?.generalNotes?.trim() && (
-                  <Typography variant="body1" sx={{ 
-                    p: 2, 
-                    backgroundColor: '#f5f5f5', 
-                    borderRadius: 1, 
-                    border: '1px solid #e0e0e0',
-                    minHeight: 120,
-                    whiteSpace: 'pre-wrap',
-                    color: 'text.primary'
-                  }}>
-                    {selectedOrder.paymentData.generalNotes}
-                  </Typography>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
+              {selectedOrder.orderDetails?.billInvoice || 'N/A'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {formatDate(selectedOrder.createdAt)}
+            </Typography>
+          </Box>
         </Box>
 
-        {/* Section 4: Internal JL Cost Analysis */}
-        <Card sx={{ border: '2px solid #e3f2fd' }}>
-          <CardContent sx={{ p: 0 }}>
-            {/* Header */}
-            <Box sx={{
-              backgroundColor: '#274290',
-              color: 'white',
-              p: 2,
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                🏭 Internal JL Cost Analysis
-              </Typography>
-            </Box>
+        {/* Items & Services Section */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 'bold', 
+            mb: 2,
+            color: '#274290'
+          }}>
+            Items & Services
+          </Typography>
 
-            {/* Content */}
-            <Box sx={{ p: 3 }}>
-              <TableContainer>
-                <Table sx={{ width: '100%' }}>
-                  <TableHead sx={{ backgroundColor: '#274290' }}>
-                    <TableRow>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold', width: '40%' }}>Description</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Qty</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Unit Price</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Tax</TableCell>
-                      <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold', width: '15%' }}>Total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedOrder.furnitureData?.groups?.map((group, index) => (
-                      <React.Fragment key={index}>
-                        {console.log('JL GROUP:', JSON.stringify(group, null, 2))}
-                        <TableRow sx={{ backgroundColor: 'grey.200' }}>
-                          <TableCell colSpan={5}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'grey.700' }}>
-                              {group.furnitureType || 'Furniture Group'}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                        {/* JL Material Row */}
-                        {group.materialJLPrice && parseFloat(group.materialJLPrice) > 0 && (
-                          (() => {
-                            const qty = parseFloat(group.materialJLQnty) || 0;
-                            const price = parseFloat(group.materialJLPrice) || 0;
-                            const subtotal = qty * price;
-                            let taxRate = 0.13;
-                            if (group.materialCompany && group.materialCompany.toLowerCase().includes('charlotte')) {
-                              taxRate = 0.02;
-                            }
-                            const tax = subtotal * taxRate;
-                            const total = subtotal + tax;
-                            return (
-                              <TableRow>
-                                <TableCell>Material ({group.materialCompany || ''} {group.materialCode ? `- ${group.materialCode}` : ''})</TableCell>
-                                <TableCell align="right">{qty}</TableCell>
-                                <TableCell align="right">{formatCurrency(price)}</TableCell>
-                                <TableCell align="right">{formatCurrency(tax)}</TableCell>
-                                <TableCell align="right">{formatCurrency(total)}</TableCell>
-                              </TableRow>
-                            );
-                          })()
-                        )}
-                        {/* JL Foam Row */}
-                        {group.foamJLPrice && parseFloat(group.foamJLPrice) > 0 && (
-                          (() => {
-                            const qty = parseFloat(group.foamQnty) || 1;
-                            const price = parseFloat(group.foamJLPrice) || 0;
-                            const subtotal = qty * price;
-                            const tax = 0; // Foam has 0% tax for JL
-                            const total = subtotal + tax;
-                            return (
-                              <TableRow>
-                                <TableCell>Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}</TableCell>
-                                <TableCell align="right">{qty}</TableCell>
-                                <TableCell align="right">{formatCurrency(price)}</TableCell>
-                                <TableCell align="right">{formatCurrency(tax)}</TableCell>
-                                <TableCell align="right">{formatCurrency(total)}</TableCell>
-                              </TableRow>
-                            );
-                          })()
-                        )}
-                        {/* Other Expenses Row */}
-                        {group.otherExpenses && parseFloat(group.otherExpenses) > 0 && (
-                          <TableRow>
-                            <TableCell>{group.expensesNote || 'Other Expense'}</TableCell>
-                            <TableCell align="right">1</TableCell>
-                            <TableCell align="right">{formatCurrency(group.otherExpenses)}</TableCell>
-                            <TableCell align="right">{formatCurrency(0)}</TableCell>
-                            <TableCell align="right">{formatCurrency(group.otherExpenses)}</TableCell>
-                          </TableRow>
-                        )}
-                        {/* Shipping Row */}
-                        {group.shipping && parseFloat(group.shipping) > 0 && (
-                          <TableRow>
-                            <TableCell>Shipping</TableCell>
-                            <TableCell align="right">1</TableCell>
-                            <TableCell align="right">{formatCurrency(group.shipping)}</TableCell>
-                            <TableCell align="right">{formatCurrency(0)}</TableCell>
-                            <TableCell align="right">{formatCurrency(group.shipping)}</TableCell>
-                          </TableRow>
-                        )}
-                      </React.Fragment>
-                    )) || (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center">
-                          <Typography variant="body1" color="text.secondary">
-                            No items for JL Cost Analysis
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
-                      <React.Fragment>
-                        <TableRow>
-                          <TableCell colSpan={5} sx={{ backgroundColor: 'grey.100', fontWeight: 'bold', color: 'grey.800' }}>
-                            Other Expenses
-                          </TableCell>
-                        </TableRow>
-                        {selectedOrder.extraExpenses.map((exp, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{exp.description}</TableCell>
-                            <TableCell align="right">{exp.unit}</TableCell>
-                            <TableCell align="right">{formatCurrency(exp.price)}</TableCell>
-                            <TableCell align="right">{formatCurrency(exp.tax)}</TableCell>
-                            <TableCell align="right">{formatCurrency(exp.total)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </React.Fragment>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+          {/* Table Header */}
+          <Box sx={{ 
+            display: 'flex',
+            backgroundColor: '#f0f0f0',
+            border: '1px solid #ccc',
+            fontWeight: 'bold',
+            fontSize: '0.875rem'
+          }}>
+            <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>Description</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Price</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+            <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>Total</Box>
+          </Box>
 
-              {/* JL Totals */}
-              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-                <Paper elevation={1} sx={{ p: 2, minWidth: 300, backgroundColor: 'grey.200' }}>
-                  <Table sx={{ width: 'auto' }}>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell>
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'grey.700' }}>
-                            Subtotal (Before Tax):
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                            {formatCurrency(totals.jlSubtotalBeforeTax)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell>
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'grey.700' }}>
-                            Grand Total (JL Internal Cost):
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'grey.700' }}>
-                            {formatCurrency(totals.jlGrandTotal)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </Paper>
+          {/* Table Content */}
+          {selectedOrder.furnitureData?.groups?.map((group, groupIndex) => (
+            <Box key={groupIndex}>
+              {/* Furniture Type Header */}
+              <Box sx={{ 
+                display: 'flex',
+                backgroundColor: '#f8f8f8',
+                border: '1px solid #ccc',
+                borderTop: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.875rem'
+              }}>
+                <Box sx={{ flex: 6, p: 1 }}>
+                  {group.furnitureType || 'Furniture Group'}
+                </Box>
               </Box>
+
+              {/* Labour */}
+              {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem'
+                }}>
+                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
+                    Labour {group.labourNote ? group.labourNote : 'without piping design'}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(group.labourPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {group.labourQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Material */}
+              {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem'
+                }}>
+                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
+                    Material {group.materialCompany || ''} {group.materialCode ? `(${group.materialCode})` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(group.materialPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {group.materialQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Foam */}
+              {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem'
+                }}>
+                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
+                    Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(group.foamPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {group.foamQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Painting */}
+              {group.paintingLabour && parseFloat(group.paintingLabour) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem'
+                }}>
+                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
+                    Painting{group.paintingNote ? ` - ${group.paintingNote}` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(group.paintingLabour) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {group.paintingQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
             </Box>
-          </CardContent>
-        </Card>
+          ))}
+        </Box>
+
+        {/* Totals Section */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end',
+          mb: 3
+        }}>
+          <Box sx={{ width: 300 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 1,
+              fontSize: '0.875rem'
+            }}>
+              <span>Items Subtotal:</span>
+              <span>${totals.itemsSubtotal.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 1,
+              fontSize: '0.875rem'
+            }}>
+              <span>Tax (13% on M&F):</span>
+              <span>${totals.taxAmount.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 2,
+              fontSize: '0.875rem'
+            }}>
+              <span>Pickup & Delivery:</span>
+              <span>${totals.pickupDeliveryCost.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 2,
+              fontWeight: 'bold',
+              fontSize: '1rem',
+              borderTop: '1px solid #ccc',
+              pt: 1
+            }}>
+              <span>Grand Total:</span>
+              <span>${totals.grandTotal.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 2,
+              fontSize: '0.875rem'
+            }}>
+              <span>Deposit Paid:</span>
+              <span>-${totals.amountPaid.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              backgroundColor: '#fff3cd',
+              p: 1,
+              borderRadius: 1,
+              fontWeight: 'bold',
+              fontSize: '1rem'
+            }}>
+              <span>Balance Due:</span>
+              <span>${totals.balanceDue.toFixed(2)}</span>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Notes Section */}
+        <Box sx={{ 
+          display: 'flex', 
+          gap: 2,
+          mb: 3
+        }}>
+          {/* Internal Notes */}
+          <Box sx={{ flex: 1 }}>
+            <Box sx={{ 
+              backgroundColor: '#f8f8f8',
+              p: 1,
+              border: '1px solid #ccc',
+              borderBottom: 'none',
+              fontWeight: 'bold',
+              fontSize: '0.875rem'
+            }}>
+              Internal Notes
+            </Box>
+            <Box sx={{ 
+              border: '1px solid #ccc',
+              minHeight: 80,
+              p: 2,
+              fontSize: '0.875rem'
+            }}>
+              {selectedOrder.paymentData?.generalNotes || ''}
+            </Box>
+          </Box>
+
+          {/* Customer Notes */}
+          <Box sx={{ flex: 1 }}>
+            <Box sx={{ 
+              backgroundColor: '#f8f8f8',
+              p: 1,
+              border: '1px solid #ccc',
+              borderBottom: 'none',
+              fontWeight: 'bold',
+              fontSize: '0.875rem'
+            }}>
+              Customer's Item Notes
+            </Box>
+            <Box sx={{ 
+              border: '1px solid #ccc',
+              minHeight: 80,
+              p: 2,
+              fontSize: '0.875rem'
+            }}>
+              {selectedOrder.paymentData?.customerNotes || ''}
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Internal JL Cost Analysis */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 'bold', 
+            mb: 2,
+            color: '#274290'
+          }}>
+            Internal JL Cost Analysis
+          </Typography>
+
+          {/* JL Table Header */}
+          <Box sx={{ 
+            display: 'flex',
+            backgroundColor: '#f0f0f0',
+            border: '1px solid #ccc',
+            fontWeight: 'bold',
+            fontSize: '0.875rem'
+          }}>
+            <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>Component</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Unit Price</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Subtotal</Box>
+            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>TAX</Box>
+            <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>Line Total</Box>
+          </Box>
+
+          {/* JL Table Content */}
+          {selectedOrder.furnitureData?.groups?.map((group, groupIndex) => (
+            <Box key={groupIndex}>
+              {/* Furniture Type Header */}
+              <Box sx={{ 
+                display: 'flex',
+                backgroundColor: '#f8f8f8',
+                border: '1px solid #ccc',
+                borderTop: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.875rem'
+              }}>
+                <Box sx={{ flex: 6, p: 1 }}>
+                  {group.furnitureType || 'Furniture Group'}
+                </Box>
+              </Box>
+
+              {/* JL Material */}
+              {group.materialJLPrice && parseFloat(group.materialJLPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem'
+                }}>
+                  <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
+                    Material ({group.materialCode || 'N/A'})
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {(parseFloat(group.materialJLQnty) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(group.materialJLPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * 1.13).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ))}
+        </Box>
+
+        {/* JL Totals */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end',
+          mb: 3
+        }}>
+          <Box sx={{ 
+            width: 300,
+            backgroundColor: '#f0f0f0',
+            border: '1px solid #999',
+            p: 2
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              mb: 1,
+              fontWeight: 'bold',
+              fontSize: '0.875rem'
+            }}>
+              <span>Subtotal (Before Tax):</span>
+              <span style={{ color: '#274290' }}>${totals.jlSubtotalBeforeTax.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ 
+              borderTop: '1px solid #ccc',
+              pt: 1,
+              display: 'flex', 
+              justifyContent: 'space-between',
+              fontWeight: 'bold',
+              fontSize: '1rem'
+            }}>
+              <span>Grand Total (JL Internal Cost):</span>
+              <span style={{ color: '#f27921' }}>${totals.jlGrandTotal.toFixed(2)}</span>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Footer */}
+        <Box sx={{ 
+          textAlign: 'center',
+          mt: 4,
+          pt: 2,
+          borderTop: '1px solid #ccc',
+          fontSize: '0.875rem',
+          color: 'text.secondary'
+        }}>
+          Payment is due upon receipt.
+        </Box>
       </Box>
     );
   };

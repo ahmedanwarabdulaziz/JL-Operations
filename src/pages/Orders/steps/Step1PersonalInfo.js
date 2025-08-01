@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -30,6 +30,11 @@ const Step1PersonalInfo = ({
   const { showError } = useNotification();
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateCustomers, setDuplicateCustomers] = useState([]);
+
+  // Auto-select functionality
+  const handleFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
 
   const handleInputChange = (field, value) => {
     onPersonalInfoChange(field, value);
@@ -175,6 +180,7 @@ const Step1PersonalInfo = ({
           label="Customer Name *"
           value={personalInfo.customerName}
           onChange={(e) => handleInputChange('customerName', e.target.value)}
+          onFocus={handleFocus}
           error={!!formErrors.customerName}
           helperText={formErrors.customerName}
           placeholder="Enter customer's full name"
@@ -201,6 +207,7 @@ const Step1PersonalInfo = ({
           type="email"
           value={personalInfo.email}
           onChange={(e) => handleInputChange('email', e.target.value)}
+          onFocus={handleFocus}
           error={!!formErrors.email}
           helperText={formErrors.email}
           placeholder="Enter email address"
@@ -226,6 +233,7 @@ const Step1PersonalInfo = ({
           label="Phone Number"
           value={personalInfo.phone}
           onChange={(e) => handleInputChange('phone', e.target.value)}
+          onFocus={handleFocus}
           error={!!formErrors.phone}
           helperText={formErrors.phone}
           placeholder="Enter phone number"
@@ -252,6 +260,7 @@ const Step1PersonalInfo = ({
           rows={3}
           value={personalInfo.address}
           onChange={(e) => handleInputChange('address', e.target.value)}
+          onFocus={handleFocus}
           error={!!formErrors.address}
           helperText={formErrors.address}
           placeholder="Enter complete address"

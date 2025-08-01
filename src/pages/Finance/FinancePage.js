@@ -27,7 +27,11 @@ import {
   InputLabel,
   CircularProgress,
   Alert,
-  Tooltip
+  Tooltip,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -41,13 +45,18 @@ import {
   Refresh as RefreshIcon,
   DateRange as DateRangeIcon,
   FilterList as FilterListIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
+  CalendarToday as CalendarIcon,
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit } from '../../utils/orderCalculations';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData } from '../../utils/orderCalculations';
+import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
 
 // Invoice statuses will be loaded dynamically from database
 
@@ -61,6 +70,26 @@ const FinancePage = () => {
   const [editingStatus, setEditingStatus] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  
+  // Enhanced validation dialog state
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  const [validationError, setValidationError] = useState({ 
+    type: '', 
+    message: '', 
+    order: null, 
+    newStatus: null,
+    pendingAmount: 0,
+    currentAmount: 0
+  });
+  
+  // Allocation popup state
+  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
+  const [allocationMethod, setAllocationMethod] = useState('time-based');
+  const [manualAllocations, setManualAllocations] = useState([]);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [plPreviewData, setPlPreviewData] = useState(null);
   
   // Date filtering state - default to current month
   const [dateFrom, setDateFrom] = useState(() => {
@@ -99,10 +128,28 @@ const FinancePage = () => {
         // Add default invoice status if not present
         invoiceStatus: doc.data().invoiceStatus || 'in_progress'
       }));
+
+      // Get invoice statuses to identify end states
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const statusesSnapshot = await getDocs(statusesRef);
+      const statusesData = statusesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Filter out orders with end state statuses
+      const endStateStatuses = statusesData.filter(status => 
+        status.isEndState
+      );
+      const endStateValues = endStateStatuses.map(status => status.value);
+
+      const activeOrders = ordersData.filter(order => 
+        !endStateValues.includes(order.invoiceStatus)
+      );
       
-      setOrders(ordersData);
-      setFilteredOrders(ordersData);
-      calculateFinancialSummary(ordersData);
+      setOrders(activeOrders);
+      setFilteredOrders(activeOrders);
+      calculateFinancialSummary(activeOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showError('Failed to fetch orders');
@@ -138,13 +185,13 @@ const FinancePage = () => {
   const calculateFinancialSummary = (ordersData) => {
     const summary = ordersData.reduce((acc, order) => {
       const profitData = calculateOrderProfit(order);
-      const paidAmount = parseFloat(order.paymentData?.amountPaid) || 0;
+      const normalizedPayment = normalizePaymentData(order.paymentData);
       
       acc.totalRevenue += profitData.revenue;
       acc.totalCost += profitData.cost;
       acc.totalProfit += profitData.profit;
-      acc.paidAmount += paidAmount;
-      acc.pendingAmount += (profitData.revenue - paidAmount);
+      acc.paidAmount += normalizedPayment.amountPaid;
+      acc.pendingAmount += (profitData.revenue - normalizedPayment.amountPaid);
       acc.totalOrders += 1;
       
       return acc;
@@ -205,6 +252,60 @@ const FinancePage = () => {
   // Update invoice status
   const updateInvoiceStatus = async (orderId, newStatus) => {
     try {
+      // Find the order and new status
+      const order = orders.find(o => o.id === orderId);
+      const newStatusObj = invoiceStatuses.find(s => s.value === newStatus);
+      
+      if (!order || !newStatusObj) {
+        showError('Order or status not found');
+        return;
+      }
+
+      // Payment validation for end states
+      if (newStatusObj.isEndState) {
+        const totalAmount = calculateOrderProfit(order).revenue;
+        const normalizedPayment = normalizePaymentData(order.paymentData);
+        
+        if (newStatusObj.endStateType === 'done') {
+          // For "done" - must be fully paid
+          if (normalizedPayment.amountPaid < totalAmount) {
+            const pendingAmount = totalAmount - normalizedPayment.amountPaid;
+            setValidationError({
+              type: 'done',
+              message: `Cannot complete order: Payment not fully received. Required: $${totalAmount.toFixed(2)}, Paid: $${normalizedPayment.amountPaid.toFixed(2)}`,
+              order: order,
+              newStatus: newStatusObj,
+              pendingAmount: pendingAmount,
+              currentAmount: normalizedPayment.amountPaid
+            });
+            setValidationDialogOpen(true);
+            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
+            return;
+          }
+          
+          // Show allocation dialog for all "End Done" orders
+          console.log('Showing allocation dialog for completed order:', order.id);
+          handleAllocationDialog(order, newStatusObj);
+          setStatusDialogOpen(false);
+          return;
+        } else if (newStatusObj.endStateType === 'cancelled') {
+          // For "cancelled" - must have $0 payment
+          if (normalizedPayment.amountPaid > 0) {
+            setValidationError({
+              type: 'cancelled',
+              message: `Cannot cancel order: Payment has been received ($${normalizedPayment.amountPaid.toFixed(2)}). Please refund the customer first.`,
+              order: order,
+              newStatus: newStatusObj,
+              pendingAmount: 0,
+              currentAmount: normalizedPayment.amountPaid
+            });
+            setValidationDialogOpen(true);
+            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
+            return;
+          }
+        }
+      }
+
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, { invoiceStatus: newStatus });
       
@@ -216,7 +317,9 @@ const FinancePage = () => {
       
       showSuccess('Invoice status updated successfully');
       setStatusDialogOpen(false);
+      setValidationDialogOpen(false);
       setEditingStatus(null);
+      fetchOrders();
     } catch (error) {
       console.error('Error updating invoice status:', error);
       showError('Failed to update invoice status');
@@ -248,13 +351,235 @@ const FinancePage = () => {
   // Get payment status
   const getPaymentStatus = (order) => {
     const total = calculateOrderTotal(order);
-    const paid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const deposit = parseFloat(order.paymentData?.deposit) || 0;
+    const normalizedPayment = normalizePaymentData(order.paymentData);
     
-    if (paid >= total) return { status: 'Fully Paid', color: '#4caf50' };
-    if (paid >= deposit && deposit > 0) return { status: 'Deposit Paid', color: '#ff9800' };
-    if (paid > 0) return { status: 'Partial Payment', color: '#f44336' };
+    if (normalizedPayment.amountPaid >= total) return { status: 'Fully Paid', color: '#4caf50' };
+    if (normalizedPayment.amountPaid >= normalizedPayment.deposit && normalizedPayment.deposit > 0) return { status: 'Deposit Paid', color: '#ff9800' };
+    if (normalizedPayment.amountPaid > 0) return { status: 'Partial Payment', color: '#f44336' };
     return { status: 'Not Paid', color: '#757575' };
+  };
+
+  // Check if order spans multiple months
+  const checkIfCrossMonth = (order, customStartDate = null, customEndDate = null) => {
+    const startDate = customStartDate || (order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt));
+    const endDate = customEndDate || new Date();
+    
+    const startMonth = startDate.getMonth();
+    const startYear = startDate.getFullYear();
+    const endMonth = endDate.getMonth();
+    const endYear = endDate.getFullYear();
+    
+    return (startYear !== endYear) || (startMonth !== endMonth);
+  };
+
+  // Calculate allocation for an order
+  const calculateAllocation = (order, startDate, endDate) => {
+    console.log('Calculating allocation for order:', order.id, 'startDate:', startDate, 'endDate:', endDate);
+    const profitData = calculateOrderProfit(order);
+    console.log('Profit data:', profitData);
+    const allocations = calculateTimeBasedAllocation({
+      ...order,
+      startDate,
+      endDate,
+      profitData
+    });
+    console.log('Time-based allocations:', allocations);
+    
+    return allocations.map(allocation => ({
+      ...allocation,
+      revenue: profitData.revenue * (allocation.percentage / 100),
+      costs: profitData.cost * (allocation.percentage / 100),
+      profit: profitData.profit * (allocation.percentage / 100)
+    }));
+  };
+
+  // Handle allocation dialog
+  const handleAllocationDialog = (order, newStatus) => {
+    const orderStartDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+    const orderEndDate = new Date(); // Current date when status changes
+    
+    setSelectedOrderForAllocation({ ...order, newStatus });
+    setStartDate(orderStartDate);
+    setEndDate(orderEndDate);
+    setAllocationMethod('time-based');
+    
+    const allocations = calculateAllocation(order, orderStartDate, orderEndDate);
+    setManualAllocations(allocations);
+    
+    setAllocationDialogOpen(true);
+  };
+
+  // Apply allocation and update status
+  const applyAllocation = async () => {
+    try {
+      if (!selectedOrderForAllocation) return;
+      
+      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
+      
+      // Update order with new dates and allocation
+      const updateData = {
+        invoiceStatus: selectedOrderForAllocation.newStatus.value,
+        statusUpdatedAt: new Date(),
+        allocation: {
+          method: allocationMethod,
+          allocations: manualAllocations,
+          appliedAt: new Date(),
+          startDate: startDate,
+          endDate: endDate
+        }
+      };
+      
+      await updateDoc(orderRef, updateData);
+      
+      // Update local state
+      const updatedOrders = orders.map(order =>
+        order.id === selectedOrderForAllocation.id 
+          ? { ...order, ...updateData }
+          : order
+      );
+      setOrders(updatedOrders);
+      
+      showSuccess('Order completed and allocation applied successfully');
+      setAllocationDialogOpen(false);
+      setSelectedOrderForAllocation(null);
+      fetchOrders();
+      
+      // Show option to view P&L
+      setTimeout(() => {
+        if (window.confirm('Allocation applied successfully! Would you like to view the updated P&L Statement?')) {
+          navigate('/pl');
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error applying allocation:', error);
+      showError('Failed to apply allocation');
+    }
+  };
+
+  // Enhanced payment update functions
+  const handleMakeFullyPaid = async () => {
+    try {
+      const { order, newStatus, pendingAmount } = validationError;
+      const orderRef = doc(db, 'orders', order.id);
+      
+      // Normalize existing payment data
+      const normalizedPaymentData = normalizePaymentData(order.paymentData);
+      
+      // Calculate new total paid amount
+      const newTotalPaid = normalizedPaymentData.amountPaid + pendingAmount;
+      
+      // Validate the new payment data
+      const validation = validatePaymentData({
+        ...normalizedPaymentData,
+        amountPaid: newTotalPaid
+      });
+      
+      if (!validation.isValid) {
+        showError(`Payment validation failed: ${validation.errors.join(', ')}`);
+        return;
+      }
+      
+      // Prepare payment history entry
+      const paymentEntry = {
+        amount: pendingAmount,
+        date: new Date(),
+        type: 'Status Change - Full Payment',
+        method: 'System Adjustment',
+        description: `Auto-payment for status change to ${newStatus.label}`
+      };
+      
+      // Update order with new payment data
+      const updateData = {
+        'paymentData.amountPaid': newTotalPaid,
+        'paymentData.paymentHistory': [
+          ...(normalizedPaymentData.paymentHistory),
+          paymentEntry
+        ]
+      };
+      
+      await updateDoc(orderRef, updateData);
+      
+      // Now update the status directly
+      const statusUpdateData = {
+        invoiceStatus: newStatus.value,
+        statusUpdatedAt: new Date()
+      };
+      
+      await updateDoc(orderRef, statusUpdateData);
+      
+      showSuccess(`Payment updated and order status changed to "${newStatus.label}"`);
+      setValidationDialogOpen(false);
+      
+      // Show allocation dialog after payment is handled
+      console.log('Payment handled, now showing allocation dialog for order:', order.id);
+      handleAllocationDialog(order, newStatus);
+      
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      showError('Failed to update payment');
+    }
+  };
+
+  const handleSetPaymentToZero = async () => {
+    try {
+      const { order, newStatus, currentAmount } = validationError;
+      const orderRef = doc(db, 'orders', order.id);
+      
+      // Normalize existing payment data
+      const normalizedPaymentData = normalizePaymentData(order.paymentData);
+      
+      // Validate the new payment data
+      const validation = validatePaymentData({
+        ...normalizedPaymentData,
+        amountPaid: 0
+      });
+      
+      if (!validation.isValid) {
+        showError(`Payment validation failed: ${validation.errors.join(', ')}`);
+        return;
+      }
+      
+      // Prepare payment history entry for refund
+      const paymentEntry = {
+        amount: -currentAmount, // Negative amount for refund
+        date: new Date(),
+        type: 'Status Change - Refund',
+        method: 'System Adjustment',
+        description: `Auto-refund for status change to ${newStatus.label}`
+      };
+      
+      // Update order with zero payment
+      const updateData = {
+        'paymentData.amountPaid': 0,
+        'paymentData.paymentHistory': [
+          ...(normalizedPaymentData.paymentHistory),
+          paymentEntry
+        ]
+      };
+      
+      await updateDoc(orderRef, updateData);
+      
+      // Now update the status directly
+      const statusUpdateData = {
+        invoiceStatus: newStatus.value,
+        statusUpdatedAt: new Date()
+      };
+      
+      await updateDoc(orderRef, statusUpdateData);
+      
+      showSuccess(`Payment reset to $0 and order status changed to "${newStatus.label}"`);
+      setValidationDialogOpen(false);
+      
+      // Show allocation dialog after payment is handled (for cancelled orders too)
+      console.log('Payment handled, now showing allocation dialog for cancelled order:', order.id);
+      handleAllocationDialog(order, newStatus);
+      
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      showError('Failed to update payment');
+    }
   };
 
   useEffect(() => {
@@ -291,6 +616,18 @@ const FinancePage = () => {
           }}
         >
           Manage Statuses
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<TrendingUpIcon />}
+          onClick={() => navigate('/pl')}
+          sx={{ 
+            color: '#4caf50',
+            borderColor: '#4caf50',
+            '&:hover': { borderColor: '#4caf50', backgroundColor: '#f1f8e9' }
+          }}
+        >
+          P&L Statement
         </Button>
         <Button
           variant="contained"
@@ -705,8 +1042,8 @@ const FinancePage = () => {
           <TableBody>
             {filteredOrders.map((order) => {
               const profitData = calculateOrderProfit(order);
-              const paidAmount = parseFloat(order.paymentData?.amountPaid) || 0;
-              const balance = profitData.revenue - paidAmount;
+              const normalizedPayment = normalizePaymentData(order.paymentData);
+              const balance = profitData.revenue - normalizedPayment.amountPaid;
               const paymentStatus = getPaymentStatus(order);
               const statusInfo = getStatusInfo(order.invoiceStatus);
               
@@ -791,7 +1128,7 @@ const FinancePage = () => {
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                      {formatCurrency(paidAmount)}
+                      {formatCurrency(normalizedPayment.amountPaid)}
                     </Typography>
                   </TableCell>
                   
@@ -868,49 +1205,386 @@ const FinancePage = () => {
         </Table>
       </TableContainer>
 
-      {/* Status Edit Dialog */}
-      <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)}>
-        <DialogTitle>Update Invoice Status</DialogTitle>
-        <DialogContent>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>Invoice Status</InputLabel>
+      {/* Professional Status Dialog */}
+      <Dialog 
+        open={statusDialogOpen} 
+        onClose={() => setStatusDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 1000
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <AssignmentIcon />
+          Update Invoice Status
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3 }}>
+          {/* Current Status Display */}
+          <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+            <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>
+              Current Status
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  backgroundColor: getStatusInfo(editingStatus)?.color || '#607d8b'
+                }}
+              />
+              <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                {getStatusInfo(editingStatus)?.label || editingStatus || 'Unknown Status'}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Status Dropdown */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Select New Status</InputLabel>
             <Select
               value={editingStatus || ''}
               onChange={(e) => setEditingStatus(e.target.value)}
-              label="Invoice Status"
+              label="Select New Status"
             >
-                          {invoiceStatuses.map(status => (
-              <MenuItem key={status.value} value={status.value}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: '50%',
-                      backgroundColor: status.color,
-                      mr: 2
-                    }}
-                  />
-                  {status.label}
-                </Box>
-              </MenuItem>
-            ))}
+              {invoiceStatuses
+                .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
+                .map(status => (
+                  <MenuItem key={status.value} value={status.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          backgroundColor: status.color
+                        }}
+                      />
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                          {status.label}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#666' }}>
+                          {status.description || `Order is ${status.label.toLowerCase()}`}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
+
+          {/* Status Description */}
+          {editingStatus && (
+            <Box sx={{ p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ color: '#1976d2' }}>
+                <strong>Selected:</strong> {getStatusInfo(editingStatus)?.label || editingStatus}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+                {getStatusInfo(editingStatus)?.description || 'Status will be updated for this order.'}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStatusDialogOpen(false)}>
+
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setStatusDialogOpen(false)}
+            variant="outlined"
+            size="small"
+          >
             Cancel
           </Button>
           <Button 
             onClick={() => updateInvoiceStatus(selectedOrder.id, editingStatus)}
             variant="contained"
+            disabled={!editingStatus}
+            size="small"
             sx={{ 
               backgroundColor: '#f27921',
               '&:hover': { backgroundColor: '#e66a1a' }
             }}
           >
             Update Status
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Enhanced Validation Dialog */}
+      <Dialog open={validationDialogOpen} onClose={() => setValidationDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Payment Validation Required</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            {validationError.message}
+          </Typography>
+          
+          {validationError.type === 'done' && (
+            <Button 
+              variant="contained" 
+              color="success"
+              onClick={handleMakeFullyPaid}
+              fullWidth
+              sx={{ mb: 2 }}
+              startIcon={<CheckCircleIcon />}
+            >
+              Make ${validationError.pendingAmount.toFixed(2)} as Paid
+            </Button>
+          )}
+          
+          {validationError.type === 'cancelled' && (
+            <Button 
+              variant="contained" 
+              color="error"
+              onClick={handleSetPaymentToZero}
+              fullWidth
+              sx={{ mb: 2 }}
+              startIcon={<CancelIcon />}
+            >
+              Set Payment Amount to $0.00
+            </Button>
+          )}
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            This action will update the payment history and automatically change the order status.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setValidationDialogOpen(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Allocation Dialog */}
+      <Dialog 
+        open={allocationDialogOpen} 
+        onClose={() => setAllocationDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <CalendarIcon sx={{ mr: 1, color: '#274290' }} />
+            Order Completion & Date Allocation
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent>
+          {selectedOrderForAllocation && (
+            <Box sx={{ mt: 2 }}>
+              {/* Order Summary */}
+              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#f5f5f5' }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Order Summary
+                </Typography>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Order Completion:</strong> Please review and adjust the order dates if needed. 
+                    This information will be used for accurate P&L reporting and financial analysis.
+                  </Typography>
+                </Alert>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Order: {selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Customer: {selectedOrderForAllocation.personalInfo?.customerName}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Revenue: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).revenue)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Costs: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).cost)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Gross Profit: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).profit)}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+
+              {/* Date Range */}
+              <Paper sx={{ p: 2, mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Date Range
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Start Date"
+                      type="date"
+                      value={startDate ? startDate.toISOString().split('T')[0] : ''}
+                      onChange={(e) => {
+                        const newStartDate = new Date(e.target.value);
+                        setStartDate(newStartDate);
+                        if (endDate && newStartDate > endDate) {
+                          setEndDate(newStartDate);
+                        }
+                        // Recalculate allocations
+                        const allocations = calculateAllocation(selectedOrderForAllocation, newStartDate, endDate);
+                        setManualAllocations(allocations);
+                      }}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="End Date"
+                      type="date"
+                      value={endDate ? endDate.toISOString().split('T')[0] : ''}
+                      onChange={(e) => {
+                        const newEndDate = new Date(e.target.value);
+                        // Validate end date
+                        const today = new Date();
+                        today.setHours(23, 59, 59, 999);
+                        if (newEndDate > today) {
+                          showError('End date cannot be in the future');
+                          return;
+                        }
+                        if (startDate && newEndDate < startDate) {
+                          showError('End date cannot be before start date');
+                          return;
+                        }
+                        setEndDate(newEndDate);
+                        // Recalculate allocations
+                        const allocations = calculateAllocation(selectedOrderForAllocation, startDate, newEndDate);
+                        setManualAllocations(allocations);
+                      }}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ max: new Date().toISOString().split('T')[0] }}
+                    />
+                  </Grid>
+                </Grid>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Duration: {startDate && endDate ? 
+                    Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1 : 0} days
+                </Typography>
+              </Paper>
+
+              {/* Allocation Method */}
+              <Paper sx={{ p: 2, mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Allocation Method
+                </Typography>
+                <FormControl component="fieldset" fullWidth>
+                  <RadioGroup
+                    value={allocationMethod}
+                    onChange={(e) => setAllocationMethod(e.target.value)}
+                  >
+                    <FormControlLabel 
+                      value="time-based" 
+                      control={<Radio />} 
+                      label="Time-based allocation (recommended - proportional to days in each month)" 
+                    />
+                    <FormControlLabel 
+                      value="manual" 
+                      control={<Radio />} 
+                      label="Manual allocation (for special cases - specify percentages)" 
+                    />
+                  </RadioGroup>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Time-based allocation is recommended for most orders. Use manual allocation only for special cases where the time-based calculation doesn't reflect the actual work distribution.
+                  </Typography>
+                </FormControl>
+              </Paper>
+
+              {/* Monthly Breakdown */}
+              <Paper sx={{ p: 2, mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Monthly Breakdown
+                </Typography>
+                
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Month</TableCell>
+                        <TableCell>Days</TableCell>
+                        <TableCell>Percentage</TableCell>
+                        <TableCell>Revenue</TableCell>
+                        <TableCell>Costs</TableCell>
+                        <TableCell>Profit</TableCell>
+                        {allocationMethod === 'manual' && (
+                          <TableCell>Manual %</TableCell>
+                        )}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {manualAllocations.map((allocation, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{allocation.monthKey}</TableCell>
+                          <TableCell>{allocation.days}</TableCell>
+                          <TableCell>{formatPercentage(allocation.percentage)}</TableCell>
+                          <TableCell>{formatCurrency(allocation.revenue)}</TableCell>
+                          <TableCell>{formatCurrency(allocation.costs)}</TableCell>
+                          <TableCell>{formatCurrency(allocation.profit)}</TableCell>
+                          {allocationMethod === 'manual' && (
+                            <TableCell>
+                              <TextField
+                                size="small"
+                                type="number"
+                                value={allocation.percentage}
+                                onChange={(e) => {
+                                  const newAllocations = [...manualAllocations];
+                                  newAllocations[index].percentage = parseFloat(e.target.value) || 0;
+                                  setManualAllocations(newAllocations);
+                                }}
+                                inputProps={{ min: 0, max: 100, step: 0.1 }}
+                                sx={{ width: 80 }}
+                              />
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {allocationMethod === 'manual' && (
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: '#fff3cd', borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Percentage: {formatPercentage(manualAllocations.reduce((sum, a) => sum + a.percentage, 0))}
+                      {manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100 && (
+                        <span style={{ color: '#d32f2f' }}> (Must equal 100%)</span>
+                      )}
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions>
+          <Button onClick={() => setAllocationDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={applyAllocation}
+            variant="contained"
+            disabled={allocationMethod === 'manual' && 
+              manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100}
+            sx={{ 
+              backgroundColor: '#274290',
+              '&:hover': { backgroundColor: '#1e3a8a' }
+            }}
+          >
+            Complete Order & Apply Allocation
           </Button>
         </DialogActions>
       </Dialog>

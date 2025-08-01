@@ -1,10 +1,136 @@
 // Shared order calculation utilities to ensure consistency across all pages
+import { getMaterialCompanyTaxRate } from './materialTaxRates';
 
 /**
- * Calculate total order value including all components
- * Works with both old and new order structures
+ * Calculate pickup & delivery cost based on service type
+ */
+export const calculatePickupDeliveryCost = (baseCost, serviceType) => {
+  const cost = parseFloat(baseCost) || 0;
+  let result;
+  
+  switch (serviceType) {
+    case 'pickup':
+    case 'delivery':
+      result = cost; // Single service
+      break;
+    case 'both':
+      result = cost * 2; // Both services
+      break;
+    default:
+      result = cost;
+  }
+  
+
+  
+  return result;
+};
+
+/**
+ * Ensure consistent payment data structure
+ */
+export const normalizePaymentData = (paymentData) => {
+  return {
+    deposit: parseFloat(paymentData?.deposit) || 0,
+    amountPaid: parseFloat(paymentData?.amountPaid) || 0,
+    pickupDeliveryEnabled: paymentData?.pickupDeliveryEnabled || false,
+    pickupDeliveryCost: paymentData?.pickupDeliveryCost || '',
+    pickupDeliveryServiceType: paymentData?.pickupDeliveryServiceType || 'both', // Default to both for backward compatibility
+    notes: paymentData?.notes || '',
+    paymentHistory: paymentData?.paymentHistory || [],
+    customerNotes: paymentData?.customerNotes || '',
+    generalNotes: paymentData?.generalNotes || ''
+  };
+};
+
+/**
+ * Validate payment data integrity
+ */
+export const validatePaymentData = (paymentData) => {
+  const normalized = normalizePaymentData(paymentData);
+  
+  const errors = [];
+  
+  if (normalized.amountPaid < 0) {
+    errors.push('Amount paid cannot be negative');
+  }
+  
+  if (normalized.deposit < 0) {
+    errors.push('Deposit amount cannot be negative');
+  }
+  
+  if (normalized.pickupDeliveryCost && parseFloat(normalized.pickupDeliveryCost) < 0) {
+    errors.push('Pickup/delivery cost cannot be negative');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+    normalized
+  };
+};
+
+/**
+ * Calculate total order value including tax (13% on materials and foam)
+ * This is the customer-facing total that should match the invoice
  */
 export const calculateOrderTotal = (order) => {
+  let itemsSubtotal = 0;
+  let taxableAmount = 0;
+  
+  // Add furniture costs (supports both old and new field structures)
+  if (order.furnitureData?.groups) {
+    order.furnitureData.groups.forEach(group => {
+      // Material costs
+      const materialTotal = (parseFloat(group.materialPrice) || 0) * (parseInt(group.materialQnty) || 0);
+      itemsSubtotal += materialTotal;
+      taxableAmount += materialTotal; // Materials are taxable
+      
+      // Labour costs (not taxable)
+      itemsSubtotal += (parseFloat(group.labourPrice) || 0) * (parseInt(group.labourQnty) || 0);
+      
+      // Foam costs (if enabled) - taxable
+      if (group.foamEnabled || group.foamPrice > 0) {
+        const foamTotal = (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
+        itemsSubtotal += foamTotal;
+        taxableAmount += foamTotal; // Foam is taxable
+      }
+      
+      // Painting costs (if enabled) - not taxable (labour)
+      if (group.paintingEnabled || group.paintingLabour > 0) {
+        const paintingTotal = (parseFloat(group.paintingLabour) || 0) * (parseInt(group.paintingQnty) || 0);
+        itemsSubtotal += paintingTotal;
+        // Painting is labour, so not taxable
+      }
+      
+      // Legacy support for old field names
+      if (group.labourWork && !group.labourPrice) {
+        itemsSubtotal += (parseFloat(group.labourWork) || 0) * (parseInt(group.quantity) || 1);
+      }
+    });
+  }
+
+  // Calculate tax (13% on materials and foam)
+  const taxAmount = taxableAmount * 0.13;
+  
+  // Add pickup & delivery cost (not taxable)
+  if (order.paymentData?.pickupDeliveryEnabled) {
+    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+    const calculatedCost = calculatePickupDeliveryCost(baseCost, serviceType);
+    
+
+    
+    itemsSubtotal += calculatedCost;
+  }
+
+  // Return total including tax
+  return itemsSubtotal + taxAmount;
+};
+
+/**
+ * Calculate total order value WITHOUT tax (for internal calculations)
+ */
+export const calculateOrderTotalWithoutTax = (order) => {
   let total = 0;
   
   // Add furniture costs (supports both old and new field structures)
@@ -21,6 +147,11 @@ export const calculateOrderTotal = (order) => {
         total += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
       }
       
+      // Painting costs (if enabled)
+      if (group.paintingEnabled || group.paintingLabour > 0) {
+        total += (parseFloat(group.paintingLabour) || 0) * (parseInt(group.paintingQnty) || 0);
+      }
+      
       // Legacy support for old field names
       if (group.labourWork && !group.labourPrice) {
         total += (parseFloat(group.labourWork) || 0) * (parseInt(group.quantity) || 1);
@@ -30,10 +161,33 @@ export const calculateOrderTotal = (order) => {
 
   // Add pickup & delivery cost
   if (order.paymentData?.pickupDeliveryEnabled) {
-    total += parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+    total += calculatePickupDeliveryCost(baseCost, serviceType);
   }
 
   return total;
+};
+
+/**
+ * Calculate tax amount for an order
+ */
+export const calculateOrderTax = (order) => {
+  let taxableAmount = 0;
+  
+  if (order.furnitureData?.groups) {
+    order.furnitureData.groups.forEach(group => {
+      // Materials are taxable
+      taxableAmount += (parseFloat(group.materialPrice) || 0) * (parseInt(group.materialQnty) || 0);
+      
+      // Foam is taxable
+      if (group.foamEnabled || group.foamPrice > 0) {
+        taxableAmount += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
+      }
+    });
+  }
+  
+  return taxableAmount * 0.13; // 13% tax rate - Note: This is customer-facing tax, not JL internal tax
 };
 
 /**
@@ -44,6 +198,7 @@ export const getOrderCostBreakdown = (order) => {
     material: 0,
     labour: 0,
     foam: 0,
+    painting: 0,
     pickupDelivery: 0,
     total: 0
   };
@@ -61,6 +216,11 @@ export const getOrderCostBreakdown = (order) => {
         breakdown.foam += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
       }
       
+      // Painting costs
+      if (group.paintingEnabled || group.paintingLabour > 0) {
+        breakdown.painting += (parseFloat(group.paintingLabour) || 0) * (parseInt(group.paintingQnty) || 0);
+      }
+      
       // Legacy support
       if (group.labourWork && !group.labourPrice) {
         breakdown.labour += (parseFloat(group.labourWork) || 0) * (parseInt(group.quantity) || 1);
@@ -70,10 +230,12 @@ export const getOrderCostBreakdown = (order) => {
 
   // Pickup & delivery
   if (order.paymentData?.pickupDeliveryEnabled) {
-    breakdown.pickupDelivery = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+    breakdown.pickupDelivery = calculatePickupDeliveryCost(baseCost, serviceType);
   }
 
-  breakdown.total = breakdown.material + breakdown.labour + breakdown.foam + breakdown.pickupDelivery;
+  breakdown.total = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting + breakdown.pickupDelivery;
   
   return breakdown;
 };
@@ -81,7 +243,7 @@ export const getOrderCostBreakdown = (order) => {
 /**
  * Calculate JL internal costs (actual costs to the business)
  */
-export const calculateOrderCost = (order) => {
+export const calculateOrderCost = (order, materialTaxRates = {}) => {
   let totalCost = 0;
 
   if (order.furnitureData?.groups) {
@@ -91,11 +253,8 @@ export const calculateOrderCost = (order) => {
       const jlMaterialQnty = parseFloat(group.materialJLQnty) || 0;
       const jlMaterialSubtotal = jlMaterialPrice * jlMaterialQnty;
       
-      // Get tax rate based on material company
-      let taxRate = 0.13; // Default 13%
-      if (group.materialCompany && group.materialCompany.toLowerCase().includes('charlotte')) {
-        taxRate = 0.02; // 2% for Charlotte
-      }
+      // Get tax rate from material company settings
+      const taxRate = getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates);
       
       const materialTax = jlMaterialSubtotal * taxRate;
       const materialTotal = jlMaterialSubtotal + materialTax;
@@ -127,10 +286,12 @@ export const calculateOrderCost = (order) => {
 
 /**
  * Calculate profit and profit percentage
+ * Revenue includes tax (customer-facing total)
+ * Cost includes tax (internal JL costs with tax)
  */
-export const calculateOrderProfit = (order) => {
-  const revenue = calculateOrderTotal(order);
-  const cost = calculateOrderCost(order);
+export const calculateOrderProfit = (order, materialTaxRates = {}) => {
+  const revenue = calculateOrderTotal(order); // Includes tax
+  const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
   const profit = revenue - cost;
   const profitPercentage = revenue > 0 ? (profit / revenue) * 100 : 0;
 
@@ -203,9 +364,10 @@ export const getOrderStatus = (order) => {
 
 /**
  * Calculate deposit status
+ * Uses tax-inclusive total for accurate payment tracking
  */
 export const getDepositStatus = (order) => {
-  const total = calculateOrderTotal(order);
+  const total = calculateOrderTotal(order); // Includes tax
   const deposit = parseFloat(order.paymentData?.deposit) || 0;
   const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
   

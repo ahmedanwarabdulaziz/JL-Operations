@@ -82,7 +82,8 @@ export const NotificationProvider = ({ children }) => {
   const value = {
     showSuccess,
     showError,
-    showConfirm
+    showConfirm,
+    confirmDialogOpen: confirmDialog.open
   };
 
   return (
@@ -111,6 +112,21 @@ export const NotificationProvider = ({ children }) => {
         onClose={handleConfirmClose}
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-description"
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 99999,
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            margin: 0,
+            maxWidth: '500px',
+            width: '90%'
+          },
+          '& .MuiBackdrop-root': {
+            zIndex: 99998
+          }
+        }}
       >
         <DialogTitle id="confirm-dialog-title">
           {confirmDialog.title}

@@ -28,16 +28,7 @@ import {
   Avatar,
   Tooltip,
   Switch,
-  FormControlLabel,
-  Radio,
-  RadioGroup,
-  FormLabel,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
+  FormControlLabel
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -59,9 +50,7 @@ import {
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Assignment as AssignmentIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Assignment as AssignmentIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { useGmailAuth } from '../../contexts/GmailAuthContext';
@@ -71,9 +60,7 @@ import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData } from '../../utils/orderCalculations';
-import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
-import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
 import { useAutoSelect } from '../../hooks/useAutoSelect';
 
 const WorkshopPage = () => {
@@ -108,35 +95,12 @@ const WorkshopPage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
-  
-  // Enhanced validation dialog state (from Finance page)
-  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
-  const [validationError, setValidationError] = useState({ 
-    type: '', 
-    message: '', 
-    order: null, 
-    newStatus: null,
-    pendingAmount: 0,
-    currentAmount: 0
-  });
-  
-  // Enhanced allocation popup state
-  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
-  const [allocationDialogHidden, setAllocationDialogHidden] = useState(false);
-  const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [monthlyAllocations, setMonthlyAllocations] = useState([]);
-  const [totalRevenue, setTotalRevenue] = useState(0);
-  const [totalCost, setTotalCost] = useState(0);
-  const [showAllocationTable, setShowAllocationTable] = useState(false);
-  const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
+  const { showError, showSuccess } = useNotification();
   const { gmailSignedIn, gmailUser, signIn } = useGmailAuth();
   const { treatments, loading: treatmentsLoading } = useTreatments();
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
   const { onFocus: handleAutoSelect } = useAutoSelect();
-  const [materialTaxRates, setMaterialTaxRates] = useState({});
 
   // Fetch invoice statuses
   const fetchInvoiceStatuses = async () => {
@@ -166,470 +130,9 @@ const WorkshopPage = () => {
            { value: status, label: status, color: '#757575' };
   };
 
-  // Enhanced validation and allocation functions (from Finance page)
-  const checkIfCrossMonth = (order, customStartDate = null, customEndDate = null) => {
-    const start = customStartDate || order.orderDetails?.startDate?.toDate?.() || new Date(order.orderDetails?.startDate);
-    const end = customEndDate || order.orderDetails?.endDate?.toDate?.() || new Date(order.orderDetails?.endDate);
-    
-    if (!start || !end) return false;
-    
-    const startMonth = start.getMonth();
-    const startYear = start.getFullYear();
-    const endMonth = end.getMonth();
-    const endYear = end.getFullYear();
-    
-    return startMonth !== endMonth || startYear !== endYear;
-  };
-
-  const calculateAllocation = (order, startDate, endDate) => {
-    const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
-    const end = endDate.toDate ? endDate.toDate() : new Date(endDate);
-    
-    const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    const startMonth = start.getMonth();
-    const startYear = start.getFullYear();
-    const endMonth = end.getMonth();
-    const endYear = end.getFullYear();
-    
-    if (startMonth === endMonth && startYear === endYear) {
-      return [{ month: startMonth, year: startYear, percentage: 100 }];
-    }
-    
-    const allocations = [];
-    let currentDate = new Date(start);
-    
-    while (currentDate <= end) {
-      const month = currentDate.getMonth();
-      const year = currentDate.getFullYear();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const daysInOrder = Math.min(
-        daysInMonth - currentDate.getDate() + 1,
-        end.getDate() - currentDate.getDate() + 1
-      );
-      
-      const percentage = (daysInOrder / totalDays) * 100;
-      allocations.push({ month, year, percentage });
-      
-      currentDate = new Date(year, month + 1, 1);
-    }
-    
-    return allocations;
-  };
-
-  // Generate months between start and end dates
-  const generateMonthsBetweenDates = (startDate, endDate) => {
-    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      return [];
-    }
-    
-    const months = [];
-    const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-    
-    while (current <= end) {
-      months.push({
-        month: current.getMonth(),
-        year: current.getFullYear(),
-        label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        percentage: months.length === 0 ? 100 : 0 // Default 100% to first month
-      });
-      
-      current.setMonth(current.getMonth() + 1);
-    }
-    
-    return months;
-  };
-
-  // Generate 5-month allocation table (current ± 2 months) - fallback
-  const generateMonthlyAllocations = (order) => {
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-    
-    const months = [];
-    for (let i = -2; i <= 2; i++) {
-      const month = (currentMonth + i + 12) % 12;
-      const year = currentYear + Math.floor((currentMonth + i) / 12);
-      months.push({
-        month,
-        year,
-        label: new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        percentage: i === 0 ? 100 : 0 // Default 100% to current month
-      });
-    }
-    
-    return months;
-  };
-
-  // Calculate financial breakdown for each month
-  const calculateFinancialBreakdown = (allocations, revenue, cost) => {
-    return allocations.map(allocation => ({
-      ...allocation,
-      revenue: (revenue * allocation.percentage / 100),
-      cost: (cost * allocation.percentage / 100),
-      profit: (revenue * allocation.percentage / 100) - (cost * allocation.percentage / 100)
-    }));
-  };
-
-  // Update allocation percentage
-  const updateAllocationPercentage = (index, percentage) => {
-    const newAllocations = [...monthlyAllocations];
-    const newPercentage = parseFloat(percentage) || 0;
-    newAllocations[index].percentage = newPercentage;
-    newAllocations[index].lastUpdated = new Date();
-    setMonthlyAllocations(newAllocations);
-    
-    // Calculate and show totals
-    const totals = calculateTotals(newAllocations);
-    const remainingPercentage = 100 - totals.totalPercentage;
-    
-    // Show warning if total is not 100%
-    if (Math.abs(remainingPercentage) > 0.01) {
-      console.log(`Allocation updated. Total: ${totals.totalPercentage.toFixed(1)}%, Remaining: ${remainingPercentage.toFixed(1)}%`);
-    }
-  };
-
-  // Save dates and update table
-  const handleSaveDates = async () => {
-    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      showError('Please enter valid start and end dates');
-      return;
-    }
-
-    if (startDate > endDate) {
-      showError('Start date cannot be after end date');
-      return;
-    }
-
-    if (!selectedOrderForAllocation) {
-      showError('No order selected for allocation');
-      return;
-    }
-
-    // Generate new allocations based on date range
-    const newAllocations = generateMonthsBetweenDates(startDate, endDate);
-    
-    if (newAllocations.length === 0) {
-      showError('No valid months found between the selected dates');
-      return;
-    }
-
-    try {
-      // Update order dates in database
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
-      await updateDoc(orderRef, {
-        'orderDetails.startDate': startDate,
-        'orderDetails.endDate': endDate,
-        'orderDetails.lastUpdated': new Date()
-      });
-
-      // Update local state
-      setSelectedOrderForAllocation(prev => ({
-        ...prev,
-        orderDetails: {
-          ...prev.orderDetails,
-          startDate: startDate,
-          endDate: endDate,
-          lastUpdated: new Date()
-        }
-      }));
-
-      setMonthlyAllocations(newAllocations);
-      setShowAllocationTable(true);
-      showSuccess('Dates saved! Table updated with relevant months.');
-    } catch (error) {
-      console.error('Error saving dates:', error);
-      showError('Failed to save dates to database');
-    }
-  };
-
-  // Calculate totals
-  const calculateTotals = (allocations) => {
-    const totalPercentage = allocations.reduce((sum, item) => sum + item.percentage, 0);
-    const calculatedRevenue = allocations.reduce((sum, item) => sum + (totalRevenue * item.percentage / 100), 0);
-    const calculatedCost = allocations.reduce((sum, item) => sum + (totalCost * item.percentage / 100), 0);
-    const calculatedProfit = calculatedRevenue - calculatedCost;
-    
-    return { totalPercentage, totalRevenue: calculatedRevenue, totalCost: calculatedCost, totalProfit: calculatedProfit };
-  };
-
-  // Get allocation status for display
-  const getAllocationStatus = () => {
-    const totals = calculateTotals(monthlyAllocations);
-    const remainingPercentage = 100 - totals.totalPercentage;
-    
-    if (Math.abs(remainingPercentage) <= 0.01) {
-      return { status: 'valid', message: 'Allocation is complete and ready to apply', color: '#4caf50' };
-    } else if (totals.totalPercentage > 100) {
-      return { status: 'over', message: `Total exceeds 100% by ${Math.abs(remainingPercentage).toFixed(1)}%`, color: '#f44336' };
-    } else {
-      return { status: 'under', message: `${Math.abs(remainingPercentage).toFixed(1)}% remaining to reach 100%`, color: '#ff9800' };
-    }
-  };
-
-  const handleAllocationDialog = (order, newStatus) => {
-    setSelectedOrderForAllocation({ ...order, newStatus });
-    setAllocationDialogOpen(true);
-    setShowAllocationTable(false);
-    
-    // Set default dates with proper validation
-    let start, end;
-    
-    if (order.orderDetails?.startDate) {
-      if (order.orderDetails.startDate.toDate) {
-        start = order.orderDetails.startDate.toDate();
-      } else {
-        start = new Date(order.orderDetails.startDate);
-      }
-    }
-    
-    if (order.orderDetails?.endDate) {
-      if (order.orderDetails.endDate.toDate) {
-        end = order.orderDetails.endDate.toDate();
-      } else {
-        end = new Date(order.orderDetails.endDate);
-      }
-    }
-    
-    // Only set dates if they are valid
-    if (start && !isNaN(start.getTime())) {
-      setStartDate(start);
-    } else {
-      setStartDate(new Date()); // Default to today
-    }
-    
-    if (end && !isNaN(end.getTime())) {
-      setEndDate(end);
-    } else {
-      setEndDate(new Date()); // Default to today
-    }
-
-    // Generate initial allocations
-    const initialAllocations = generateMonthlyAllocations(order);
-    const profitData = calculateOrderProfit(order);
-    const revenue = profitData.revenue;
-    const cost = profitData.cost;
-    
-    setTotalRevenue(revenue);
-    setTotalCost(cost);
-    setMonthlyAllocations(initialAllocations);
-  };
-
-  const applyAllocation = async () => {
-    try {
-      if (!selectedOrderForAllocation) return;
-      
-      // Validate total percentage equals 100%
-      const totals = calculateTotals(monthlyAllocations);
-      if (Math.abs(totals.totalPercentage - 100) > 0.01) {
-        showError('Total percentage must equal 100%');
-        return;
-      }
-
-      // Prepare allocation data with detailed information
-      const allocationData = {
-        method: 'manual',
-        allocations: monthlyAllocations.map(allocation => {
-          const revenue = (totalRevenue * allocation.percentage / 100);
-          const cost = (totalCost * allocation.percentage / 100);
-          const profit = revenue - cost;
-          
-          return {
-            month: allocation.month,
-            year: allocation.year,
-            percentage: allocation.percentage,
-            revenue: revenue,
-            cost: cost,
-            profit: profit,
-            monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: new Date()
-          };
-        }),
-        appliedAt: new Date(),
-        originalRevenue: totalRevenue,
-        originalCost: totalCost,
-        originalProfit: totalRevenue - totalCost,
-        dateRange: {
-          startDate: startDate,
-          endDate: endDate
-        },
-        recalculatedAt: new Date()
-      };
-
-      // Prepare update data
-      const updateData = {
-        invoiceStatus: selectedOrderForAllocation.newStatus?.value || 'done',
-        allocation: allocationData
-      };
-
-      // Always update dates if they exist (even if they haven't changed)
-      if (startDate && endDate) {
-        updateData.orderDetails = {
-          ...selectedOrderForAllocation.orderDetails,
-          startDate: startDate,
-          endDate: endDate,
-          lastUpdated: new Date()
-        };
-      }
-
-      // Force hide allocation dialog and show confirmation
-      setAllocationDialogHidden(true);
-      setAllocationDialogOpen(false); // Also close it completely
-      
-      // Longer delay to ensure dialog is completely hidden before showing confirmation
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Show confirmation dialog with allocation summary
-      const allocationSummary = monthlyAllocations.map(allocation => 
-        `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
-      ).join(', ');
-
-      const confirmed = await showConfirm(
-        'Confirm Allocation',
-        `Are you sure you want to apply this allocation?\n\n` +
-        `Order: ${selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}\n` +
-        `Status: ${selectedOrderForAllocation.newStatus?.label || 'Done'}\n` +
-        `Date Range: ${startDate ? startDate.toLocaleDateString() : 'Not set'} - ${endDate ? endDate.toLocaleDateString() : 'Not set'}\n` +
-        `Allocations: ${allocationSummary}\n` +
-        `Total Revenue: ${formatCurrency(totalRevenue)}\n` +
-        `Total Cost: ${formatCurrency(totalCost)}\n` +
-        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`
-      );
-
-      if (!confirmed) {
-        // Reopen allocation dialog if user cancels
-        setAllocationDialogHidden(false);
-        setAllocationDialogOpen(true);
-        return; // User cancelled
-      }
-      
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
-      await updateDoc(orderRef, updateData);
-      
-      showSuccess('Order completed and allocated successfully');
-      setAllocationDialogOpen(false);
-      setAllocationDialogHidden(false);
-      setSelectedOrderForAllocation(null);
-      fetchOrders();
-    } catch (error) {
-      console.error('Error applying allocation:', error);
-      showError('Failed to apply allocation');
-      setAllocationDialogHidden(false);
-    }
-  };
-
-  const handleMakeFullyPaid = async () => {
-    try {
-      if (!validationError.order) return;
-      
-      const orderRef = doc(db, 'orders', validationError.order.id);
-      const totalAmount = calculateOrderProfit(validationError.order).revenue;
-      
-      await updateDoc(orderRef, {
-        'paymentData.amountPaid': totalAmount,
-        'paymentData.paymentHistory': [
-          ...(validationError.order.paymentData?.paymentHistory || []),
-          {
-            amount: validationError.pendingAmount,
-            date: new Date(),
-            notes: 'Auto-paid to complete order'
-          }
-        ]
-      });
-      
-      // Show allocation dialog for completed order
-      handleAllocationDialog(validationError.order, validationError.newStatus);
-      setValidationDialogOpen(false);
-    } catch (error) {
-      console.error('Error making fully paid:', error);
-      showError('Failed to update payment');
-    }
-  };
-
-  const handleSetPaymentToZero = async () => {
-    try {
-      if (!validationError.order) return;
-      
-      const orderRef = doc(db, 'orders', validationError.order.id);
-      
-      await updateDoc(orderRef, {
-        'paymentData.amountPaid': 0,
-        'paymentData.paymentHistory': [
-          ...(validationError.order.paymentData?.paymentHistory || []),
-          {
-            amount: -validationError.currentAmount,
-            date: new Date(),
-            notes: 'Refunded to cancel order'
-          }
-        ]
-      });
-      
-      // Update status directly for cancelled orders
-      await updateInvoiceStatus(validationError.order.id, validationError.newStatus?.value);
-      setValidationDialogOpen(false);
-    } catch (error) {
-      console.error('Error setting payment to zero:', error);
-      showError('Failed to update payment');
-    }
-  };
-
-  // Update invoice status with validation (enhanced from Finance page)
+  // Update invoice status
   const updateInvoiceStatus = async (orderId, newStatus) => {
     try {
-      // Find the order and new status
-      const order = orders.find(o => o.id === orderId);
-      const newStatusObj = invoiceStatuses.find(s => s.value === newStatus);
-      
-      if (!order || !newStatusObj) {
-        showError('Order or status not found');
-        return;
-      }
-
-      // Payment validation for end states
-      if (newStatusObj.isEndState) {
-        const totalAmount = calculateOrderProfit(order).revenue;
-        const normalizedPayment = normalizePaymentData(order.paymentData);
-        
-        if (newStatusObj.endStateType === 'done') {
-          // For "done" - must be fully paid
-          if (normalizedPayment.amountPaid < totalAmount) {
-            const pendingAmount = totalAmount - normalizedPayment.amountPaid;
-            setValidationError({
-              type: 'done',
-              message: `Cannot complete order: Payment not fully received. Required: $${totalAmount.toFixed(2)}, Paid: $${normalizedPayment.amountPaid.toFixed(2)}`,
-              order: order,
-              newStatus: newStatusObj,
-              pendingAmount: pendingAmount,
-              currentAmount: normalizedPayment.amountPaid
-            });
-            setValidationDialogOpen(true);
-            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
-            return;
-          }
-          
-          // Show allocation dialog for all "End Done" orders
-          console.log('Showing allocation dialog for completed order:', order.id);
-          handleAllocationDialog(order, newStatusObj);
-          setStatusDialogOpen(false);
-          return;
-        } else if (newStatusObj.endStateType === 'cancelled') {
-          // For "cancelled" - must have $0 payment
-          if (normalizedPayment.amountPaid > 0) {
-            setValidationError({
-              type: 'cancelled',
-              message: `Cannot cancel order: Payment has been received ($${normalizedPayment.amountPaid.toFixed(2)}). Please refund the customer first.`,
-              order: order,
-              newStatus: newStatusObj,
-              pendingAmount: 0,
-              currentAmount: normalizedPayment.amountPaid
-            });
-            setValidationDialogOpen(true);
-            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
-            return;
-          }
-        }
-      }
-
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, { invoiceStatus: newStatus });
       
@@ -646,9 +149,7 @@ const WorkshopPage = () => {
       
       showSuccess('Invoice status updated successfully');
       setStatusDialogOpen(false);
-      setValidationDialogOpen(false);
       setEditingStatus(null);
-      fetchOrders();
     } catch (error) {
       console.error('Error updating invoice status:', error);
       showError('Failed to update invoice status');
@@ -673,26 +174,8 @@ const WorkshopPage = () => {
         ...doc.data()
       }));
       
-      // Get invoice statuses to identify end states
-      const statusesRef = collection(db, 'invoiceStatuses');
-      const statusesSnapshot = await getDocs(statusesRef);
-      const statusesData = statusesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Filter out orders with end state statuses
-      const endStateStatuses = statusesData.filter(status => 
-        status.isEndState
-      );
-      const endStateValues = endStateStatuses.map(status => status.value);
-
-      const activeOrders = ordersData.filter(order => 
-        !endStateValues.includes(order.invoiceStatus)
-      );
-      
       // Sort by bill number (highest to lowest)
-      const sortedOrders = activeOrders.sort((a, b) => {
+      const sortedOrders = ordersData.sort((a, b) => {
         const billA = parseInt(a.orderDetails?.billInvoice || '0', 10);
         const billB = parseInt(b.orderDetails?.billInvoice || '0', 10);
         return billB - billA;
@@ -718,7 +201,6 @@ const WorkshopPage = () => {
   useEffect(() => {
     fetchOrders();
     fetchInvoiceStatuses();
-    fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
   }, [fetchOrders]);
 
   // Add a refresh mechanism when the page gains focus with improved debouncing
@@ -800,7 +282,7 @@ const WorkshopPage = () => {
   // Use consistent calculation functions from orderCalculations
   const calculateInvoiceTotals = (order) => {
     const revenue = calculateOrderTotal(order); // Includes tax
-    const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
+    const cost = calculateOrderCost(order); // Includes tax
     const taxAmount = calculateOrderTax(order);
     
 
@@ -3306,16 +2788,11 @@ const WorkshopPage = () => {
       </Dialog>
 
       {/* Simple Dropdown Status Dialog */}
-            <Dialog 
+      <Dialog 
         open={statusDialogOpen} 
-        onClose={() => setStatusDialogOpen(false)} 
-        maxWidth="sm" 
+        onClose={() => setStatusDialogOpen(false)}
+        maxWidth="sm"
         fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            zIndex: 1000
-          }
-        }}
       >
         <DialogTitle sx={{ 
           background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
@@ -3421,329 +2898,310 @@ const WorkshopPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+          </Box>
 
-      {/* Enhanced Validation Dialog (from Finance page) */}
-      <Dialog 
-        open={validationDialogOpen} 
-        onClose={() => setValidationDialogOpen(false)} 
-        maxWidth="sm" 
-        fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            zIndex: 9999
-          },
-          '& .MuiBackdrop-root': {
-            zIndex: 9998
-          }
-        }}
-      >
-        <DialogTitle>Payment Validation Required</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 3 }}>
-            {validationError.message}
-          </Typography>
-          
-          {validationError.type === 'done' && (
-            <Button 
-              variant="contained" 
-              color="success"
-              onClick={handleMakeFullyPaid}
-              fullWidth
-              sx={{ mb: 2 }}
-              startIcon={<CheckCircleIcon />}
-            >
-              Make ${validationError.pendingAmount.toFixed(2)} as Paid
-            </Button>
-          )}
-          
-          {validationError.type === 'cancelled' && (
-            <Button 
-              variant="contained" 
-              color="error"
-              onClick={handleSetPaymentToZero}
-              fullWidth
-              sx={{ mb: 2 }}
-              startIcon={<CancelIcon />}
-            >
-              Refund ${validationError.currentAmount.toFixed(2)} and Cancel
-            </Button>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setValidationDialogOpen(false)}>
-            Cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Enhanced Allocation Dialog */}
-      <Dialog 
-        open={allocationDialogOpen && !validationDialogOpen && !confirmDialogOpen && !allocationDialogHidden} 
-        onClose={() => setAllocationDialogOpen(false)} 
-        maxWidth="lg" 
-        fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            zIndex: 1000
-          },
-          '& .MuiBackdrop-root': {
-            zIndex: 999
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}>
-          <AssignmentIcon />
-          Order Completion & Financial Allocation
-        </DialogTitle>
-        
-        <DialogContent sx={{ p: 3 }}>
-          {/* Order Summary */}
-          {selectedOrderForAllocation && (
-            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Order Summary</Typography>
-              <Typography variant="body2">
-                <strong>Order #:</strong> {selectedOrderForAllocation.orderDetails?.billInvoice}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Customer:</strong> {selectedOrderForAllocation.personalInfo?.customerName}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Total Revenue:</strong> ${totalRevenue.toFixed(2)}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Total Cost:</strong> ${totalCost.toFixed(2)}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Total Profit:</strong> ${(totalRevenue - totalCost).toFixed(2)}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Editable Dates */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Order Dates</Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={5}>
-                <TextField
-                  label="Start Date"
-                  type="date"
-                  value={startDate && startDate instanceof Date && !isNaN(startDate) ? startDate.toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setStartDate(date);
-                    }
-                  }}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={5}>
-                <TextField
-                  label="End Date"
-                  type="date"
-                  value={endDate && endDate instanceof Date && !isNaN(endDate) ? endDate.toISOString().split('T')[0] : ''}
-                  onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setEndDate(date);
-                    }
-                  }}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={2}>
-                <Button
-                  variant="contained"
-                  onClick={handleSaveDates}
-                  fullWidth
-                  sx={{ 
-                    height: '56px',
-                    backgroundColor: '#2e7d32',
-                    '&:hover': { backgroundColor: '#1b5e20' }
+          {/* Professional Status Selection */}
+          <Box sx={{ mt: 3 }}>
+            {invoiceStatuses
+              .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
+              .map(status => (
+              <Grid item xs={12} sm={6} md={4} key={status.value}>
+                <Card
+                  onClick={() => setEditingStatus(status.value)}
+                  sx={{
+                    cursor: 'pointer',
+                    border: editingStatus === status.value ? '2px solid #1976d2' : '1px solid #e0e0e0',
+                    borderRadius: 4,
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transform: editingStatus === status.value ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
+                    boxShadow: editingStatus === status.value 
+                      ? '0 12px 40px rgba(25, 118, 210, 0.25)' 
+                      : '0 4px 20px rgba(0,0,0,0.08)',
+                    '&:hover': {
+                      transform: 'translateY(-6px) scale(1.03)',
+                      boxShadow: '0 16px 50px rgba(0,0,0,0.15)',
+                      borderColor: '#1976d2'
+                    },
+                    backgroundColor: editingStatus === status.value ? 'rgba(25, 118, 210, 0.05)' : 'white',
+                    height: 220,
+                    width: '100%',
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
                 >
-                  Save & Confirm
-                </Button>
-              </Grid>
-            </Grid>
-            <Typography variant="body2" sx={{ mt: 1, color: '#666', fontStyle: 'italic' }}>
-              Click "Save & Confirm" to update the allocation table with months between your selected dates
-            </Typography>
-          </Box>
-
-          {/* Financial Allocation Table */}
-          {showAllocationTable && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>Monthly Financial Allocation</Typography>
-              <Typography variant="body2" sx={{ mb: 2, color: '#666' }}>
-                Distribute the order's revenue and costs across the months between your selected dates. Total percentage must equal 100%.
-              </Typography>
-            
-            <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Month</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Percentage (%)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Revenue ($)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Cost ($)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Profit ($)</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {monthlyAllocations.map((allocation, index) => {
-                    const revenue = (totalRevenue * allocation.percentage / 100);
-                    const cost = (totalCost * allocation.percentage / 100);
-                    const profit = revenue - cost;
-                    
-                    return (
-                      <TableRow key={index}>
-                        <TableCell>{allocation.label}</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            value={allocation.percentage}
-                            onChange={(e) => updateAllocationPercentage(index, e.target.value)}
-                            size="small"
-                            sx={{ width: 80 }}
-                            inputProps={{ 
-                              min: 0, 
-                              max: 100, 
-                              step: 0.1 
+                  {/* Subtle Background Pattern */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      width: '100%',
+                      height: '100%',
+                      background: editingStatus === status.value 
+                        ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.03) 0%, transparent 50%)'
+                        : 'linear-gradient(135deg, rgba(0,0,0,0.02) 0%, transparent 50%)',
+                      pointerEvents: 'none'
+                    }}
+                  />
+                  
+                  <CardContent sx={{ 
+                    p: 4, 
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    height: '100%',
+                    position: 'relative',
+                    zIndex: 1
+                  }}>
+                    {/* Top Section: Icon and Name */}
+                    <Box>
+                      {/* Status Icon */}
+                      <Box sx={{ mb: 3 }}>
+                        <Box
+                          sx={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: '50%',
+                            background: `linear-gradient(135deg, ${status.color} 0%, ${status.color}dd 100%)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto',
+                            boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                            border: '3px solid white',
+                            position: 'relative'
+                          }}
+                        >
+                          <Typography 
+                            variant="h4" 
+                            sx={{ 
+                              color: 'white', 
+                              fontWeight: 'bold',
+                              fontSize: '1.5rem'
+                            }}
+                          >
+                            {status.label.charAt(0)}
+                          </Typography>
+                          {/* Subtle inner glow */}
+                          <Box
+                            sx={{
+                              position: 'absolute',
+                              top: '50%',
+                              left: '50%',
+                              transform: 'translate(-50%, -50%)',
+                              width: '80%',
+                              height: '80%',
+                              borderRadius: '50%',
+                              background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)',
+                              pointerEvents: 'none'
                             }}
                           />
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
-                          ${revenue.toFixed(2)}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                          ${cost.toFixed(2)}
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: profit >= 0 ? '#2e7d32' : '#d32f2f' }}>
-                          ${profit.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {/* Totals Row */}
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>TOTAL</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>
-                      {calculateTotals(monthlyAllocations).totalPercentage.toFixed(1)}%
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
-                      ${calculateTotals(monthlyAllocations).totalRevenue.toFixed(2)}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                      ${calculateTotals(monthlyAllocations).totalCost.toFixed(2)}
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
-                      ${calculateTotals(monthlyAllocations).totalProfit.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-            
-            {/* Allocation Status */}
-            {showAllocationTable && (
-              <Box sx={{ mt: 2 }}>
-                {(() => {
-                  const status = getAllocationStatus();
-                  return (
-                    <Alert 
-                      severity={status.status === 'valid' ? 'success' : status.status === 'over' ? 'error' : 'warning'} 
-                      sx={{ 
-                        '& .MuiAlert-message': { 
-                          color: status.color,
-                          fontWeight: 'bold'
-                        }
-                      }}
-                    >
-                      {status.message}
-                    </Alert>
-                  );
-                })()}
-              </Box>
-            )}
+                        </Box>
+                      </Box>
 
-            {/* Allocation Summary */}
-            {showAllocationTable && getAllocationStatus().status === 'valid' && (
-              <Box sx={{ mt: 3, p: 2, backgroundColor: '#e8f5e8', borderRadius: 1, border: '1px solid #4caf50' }}>
-                <Typography variant="h6" sx={{ mb: 1, color: '#2e7d32' }}>Allocation Summary</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Revenue:</strong> {formatCurrency(totalRevenue)}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Cost:</strong> {formatCurrency(totalCost)}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Profit:</strong> {formatCurrency(totalRevenue - totalCost)}
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Allocation Breakdown:</strong>
-                </Typography>
-                <Box sx={{ ml: 2 }}>
-                  {monthlyAllocations.map((allocation, index) => (
-                    <Typography key={index} variant="body2" sx={{ fontSize: '0.875rem' }}>
-                      • {allocation.label}: {allocation.percentage.toFixed(1)}% ({formatCurrency(totalRevenue * allocation.percentage / 100)})
-                    </Typography>
-                  ))}
-                </Box>
-                <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem', color: '#666', fontStyle: 'italic' }}>
-                  Last recalculated: {new Date().toLocaleString()}
-                </Typography>
-              </Box>
+                      {/* Status Name */}
+                      <Typography 
+                        variant="h5" 
+                        sx={{ 
+                          fontWeight: 'bold', 
+                          color: '#1a237e',
+                          mb: 2,
+                          width: '100%',
+                          textAlign: 'center'
+                        }}
+                      >
+                        {status.label}
+                      </Typography>
+
+                      {/* Status Description */}
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          color: '#666',
+                          lineHeight: 1.6,
+                          minHeight: 48,
+                          width: '100%',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word',
+                          fontWeight: 400
+                        }}
+                      >
+                        {status.description || `Order is ${status.label.toLowerCase()}`}
+                      </Typography>
+                    </Box>
+
+                    {/* Bottom Section: Selection Indicator */}
+                    <Box sx={{ mt: 'auto', pt: 3 }}>
+                      {editingStatus === status.value ? (
+                        <Chip 
+                          label="Selected" 
+                          size="medium" 
+                          sx={{ 
+                            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '0.875rem',
+                            height: 32,
+                            '& .MuiChip-label': {
+                              px: 2
+                            }
+                          }} 
+                        />
+                      ) : (
+                        <Box sx={{ height: 32 }} />
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+
+            {/* Fallback option if current status is not in the list */}
+            {editingStatus && !invoiceStatuses.find(s => s.value === editingStatus) && (
+              <Grid item xs={12} sm={6} md={4} sx={{ display: 'flex' }}>
+                <Card
+                  onClick={() => setEditingStatus(editingStatus)}
+                  sx={{
+                    cursor: 'pointer',
+                    border: '2px solid #607d8b',
+                    borderRadius: 3,
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'scale(1.03)',
+                      boxShadow: '0 8px 25px rgba(0,0,0,0.15)'
+                    },
+                    height: 200, // Fixed height for all cards
+                    width: '100%', // Fixed width for all cards
+                    minWidth: '100%', // Ensure minimum width
+                    maxWidth: '100%', // Ensure maximum width
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: '1 1 auto' // Prevent flex shrinking
+                  }}
+                >
+                  <CardContent sx={{ 
+                    p: 3, 
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    height: '100%'
+                  }}>
+                    {/* Top Section: Icon and Name */}
+                    <Box>
+                      <Box sx={{ mb: 2 }}>
+                        <Box
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: '50%',
+                            backgroundColor: '#607d8b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            border: '3px solid white'
+                          }}
+                        >
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              color: 'white', 
+                              fontWeight: 'bold',
+                              fontSize: '1.2rem'
+                            }}
+                          >
+                            ?
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Typography variant="h6" sx={{ 
+                        fontWeight: 'bold', 
+                        color: '#274290', 
+                        mb: 1,
+                        width: '100%',
+                        textAlign: 'center'
+                      }}>
+                        {editingStatus}
+                      </Typography>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: '#666',
+                          minHeight: 40, // Fixed height for description
+                          width: '100%',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          wordWrap: 'break-word',
+                          overflowWrap: 'break-word'
+                        }}
+                      >
+                        Current Status (Unknown)
+                      </Typography>
+                    </Box>
+
+                    {/* Bottom Section: Spacer */}
+                    <Box sx={{ mt: 'auto', pt: 2 }}>
+                      <Box sx={{ height: 24 }} /> // Spacer to maintain alignment
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
             )}
-          </Box>
-          )}
+          </Grid>
         </DialogContent>
-        
-        <DialogActions sx={{ p: 2, gap: 1 }}>
+
+        {/* Enhanced Actions */}
+        <DialogActions sx={{ p: 3, gap: 2, backgroundColor: '#f8f9fa' }}>
           <Button 
-            onClick={() => setAllocationDialogOpen(false)}
+            onClick={() => setStatusDialogOpen(false)}
             variant="outlined"
-            size="small"
+            sx={{
+              borderColor: '#607d8b',
+              color: '#607d8b',
+              '&:hover': {
+                borderColor: '#455a64',
+                backgroundColor: 'rgba(96, 125, 139, 0.04)'
+              }
+            }}
           >
             Cancel
           </Button>
           <Button 
-            onClick={applyAllocation}
+            onClick={() => updateInvoiceStatus(selectedOrder.id, editingStatus)}
             variant="contained"
-            disabled={Math.abs(calculateTotals(monthlyAllocations).totalPercentage - 100) > 0.01}
-            size="small"
-            sx={{ 
+            disabled={!editingStatus}
+            sx={{
               backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' }
+              color: 'white',
+              fontWeight: 'bold',
+              px: 4,
+              py: 1.5,
+              borderRadius: 2,
+              '&:hover': {
+                backgroundColor: '#e65100',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 12px rgba(242, 121, 33, 0.4)'
+              },
+              '&:disabled': {
+                backgroundColor: '#ccc',
+                color: '#666'
+              }
             }}
           >
-            {(() => {
-              const status = getAllocationStatus();
-              if (status.status === 'valid') {
-                return 'Complete Order & Apply Allocation';
-              } else if (status.status === 'over') {
-                return 'Total Exceeds 100% - Cannot Apply';
-              } else {
-                return `${Math.abs(100 - calculateTotals(monthlyAllocations).totalPercentage).toFixed(1)}% Remaining`;
-              }
-            })()}
+            Update Status
           </Button>
         </DialogActions>
       </Dialog>
+
       </Box>
     </>
   );

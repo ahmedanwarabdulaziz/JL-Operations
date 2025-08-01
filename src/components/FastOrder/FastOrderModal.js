@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { calculatePickupDeliveryCost } from '../../utils/orderCalculations';
 import {
   Dialog,
   DialogTitle,
@@ -61,16 +62,22 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
         foamPrice: '',
         foamQnty: 1,
         foamNote: '',
+        paintingEnabled: false,
+        paintingLabour: '',
+        paintingNote: '',
+        paintingQnty: 1,
         customerNote: ''
       }] 
     },
-    paymentData: {
-      deposit: 0, // Required deposit amount
-      amountPaid: 0, // Actual amount paid by customer
-      pickupDeliveryEnabled: false,
-      pickupDeliveryCost: '',
-      notes: ''
-    }
+              paymentData: {
+            deposit: 0, // Required deposit amount
+            amountPaid: 0, // Actual amount paid by customer
+            amountPaidEnabled: false, // Toggle for amount paid field
+            pickupDeliveryEnabled: false,
+            pickupDeliveryCost: '',
+            pickupDeliveryServiceType: 'both', // Default to both for backward compatibility
+            notes: ''
+          }
   });
   
   // Toggle states for Step 2
@@ -79,6 +86,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
     materials: false,
     labour: false,
     foam: false,
+    painting: false,
     customerNote: false,
     pickupDelivery: false
   });
@@ -155,8 +163,10 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
           paymentData: {
             deposit: 0, // Required deposit amount
             amountPaid: 0, // Actual amount paid by customer
+            amountPaidEnabled: false, // Toggle for amount paid field
             pickupDeliveryEnabled: false,
             pickupDeliveryCost: '',
+            pickupDeliveryServiceType: 'both', // Default to both for backward compatibility
             notes: ''
           }
         });
@@ -180,6 +190,11 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
   const handleDataUpdate = (stepData) => {
     setOrderData(prev => ({ ...prev, ...stepData }));
     setErrors({}); // Clear errors when user makes changes
+    
+    // Sync pickup & delivery toggle with payment data
+    if (stepData.paymentData?.pickupDeliveryEnabled !== undefined) {
+      setToggles(prev => ({ ...prev, pickupDelivery: stepData.paymentData.pickupDeliveryEnabled }));
+    }
   };
 
   // Handle using existing customer
@@ -201,6 +216,17 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
   // Handle toggle changes
   const handleToggleChange = (toggleName, value) => {
     setToggles(prev => ({ ...prev, [toggleName]: value }));
+    
+    // Sync pickup & delivery toggle with payment data
+    if (toggleName === 'pickupDelivery') {
+      setOrderData(prev => ({
+        ...prev,
+        paymentData: {
+          ...prev.paymentData,
+          pickupDeliveryEnabled: value
+        }
+      }));
+    }
   };
 
   // Check for duplicate customers
@@ -212,8 +238,8 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
     const hasPhone = phone && phone.trim().length > 0;
     const hasEmail = email && email.trim().length > 0;
     
-    // Need at least name and email to check for duplicates
-    if (!hasName || !hasEmail) {
+    // Need at least name to check for duplicates (email is optional)
+    if (!hasName) {
       return false;
     }
 
@@ -261,9 +287,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
       if (!orderData.personalInfo.customerName.trim()) {
         newErrors.customerName = 'Customer name is required';
       }
-      if (!orderData.personalInfo.email.trim()) {
-        newErrors.email = 'Email is required';
-      }
+      // Email is now optional - no validation required
     } else if (stepIndex === 1) {
       // Validate bill invoice (always required)
       if (!orderData.orderDetails.billInvoice?.trim()) {
@@ -356,11 +380,33 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
     setIsSubmitting(true);
     
     try {
-      // Prepare final order data
+      // Get default invoice status from database (same as normal order)
+      let defaultInvoiceStatus = 'in_progress';
+      try {
+        const statusesRef = collection(db, 'invoiceStatuses');
+        const statusesSnapshot = await getDocs(statusesRef);
+        const defaultStatus = statusesSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .find(status => status.isDefault);
+        
+        if (defaultStatus) {
+          defaultInvoiceStatus = defaultStatus.value;
+        }
+      } catch (error) {
+        console.warn('Could not fetch default status, using fallback');
+      }
+
+      // Prepare final order data - match normal order structure exactly
       const finalOrderData = {
-        ...orderData,
-        toggles, // Include toggle states
+        personalInfo: orderData.personalInfo,
+        orderDetails: orderData.orderDetails,
+        furnitureData: orderData.furnitureData,
+        paymentData: orderData.paymentData,
+        toggles, // Include toggle states for fast orders
+        workflowStatus: 'Inprogress', // Match normal order workflow status
+        invoiceStatus: defaultInvoiceStatus, // Use dynamic default invoice status
         createdAt: new Date(),
+        updatedAt: new Date(),
         status: 'pending',
         isFastOrder: true, // Flag to identify fast orders
         totalAmount: calculateTotal()
@@ -386,8 +432,14 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
     const materialTotal = (furniture.materialQnty || 0) * (furniture.materialPrice || 0);
     const labourTotal = (furniture.labourQnty || 0) * (furniture.labourPrice || 0);
     const foamTotal = (furniture.foamQnty || 0) * (furniture.foamPrice || 0);
-    const pickupDeliveryTotal = orderData.paymentData.pickupDeliveryEnabled ? 
-      (orderData.paymentData.pickupDeliveryCost || 0) : 0;
+    
+    // Calculate pickup & delivery cost based on service type
+    let pickupDeliveryTotal = 0;
+    if (orderData.paymentData.pickupDeliveryEnabled) {
+      const baseCost = parseFloat(orderData.paymentData.pickupDeliveryCost) || 0;
+      const serviceType = orderData.paymentData.pickupDeliveryServiceType || 'both';
+      pickupDeliveryTotal = calculatePickupDeliveryCost(baseCost, serviceType);
+    }
     
     return materialTotal + labourTotal + foamTotal + pickupDeliveryTotal;
   };

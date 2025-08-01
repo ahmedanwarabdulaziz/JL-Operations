@@ -217,6 +217,17 @@ const StatusManagementPage = () => {
   const [cancellationReason, setCancellationReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState('');
+  
+  // Enhanced validation dialog state
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  const [validationError, setValidationError] = useState({ 
+    type: '', 
+    message: '', 
+    order: null, 
+    newStatus: null,
+    pendingAmount: 0,
+    currentAmount: 0
+  });
 
   const [statusForm, setStatusForm] = useState({
     label: '',
@@ -487,6 +498,45 @@ const StatusManagementPage = () => {
 
     setSelectedOrderForStatusChange({ order, newStatus });
     
+    // Payment validation for end states
+    if (newStatus.isEndState) {
+      const totalAmount = calculateOrderTotal(order);
+      const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+      
+      if (newStatus.endStateType === 'done') {
+        // For "done" - must be fully paid
+        if (amountPaid < totalAmount) {
+          const pendingAmount = totalAmount - amountPaid;
+                      setValidationError({
+              type: 'done',
+              message: `Cannot complete order: Payment not fully received. Required: $${totalAmount.toFixed(2)}, Paid: $${amountPaid.toFixed(2)}`,
+              order: order,
+              newStatus: newStatus,
+              pendingAmount: pendingAmount,
+              currentAmount: amountPaid
+            });
+            setValidationDialogOpen(true);
+            setStatusChangeDialogOpen(false); // Close the status dialog when validation dialog opens
+            return;
+        }
+      } else if (newStatus.endStateType === 'cancelled') {
+        // For "cancelled" - must have $0 payment
+        if (amountPaid > 0) {
+                      setValidationError({
+              type: 'cancelled',
+              message: `Cannot cancel order: Payment has been received ($${amountPaid.toFixed(2)}). Please refund the customer first.`,
+              order: order,
+              newStatus: newStatus,
+              pendingAmount: 0,
+              currentAmount: amountPaid
+            });
+            setValidationDialogOpen(true);
+            setStatusChangeDialogOpen(false); // Close the status dialog when validation dialog opens
+            return;
+        }
+      }
+    }
+    
     // If changing to cancellation end state, ask for reason
     if (newStatus.isEndState && newStatus.endStateType === 'cancelled') {
       setCancellationReason('');
@@ -497,7 +547,7 @@ const StatusManagementPage = () => {
     }
   };
 
-  const applyStatusChange = async (order, newStatus, reason = '') => {
+  const applyStatusChange = async (order, newStatus, reason = '', skipPaymentUpdate = false) => {
     try {
       const orderRef = doc(db, 'orders', order.id);
       const updateData = {
@@ -505,8 +555,8 @@ const StatusManagementPage = () => {
         statusUpdatedAt: new Date()
       };
 
-      // Apply business rules
-      if (newStatus.isEndState) {
+      // Apply business rules (skip if payment was already updated)
+      if (newStatus.isEndState && !skipPaymentUpdate) {
         if (newStatus.endStateType === 'cancelled') {
           // Cancelled orders: set paid amount to 0
           updateData['paymentData.amountPaid'] = 0;
@@ -526,10 +576,100 @@ const StatusManagementPage = () => {
       
       showSuccess(`Order status updated to "${newStatus.label}"`);
       setStatusChangeDialogOpen(false);
+      setValidationDialogOpen(false);
       fetchOrders();
     } catch (error) {
       console.error('Error updating order status:', error);
       showError('Failed to update order status');
+    }
+  };
+
+  // Enhanced payment update functions
+  const handleMakeFullyPaid = async () => {
+    try {
+      const { order, newStatus, pendingAmount } = validationError;
+      const orderRef = doc(db, 'orders', order.id);
+      
+      // Calculate new total paid amount
+      const currentAmount = parseFloat(order.paymentData?.amountPaid) || 0;
+      const newTotalPaid = currentAmount + pendingAmount;
+      
+      // Prepare payment history entry
+      const paymentEntry = {
+        amount: pendingAmount,
+        date: new Date(),
+        type: 'Status Change - Full Payment',
+        method: 'System Adjustment',
+        description: `Auto-payment for status change to ${newStatus.label}`
+      };
+      
+      // Update order with new payment data
+      const updateData = {
+        'paymentData.amountPaid': newTotalPaid,
+        'paymentData.paymentHistory': [
+          ...(order.paymentData?.paymentHistory || []),
+          paymentEntry
+        ]
+      };
+      
+      await updateDoc(orderRef, updateData);
+      
+      // Now update the status directly
+      const statusUpdateData = {
+        invoiceStatus: newStatus.value,
+        statusUpdatedAt: new Date()
+      };
+      
+      await updateDoc(orderRef, statusUpdateData);
+      
+      showSuccess(`Payment updated and order status changed to "${newStatus.label}"`);
+      setValidationDialogOpen(false);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      showError('Failed to update payment');
+    }
+  };
+
+  const handleSetPaymentToZero = async () => {
+    try {
+      const { order, newStatus, currentAmount } = validationError;
+      const orderRef = doc(db, 'orders', order.id);
+      
+      // Prepare payment history entry for refund
+      const paymentEntry = {
+        amount: -currentAmount, // Negative amount for refund
+        date: new Date(),
+        type: 'Status Change - Refund',
+        method: 'System Adjustment',
+        description: `Auto-refund for status change to ${newStatus.label}`
+      };
+      
+      // Update order with zero payment
+      const updateData = {
+        'paymentData.amountPaid': 0,
+        'paymentData.paymentHistory': [
+          ...(order.paymentData?.paymentHistory || []),
+          paymentEntry
+        ]
+      };
+      
+      await updateDoc(orderRef, updateData);
+      
+      // Now update the status directly
+      const statusUpdateData = {
+        invoiceStatus: newStatus.value,
+        statusUpdatedAt: new Date()
+      };
+      
+      await updateDoc(orderRef, statusUpdateData);
+      
+      showSuccess(`Payment reset to $0 and order status changed to "${newStatus.label}"`);
+      setValidationDialogOpen(false);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      showError('Failed to update payment');
     }
   };
 
@@ -1000,6 +1140,51 @@ const StatusManagementPage = () => {
             disabled={!cancellationReason.trim()}
           >
             Confirm Cancellation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Enhanced Validation Dialog */}
+      <Dialog open={validationDialogOpen} onClose={() => setValidationDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Payment Validation Required</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            {validationError.message}
+          </Typography>
+          
+          {validationError.type === 'done' && (
+            <Button 
+              variant="contained" 
+              color="success"
+              onClick={handleMakeFullyPaid}
+              fullWidth
+              sx={{ mb: 2 }}
+              startIcon={<CheckCircleIcon />}
+            >
+              Make ${validationError.pendingAmount.toFixed(2)} as Paid
+            </Button>
+          )}
+          
+          {validationError.type === 'cancelled' && (
+            <Button 
+              variant="contained" 
+              color="error"
+              onClick={handleSetPaymentToZero}
+              fullWidth
+              sx={{ mb: 2 }}
+              startIcon={<CancelIcon />}
+            >
+              Set Payment Amount to $0.00
+            </Button>
+          )}
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            This action will update the payment history and automatically change the order status.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setValidationDialogOpen(false)}>
+            Cancel
           </Button>
         </DialogActions>
       </Dialog>

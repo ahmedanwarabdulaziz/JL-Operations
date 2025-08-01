@@ -28,7 +28,11 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
 const menuItems = [
@@ -41,10 +45,13 @@ const menuItems = [
   { text: 'Platforms', path: '/platforms', icon: <PublicIcon /> },
   { text: 'Invoices', path: '/invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/finance', icon: <AccountBalanceIcon /> },
+  { text: 'P&L Statement', path: '/pl', icon: <TrendingUpIcon /> },
   { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
+  { text: 'Completed Orders', path: '/end-done', icon: <CheckCircleIcon /> },
+  { text: 'Cancelled Orders', path: '/end-cancelled', icon: <CancelIcon /> },
   { text: 'Email Settings', path: '/email-settings', icon: <EmailIcon /> },
-  { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
 
+  { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
   { text: 'Rapid Invoice Settings', path: '/rapid-invoice-settings', icon: <FlashOnIcon /> },
   { text: 'Data Management', path: '/data-management', icon: <SettingsIcon /> },
 ];
@@ -118,7 +125,7 @@ const Sidebar = ({ onToggle, onPin }) => {
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#fff',
+          backgroundColor: '#b98f33', // Custom gold background
           borderRight: '1px solid #e0e0e0',
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
           transition: 'width 0.3s ease',
@@ -130,7 +137,7 @@ const Sidebar = ({ onToggle, onPin }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {isExpanded ? (
             <>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                 JL Operation
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -146,7 +153,7 @@ const Sidebar = ({ onToggle, onPin }) => {
             </>
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1976d2', fontSize: '1.2rem' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', fontSize: '1.2rem' }}>
                 JL
               </Typography>
             </Box>
@@ -211,20 +218,21 @@ const Sidebar = ({ onToggle, onPin }) => {
                 borderRadius: 1,
                 minHeight: 48,
                 justifyContent: isExpanded ? 'flex-start' : 'center',
+                color: '#000000', // Black text
                 '&:hover': {
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: 'rgba(0,0,0,0.1)', // Darker gold on hover
                 },
                 '&.Mui-selected': {
-                  backgroundColor: '#e3f2fd',
-                  color: '#1976d2',
+                  backgroundColor: 'rgba(0,0,0,0.2)', // Even darker for selected
+                  color: '#000000',
                   '&:hover': {
-                    backgroundColor: '#e3f2fd',
+                    backgroundColor: 'rgba(0,0,0,0.2)',
                   },
                 },
               }}
             >
               <Box sx={{ 
-                color: 'inherit',
+                color: '#000000', // Black color for icons and text
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: isExpanded ? 'flex-start' : 'center',
@@ -236,8 +244,10 @@ const Sidebar = ({ onToggle, onPin }) => {
                     primary={item.text} 
                     sx={{
                       ml: 2,
+                      color: '#000000', // Black text
                       '& .MuiListItemText-primary': {
                         fontWeight: 500,
+                        color: '#000000', // Ensure text is black
                       },
                     }}
                   />

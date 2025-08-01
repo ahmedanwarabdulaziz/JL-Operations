@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -25,6 +25,11 @@ const Step3Furniture = ({
   setFormErrors 
 }) => {
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
+
+  // Auto-select functionality
+  const handleFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
   const addFurnitureGroup = () => {
     const newGroup = {
       id: Date.now(),
@@ -40,6 +45,10 @@ const Step3Furniture = ({
       foamPrice: '',
       foamQnty: 1,
       foamNote: '',
+      paintingEnabled: false,
+      paintingLabour: '',
+      paintingNote: '',
+      paintingQnty: 1,
       customerNote: ''
     };
     
@@ -96,6 +105,7 @@ const Step3Furniture = ({
                 label="Furniture Type *"
                 value={group.furnitureType}
                 onChange={(e) => updateFurnitureGroup(index, 'furnitureType', e.target.value)}
+                onFocus={handleFocus}
                 error={!!formErrors[`furniture_${index}_type`]}
                 helperText={formErrors[`furniture_${index}_type`]}
                 placeholder="Enter furniture type"
@@ -157,6 +167,7 @@ const Step3Furniture = ({
                   label="Material Code"
                   value={group.materialCode}
                   onChange={(e) => updateFurnitureGroup(index, 'materialCode', e.target.value)}
+                  onFocus={handleFocus}
                   placeholder="Enter material code"
                   sx={{
                     '& .MuiOutlinedInput-notchedOutline': {
@@ -181,6 +192,7 @@ const Step3Furniture = ({
                   type="number"
                   value={group.materialQnty}
                   onChange={(e) => updateFurnitureGroup(index, 'materialQnty', parseFloat(e.target.value) || 0)}
+                  onFocus={handleFocus}
                   inputProps={{ min: 0, step: 0.1 }}
                   placeholder="Qty"
                   sx={{
@@ -206,6 +218,7 @@ const Step3Furniture = ({
                   type="number"
                   value={group.materialPrice}
                   onChange={(e) => updateFurnitureGroup(index, 'materialPrice', parseFloat(e.target.value) || 0)}
+                  onFocus={handleFocus}
                   inputProps={{ min: 0, step: 0.01 }}
                   placeholder="Price"
                   sx={{
@@ -235,6 +248,7 @@ const Step3Furniture = ({
                   type="number"
                   value={group.labourPrice}
                   onChange={(e) => updateFurnitureGroup(index, 'labourPrice', parseFloat(e.target.value) || 0)}
+                  onFocus={handleFocus}
                   inputProps={{ min: 0, step: 0.01 }}
                   placeholder="Labour price"
                   sx={{
@@ -259,6 +273,7 @@ const Step3Furniture = ({
                   label="Labour Note"
                   value={group.labourNote}
                   onChange={(e) => updateFurnitureGroup(index, 'labourNote', e.target.value)}
+                  onFocus={handleFocus}
                   placeholder="Labour notes"
                   sx={{
                     '& .MuiOutlinedInput-notchedOutline': {
@@ -283,6 +298,7 @@ const Step3Furniture = ({
                   type="number"
                   value={group.labourQnty}
                   onChange={(e) => updateFurnitureGroup(index, 'labourQnty', parseFloat(e.target.value) || 0)}
+                  onFocus={handleFocus}
                   inputProps={{ min: 0, step: 0.1 }}
                   placeholder="Qty"
                   sx={{
@@ -308,12 +324,12 @@ const Step3Furniture = ({
               <FormControlLabel
                 control={
                   <Switch
-                    checked={group.foamEnabled}
+                    checked={Boolean(group.foamEnabled)}
                     onChange={(e) => {
                       const newValue = e.target.checked;
                       updateFurnitureGroup(index, 'foamEnabled', newValue);
                       // Set default foam quantity to 1 when enabled
-                      if (newValue && !group.foamQnty) {
+                      if (newValue && (!group.foamQnty || group.foamQnty === 0)) {
                         updateFurnitureGroup(index, 'foamQnty', 1);
                       }
                     }}
@@ -333,6 +349,7 @@ const Step3Furniture = ({
                     type="number"
                     value={group.foamPrice}
                     onChange={(e) => updateFurnitureGroup(index, 'foamPrice', parseFloat(e.target.value) || 0)}
+                    onFocus={handleFocus}
                     inputProps={{ min: 0, step: 0.01 }}
                     placeholder="Foam price"
                     sx={{
@@ -357,6 +374,7 @@ const Step3Furniture = ({
                     label="Foam Thickness"
                     value={group.foamThickness}
                     onChange={(e) => updateFurnitureGroup(index, 'foamThickness', e.target.value)}
+                    onFocus={handleFocus}
                     placeholder="Thickness"
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
@@ -380,6 +398,7 @@ const Step3Furniture = ({
                     label="Foam Note"
                     value={group.foamNote}
                     onChange={(e) => updateFurnitureGroup(index, 'foamNote', e.target.value)}
+                    onFocus={handleFocus}
                     placeholder="Foam notes"
                     sx={{
                       '& .MuiOutlinedInput-notchedOutline': {
@@ -404,6 +423,109 @@ const Step3Furniture = ({
                     type="number"
                     value={group.foamQnty}
                     onChange={(e) => updateFurnitureGroup(index, 'foamQnty', parseFloat(e.target.value) || 0)}
+                    onFocus={handleFocus}
+                    inputProps={{ min: 0, step: 0.1 }}
+                    placeholder="Qty"
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: 'grey.300',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: '2px',
+                      },
+                    }}
+                  />
+                </Grid>
+              </Grid>
+            )}
+
+            {/* Painting Toggle */}
+            <Box sx={{ mb: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={Boolean(group.paintingEnabled)}
+                    onChange={(e) => {
+                      const newValue = e.target.checked;
+                      updateFurnitureGroup(index, 'paintingEnabled', newValue);
+                      // Set default painting quantity to 1 when enabled
+                      if (newValue && (!group.paintingQnty || group.paintingQnty === 0)) {
+                        updateFurnitureGroup(index, 'paintingQnty', 1);
+                      }
+                    }}
+                  />
+                }
+                label="Enable Painting"
+              />
+            </Box>
+
+            {/* Painting Details Row */}
+            {group.paintingEnabled && (
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Painting Labour"
+                    type="number"
+                    value={group.paintingLabour}
+                    onChange={(e) => updateFurnitureGroup(index, 'paintingLabour', parseFloat(e.target.value) || 0)}
+                    onFocus={handleFocus}
+                    inputProps={{ min: 0, step: 0.01 }}
+                    placeholder="Labour price"
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: 'grey.300',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: '2px',
+                      },
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Painting Note"
+                    value={group.paintingNote}
+                    onChange={(e) => updateFurnitureGroup(index, 'paintingNote', e.target.value)}
+                    onFocus={handleFocus}
+                    placeholder="Painting notes"
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: 'grey.300',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: '2px',
+                      },
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    fullWidth
+                    label="Painting Quantity"
+                    type="number"
+                    value={group.paintingQnty}
+                    onChange={(e) => updateFurnitureGroup(index, 'paintingQnty', parseFloat(e.target.value) || 0)}
+                    onFocus={handleFocus}
                     inputProps={{ min: 0, step: 0.1 }}
                     placeholder="Qty"
                     sx={{
@@ -433,6 +555,7 @@ const Step3Furniture = ({
               rows={3}
               value={group.customerNote}
               onChange={(e) => updateFurnitureGroup(index, 'customerNote', e.target.value)}
+              onFocus={handleFocus}
               placeholder="Enter customer notes for this furniture item"
               sx={{
                 '& .MuiOutlinedInput-notchedOutline': {

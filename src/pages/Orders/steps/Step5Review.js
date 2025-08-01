@@ -196,6 +196,17 @@ const Step5Review = ({
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam || '-'}</Typography>
                       </Box>
                     )}
+                    {/* Painting Row - all fields in one row, only if painting labour has value */}
+                    {group.paintingLabour && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
+                        <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Labour:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.paintingLabour}</Typography>
+                        <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Note:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.paintingNote || '-'}</Typography>
+                        <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Quantity:</Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.paintingQnty || '-'}</Typography>
+                      </Box>
+                    )}
                     {/* Customer Note - only if has value */}
                     {group.customerNote && (
                       <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e3f2fd', width: '100%' }}>

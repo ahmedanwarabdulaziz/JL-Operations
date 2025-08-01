@@ -19,10 +19,14 @@ import MaterialCompaniesPage from './pages/MaterialCompanies/MaterialCompaniesPa
 import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './pages/Invoice/InvoicePage';
 import FinancePage from './pages/Finance/FinancePage';
+import PLPage from './pages/Finance/PLPage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
 import RapidInvoiceSettingsPage from './pages/RapidInvoice/RapidInvoiceSettingsPage';
 import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
+
+import EndDonePage from './pages/EndDone/EndDonePage';
+import EndCancelledPage from './pages/EndCancelled/EndCancelledPage';
 
 
 const AppContent = () => {
@@ -59,9 +63,13 @@ const AppContent = () => {
         <Route path="/platforms" element={<PlatformsPage />} />
         <Route path="/invoices" element={<InvoicePage />} />
         <Route path="/finance" element={<FinancePage />} />
+        <Route path="/pl" element={<PLPage />} />
         <Route path="/status-management" element={<StatusManagementPage />} />
         <Route path="/data-management" element={<DataManagementPage />} />
         <Route path="/email-settings" element={<EmailSettingsPage />} />
+
+        <Route path="/end-done" element={<EndDonePage />} />
+        <Route path="/end-cancelled" element={<EndCancelledPage />} />
 
         <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>

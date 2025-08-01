@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -22,6 +22,11 @@ const Step2OrderDetails = ({
 }) => {
   const { platforms, loading: platformsLoading } = usePlatforms();
 
+  // Auto-select functionality
+  const handleFocus = useCallback((event) => {
+    event.target.select();
+  }, []);
+
   return (
     <Box>
       <Typography variant="h5" gutterBottom>
@@ -37,6 +42,7 @@ const Step2OrderDetails = ({
           label="Order Description"
           value={orderDetails.description}
           onChange={(e) => onOrderDetailsChange('description', e.target.value)}
+          onFocus={handleFocus}
           error={!!formErrors.description}
           helperText={formErrors.description}
           placeholder="Describe the order details"
@@ -80,6 +86,7 @@ const Step2OrderDetails = ({
             label="Bill Invoice *"
             value={orderDetails.billInvoice}
             onChange={(e) => onOrderDetailsChange('billInvoice', e.target.value)}
+            onFocus={handleFocus}
             error={!!formErrors.billInvoice}
             helperText={formErrors.billInvoice || 'Must be exactly 6 digits'}
             required
