@@ -29,6 +29,7 @@ import EndDonePage from './pages/EndDone/EndDonePage';
 import EndCancelledPage from './pages/EndCancelled/EndCancelledPage';
 import LeadFormPage from './pages/LeadFormPage/LeadFormPage';
 import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
+import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 
 
 const AppContent = () => {
@@ -40,7 +41,7 @@ const AppContent = () => {
 
   // If it's the standalone form, render it without authentication
   if (isStandaloneForm) {
-    return <StandaloneLeadForm />;
+    return <PublicLeadForm />;
   }
 
   if (loading) {
