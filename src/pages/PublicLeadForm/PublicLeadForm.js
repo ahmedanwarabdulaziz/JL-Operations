@@ -138,9 +138,10 @@ const PublicLeadForm = () => {
         fileInputRef.current.value = '';
       }
       
+      // Auto-close after 8 seconds
       setTimeout(() => {
         setShowSuccess(false);
-      }, 5000);
+      }, 8000);
       
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -150,31 +151,50 @@ const PublicLeadForm = () => {
     }
   };
 
-  return (
-    <div className="public-lead-form-page">
-      <div className="page-header">
-        <h1>JL Operations</h1>
-        <p>Professional Furniture Manufacturing & Custom Solutions</p>
-        <div className="contact-info">
-          <p>📧 info@jloperations.com</p>
-          <p>📞 +1 (555) 123-4567</p>
+  const handleCloseSuccess = () => {
+    setShowSuccess(false);
+  };
+
+  if (showSuccess) {
+    return (
+      <div className="success-overlay">
+        <div className="success-container">
+          <div className="success-icon">✓</div>
+          <h2>Thank You for Your Interest!</h2>
+          <p className="success-message">
+            We have successfully received your project request. Our team will carefully review your requirements and contact you within 2 working days with a detailed quote and timeline.
+          </p>
+          <div className="success-details">
+            <p><strong>What happens next?</strong></p>
+            <ul>
+              <li>Our design team will analyze your project requirements</li>
+              <li>We'll prepare a comprehensive quote with material options</li>
+              <li>You'll receive a detailed timeline for completion</li>
+              <li>We'll schedule a consultation to discuss your project</li>
+            </ul>
+          </div>
+          <p className="contact-note">
+            If you have any urgent questions, please contact us at:<br/>
+            <strong>📧 info@jloperations.com</strong><br/>
+            <strong>📞 +1 (555) 123-4567</strong>
+          </p>
+          <button onClick={handleCloseSuccess} className="close-btn">
+            Close
+          </button>
         </div>
       </div>
-      
+    );
+  }
+
+  return (
+    <div className="public-lead-form-page">
       <div className="lead-form-container">
-        {showSuccess && (
-          <div className="success-message">
-            <h3>Thank You!</h3>
-            <p>We have received your request and will contact you with your quote within 2 working days.</p>
-          </div>
-        )}
-        
         <form onSubmit={handleSubmit} className="lead-form">
-          <h2>Get Your Quote</h2>
-          <p className="form-subtitle">Fill out the form below and we'll get back to you within 2 working days.</p>
+          <h2>Get Your Custom Quote</h2>
+          <p className="form-subtitle">Tell us about your project and we'll provide you with a detailed quote within 2 working days.</p>
           
           <div className="form-group">
-            <label htmlFor="name">Name *</label>
+            <label htmlFor="name">Full Name *</label>
             <input
               type="text"
               id="name"
@@ -188,7 +208,7 @@ const PublicLeadForm = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="email">Email *</label>
+            <label htmlFor="email">Email Address *</label>
             <input
               type="email"
               id="email"
@@ -220,13 +240,13 @@ const PublicLeadForm = () => {
               name="description"
               value={formData.description}
               onChange={handleInputChange}
-              placeholder="Describe your project requirements..."
+              placeholder="Describe your project requirements, dimensions, materials, or any specific details..."
               rows="4"
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="image">Attach Image (Optional)</label>
+            <label htmlFor="image">Attach Reference Image (Optional)</label>
             <input
               type="file"
               id="image"
@@ -253,42 +273,6 @@ const PublicLeadForm = () => {
             {isSubmitting ? 'Submitting...' : 'Submit Request'}
           </button>
         </form>
-      </div>
-      
-      <div className="page-footer">
-        <div className="footer-content">
-          <div className="footer-section">
-            <h3>Our Services</h3>
-            <ul>
-              <li>Custom Furniture Design</li>
-              <li>Commercial Furniture</li>
-              <li>Residential Projects</li>
-              <li>Restoration & Repair</li>
-            </ul>
-          </div>
-          
-          <div className="footer-section">
-            <h3>Why Choose Us</h3>
-            <ul>
-              <li>30+ Years Experience</li>
-              <li>Premium Materials</li>
-              <li>Custom Design</li>
-              <li>Quality Guarantee</li>
-            </ul>
-          </div>
-          
-          <div className="footer-section">
-            <h3>Contact Info</h3>
-            <p>📍 123 Furniture Lane</p>
-            <p>🏢 Suite 100</p>
-            <p>📧 info@jloperations.com</p>
-            <p>📞 +1 (555) 123-4567</p>
-          </div>
-        </div>
-        
-        <div className="footer-bottom">
-          <p>&copy; 2024 JL Operations. All rights reserved.</p>
-        </div>
       </div>
     </div>
   );
