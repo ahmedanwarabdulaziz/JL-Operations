@@ -1,0 +1,5 @@
+[33m930ed0d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Add lead form with ImgBB integration and navigation
+[33m788a09e[m Fix dynamic tax rates in invoice display and PDF generation, enhance P&L page with allocation analysis, improve EndDone page layout, and resolve workshop dialog overlap issues
+[33m894675a[m Improve email subjects and deposit email template for professionalism and clarity
+[33me53c3c1[m feat: Major UI/UX improvements and new features
+[33m4eea76e[m  Status Integration: Finance Page now uses Dynamic Statuses
