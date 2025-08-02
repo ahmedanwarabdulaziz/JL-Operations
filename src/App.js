@@ -1,7 +1,7 @@
 import React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import theme from './theme/theme';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './components/Common/NotificationSystem';
 import { FirebaseProvider } from './contexts/FirebaseContext';
@@ -33,6 +33,15 @@ import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 
 const AppContent = () => {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Check if we're on the standalone form route
+  const isStandaloneForm = location.pathname === '/standalone-form';
+
+  // If it's the standalone form, render it without authentication
+  if (isStandaloneForm) {
+    return <StandaloneLeadForm />;
+  }
 
   if (loading) {
     return (
@@ -73,7 +82,6 @@ const AppContent = () => {
         <Route path="/end-done" element={<EndDonePage />} />
         <Route path="/end-cancelled" element={<EndCancelledPage />} />
         <Route path="/lead-form" element={<LeadFormPage />} />
-        <Route path="/standalone-form" element={<StandaloneLeadForm />} />
 
         <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>
