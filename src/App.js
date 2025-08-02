@@ -27,6 +27,8 @@ import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
 
 import EndDonePage from './pages/EndDone/EndDonePage';
 import EndCancelledPage from './pages/EndCancelled/EndCancelledPage';
+import LeadFormPage from './pages/LeadFormPage/LeadFormPage';
+import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 
 
 const AppContent = () => {
@@ -70,6 +72,8 @@ const AppContent = () => {
 
         <Route path="/end-done" element={<EndDonePage />} />
         <Route path="/end-cancelled" element={<EndCancelledPage />} />
+        <Route path="/lead-form" element={<LeadFormPage />} />
+        <Route path="/standalone-form" element={<StandaloneLeadForm />} />
 
         <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
       </Routes>
