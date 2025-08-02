@@ -33,6 +33,7 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import WebIcon from '@mui/icons-material/Web';
+import GroupIcon from '@mui/icons-material/Group';
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
@@ -51,6 +52,7 @@ const menuItems = [
   { text: 'Completed Orders', path: '/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/end-cancelled', icon: <CancelIcon /> },
   { text: 'Lead Form', path: '/lead-form', icon: <WebIcon /> },
+  { text: 'Leads Management', path: '/leads', icon: <GroupIcon /> },
   { text: 'Email Settings', path: '/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
   { text: 'Rapid Invoice Settings', path: '/rapid-invoice-settings', icon: <FlashOnIcon /> },
