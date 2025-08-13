@@ -596,53 +596,77 @@ const FinancePage = () => {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#e6e7e8', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <AccountBalanceIcon sx={{ fontSize: 32, color: '#274290', mr: 2 }} />
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <AccountBalanceIcon sx={{ fontSize: 32, color: '#b98f33', mr: 2 }} />
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Financial Management
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<SettingsIcon />}
-          onClick={() => navigate('/status-management')}
-          sx={{ 
-            color: '#274290',
-            borderColor: '#274290',
-            '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
-          }}
-        >
-          Manage Statuses
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<TrendingUpIcon />}
-          onClick={() => navigate('/pl')}
-          sx={{ 
-            color: '#4caf50',
-            borderColor: '#4caf50',
-            '&:hover': { borderColor: '#4caf50', backgroundColor: '#f1f8e9' }
-          }}
-        >
-          P&L Statement
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<RefreshIcon />}
-          onClick={() => {
-            fetchOrders();
-            fetchInvoiceStatuses();
-          }}
-          sx={{ 
-            backgroundColor: '#f27921',
-            '&:hover': { backgroundColor: '#e66a1a' }
-          }}
-        >
-          Refresh Data
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            startIcon={<SettingsIcon />}
+            onClick={() => navigate('/status-management')}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
+          >
+            Manage Statuses
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<TrendingUpIcon />}
+            onClick={() => navigate('/pl')}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
+          >
+            P&L Statement
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              fetchOrders();
+              fetchInvoiceStatuses();
+            }}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
+          >
+            Refresh Data
+          </Button>
+        </Box>
       </Box>
 
       {/* Status Integration Info */}
@@ -654,7 +678,17 @@ const FinancePage = () => {
             <Button 
               size="small" 
               onClick={() => navigate('/status-management')}
-              sx={{ color: '#274290' }}
+              sx={{ 
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '1px solid #8b6b1f',
+                boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                }
+              }}
             >
               Setup Statuses
             </Button>
@@ -667,14 +701,21 @@ const FinancePage = () => {
       {/* Financial Summary Cards - Compact Single Row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#274290', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Total Revenue
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.totalRevenue)}
                 </Typography>
               </Box>
@@ -683,14 +724,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#ff9800', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Total Costs
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.totalCost)}
                 </Typography>
               </Box>
@@ -699,17 +747,24 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#f27921', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Total Profit
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.totalProfit)}
                 </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.65rem' }}>
+                <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.65rem', color: '#b98f33' }}>
                   {financialSummary.averageProfitMargin.toFixed(1)}% margin
                 </Typography>
               </Box>
@@ -718,14 +773,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#4caf50', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Paid Amount
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.paidAmount)}
                 </Typography>
               </Box>
@@ -734,14 +796,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#f44336', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Pending
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.pendingAmount)}
                 </Typography>
               </Box>
@@ -750,14 +819,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#9c27b0', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Total Orders
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {financialSummary.totalOrders}
                 </Typography>
               </Box>
@@ -766,14 +842,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#607d8b', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Avg Order
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {formatCurrency(financialSummary.totalOrders > 0 ? financialSummary.totalRevenue / financialSummary.totalOrders : 0)}
                 </Typography>
               </Box>
@@ -782,14 +865,21 @@ const FinancePage = () => {
         </Grid>
         
         <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ backgroundColor: '#795548', color: 'white', height: '100%' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Box sx={{ textAlign: 'center' }}>
-                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, opacity: 0.8 }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
                   Collection %
                 </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {financialSummary.totalRevenue > 0 ? 
                     ((financialSummary.paidAmount / financialSummary.totalRevenue) * 100).toFixed(1) : 0}%
                 </Typography>
@@ -800,10 +890,10 @@ const FinancePage = () => {
       </Grid>
 
       {/* Filters */}
-      <Paper sx={{ p: 3, mb: 3, border: '1px solid #e0e0e0' }}>
+      <Paper sx={{ p: 3, mb: 3, border: '1px solid #333333', backgroundColor: '#2a2a2a' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <FilterListIcon sx={{ color: '#274290', mr: 1 }} />
-          <Typography variant="h6" sx={{ color: '#274290', fontWeight: 'bold' }}>
+          <FilterListIcon sx={{ color: '#b98f33', mr: 1 }} />
+          <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
             Filters & Search
           </Typography>
         </Box>
@@ -825,8 +915,8 @@ const FinancePage = () => {
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#274290' },
-                  '&.Mui-focused fieldset': { borderColor: '#274290' }
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
                 }
               }}
             />
@@ -844,14 +934,14 @@ const FinancePage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <DateRangeIcon sx={{ color: '#274290' }} />
+                    <DateRangeIcon sx={{ color: '#b98f33' }} />
                   </InputAdornment>
                 )
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#274290' },
-                  '&.Mui-focused fieldset': { borderColor: '#274290' }
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
                 }
               }}
             />
@@ -867,8 +957,8 @@ const FinancePage = () => {
               InputLabelProps={{ shrink: true }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#274290' },
-                  '&.Mui-focused fieldset': { borderColor: '#274290' }
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
                 }
               }}
             />
@@ -877,14 +967,14 @@ const FinancePage = () => {
           {/* Status Filter */}
           <Grid item xs={12} sm={6} lg={2.5}>
             <FormControl fullWidth>
-              <InputLabel sx={{ color: '#274290' }}>Invoice Status</InputLabel>
+              <InputLabel sx={{ color: '#b98f33' }}>Invoice Status</InputLabel>
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 label="Invoice Status"
                 sx={{
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#274290' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#274290' }
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' }
                 }}
               >
                 <MenuItem value="all">
@@ -927,7 +1017,7 @@ const FinancePage = () => {
               <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
                 <Button
                   size="small"
-                  variant="outlined"
+                  variant="contained"
                   onClick={() => {
                     const now = new Date();
                     setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -935,16 +1025,22 @@ const FinancePage = () => {
                   }}
                   sx={{ 
                     fontSize: '0.75rem',
-                    color: '#274290',
-                    borderColor: '#274290',
-                    '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
+                    backgroundColor: '#b98f33',
+                    color: '#000000',
+                    border: '1px solid #8b6b1f',
+                    boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                    background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                    '&:hover': { 
+                      backgroundColor: '#d4af5a',
+                      boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                    }
                   }}
                 >
                   This Month
                 </Button>
                 <Button
                   size="small"
-                  variant="outlined"
+                  variant="contained"
                   onClick={() => {
                     const now = new Date();
                     setDateFrom(new Date(now.getFullYear(), 0, 1));
@@ -952,9 +1048,15 @@ const FinancePage = () => {
                   }}
                   sx={{ 
                     fontSize: '0.75rem',
-                    color: '#274290',
-                    borderColor: '#274290',
-                    '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
+                    backgroundColor: '#b98f33',
+                    color: '#000000',
+                    border: '1px solid #8b6b1f',
+                    boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                    background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                    '&:hover': { 
+                      backgroundColor: '#d4af5a',
+                      boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                    }
                   }}
                 >
                   This Year
@@ -969,8 +1071,8 @@ const FinancePage = () => {
 
         {/* Active Filters Display */}
         {(statusFilter !== 'all' || searchTerm || (dateFrom && dateTo)) && (
-          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
-            <Typography variant="body2" sx={{ mb: 1, color: '#274290', fontWeight: 'bold' }}>
+          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #333333' }}>
+            <Typography variant="body2" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>
               Active Filters:
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1004,6 +1106,7 @@ const FinancePage = () => {
               )}
               <Button
                 size="small"
+                variant="contained"
                 onClick={() => {
                   setSearchTerm('');
                   setStatusFilter('all');
@@ -1011,7 +1114,18 @@ const FinancePage = () => {
                   setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
                   setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
                 }}
-                sx={{ color: '#f27921', fontSize: '0.75rem' }}
+                sx={{ 
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
+                  border: '1px solid #8b6b1f',
+                  boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                  background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                  fontSize: '0.75rem',
+                  '&:hover': { 
+                    backgroundColor: '#d4af5a',
+                    boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                  }
+                }}
               >
                 Clear All
               </Button>
@@ -1021,22 +1135,22 @@ const FinancePage = () => {
       </Paper>
 
       {/* Orders Table */}
-      <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
+      <TableContainer component={Paper} sx={{ boxShadow: 2, backgroundColor: '#2a2a2a' }}>
         <Table>
-          <TableHead sx={{ backgroundColor: '#274290' }}>
+          <TableHead sx={{ backgroundColor: '#b98f33' }}>
             <TableRow>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice #</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Revenue</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Cost</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Profit</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Profit %</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Paid</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Balance</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Payment Status</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice Status</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Customer</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice #</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Cost</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit %</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Paid</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Balance</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Payment Status</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice Status</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Date</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1064,19 +1178,19 @@ const FinancePage = () => {
                   </TableCell>
                   
                   <TableCell>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {order.orderDetails?.billInvoice || 'N/A'}
                     </Typography>
                   </TableCell>
                   
                   <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {formatCurrency(profitData.revenue)}
                     </Typography>
                   </TableCell>
                   
                   <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {formatCurrency(profitData.cost)}
                     </Typography>
                   </TableCell>
@@ -1127,7 +1241,7 @@ const FinancePage = () => {
                   </TableCell>
                   
                   <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {formatCurrency(normalizedPayment.amountPaid)}
                     </Typography>
                   </TableCell>
@@ -1183,7 +1297,7 @@ const FinancePage = () => {
                       <IconButton 
                         size="small" 
                         onClick={() => navigate(`/orders`, { state: { viewOrder: order } })}
-                        sx={{ color: '#274290' }}
+                        sx={{ color: '#b98f33' }}
                       >
                         <ViewIcon />
                       </IconButton>
@@ -1192,7 +1306,7 @@ const FinancePage = () => {
                       <IconButton 
                         size="small" 
                         onClick={() => navigate(`/invoices`, { state: { viewOrder: order } })}
-                        sx={{ color: '#f27921' }}
+                        sx={{ color: '#b98f33' }}
                       >
                         <PdfIcon />
                       </IconButton>
@@ -1218,8 +1332,8 @@ const FinancePage = () => {
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
           display: 'flex',
           alignItems: 'center',
           gap: 2
@@ -1230,8 +1344,8 @@ const FinancePage = () => {
 
         <DialogContent sx={{ p: 3 }}>
           {/* Current Status Display */}
-          <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-            <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>
+          <Box sx={{ mb: 3, p: 2, backgroundColor: '#3a3a3a', borderRadius: 1 }}>
+            <Typography variant="subtitle2" sx={{ color: '#b98f33', mb: 1 }}>
               Current Status
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1286,11 +1400,11 @@ const FinancePage = () => {
 
           {/* Status Description */}
           {editingStatus && (
-            <Box sx={{ p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
-              <Typography variant="body2" sx={{ color: '#1976d2' }}>
+            <Box sx={{ p: 2, backgroundColor: '#3a3a3a', borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b98f33' }}>
                 <strong>Selected:</strong> {getStatusInfo(editingStatus)?.label || editingStatus}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+              <Typography variant="caption" sx={{ color: '#ffffff', display: 'block', mt: 1 }}>
                 {getStatusInfo(editingStatus)?.description || 'Status will be updated for this order.'}
               </Typography>
             </Box>
@@ -1300,8 +1414,19 @@ const FinancePage = () => {
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button 
             onClick={() => setStatusDialogOpen(false)}
-            variant="outlined"
+            variant="contained"
             size="small"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
           >
             Cancel
           </Button>
@@ -1311,8 +1436,15 @@ const FinancePage = () => {
             disabled={!editingStatus}
             size="small"
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' }
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
             }}
           >
             Update Status
@@ -1331,10 +1463,21 @@ const FinancePage = () => {
           {validationError.type === 'done' && (
             <Button 
               variant="contained" 
-              color="success"
               onClick={handleMakeFullyPaid}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                }
+              }}
               startIcon={<CheckCircleIcon />}
             >
               Make ${validationError.pendingAmount.toFixed(2)} as Paid
@@ -1344,10 +1487,21 @@ const FinancePage = () => {
           {validationError.type === 'cancelled' && (
             <Button 
               variant="contained" 
-              color="error"
               onClick={handleSetPaymentToZero}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                }
+              }}
               startIcon={<CancelIcon />}
             >
               Set Payment Amount to $0.00
@@ -1359,7 +1513,21 @@ const FinancePage = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setValidationDialogOpen(false)}>
+          <Button 
+            onClick={() => setValidationDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>
@@ -1374,7 +1542,7 @@ const FinancePage = () => {
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CalendarIcon sx={{ mr: 1, color: '#274290' }} />
+            <CalendarIcon sx={{ mr: 1, color: '#b98f33' }} />
             Order Completion & Date Allocation
           </Box>
         </DialogTitle>
@@ -1383,8 +1551,8 @@ const FinancePage = () => {
           {selectedOrderForAllocation && (
             <Box sx={{ mt: 2 }}>
               {/* Order Summary */}
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#f5f5f5' }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
+              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#3a3a3a' }}>
+                <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
                   Order Summary
                 </Typography>
                 <Alert severity="info" sx={{ mb: 2 }}>
@@ -1571,7 +1739,21 @@ const FinancePage = () => {
         </DialogContent>
         
         <DialogActions>
-          <Button onClick={() => setAllocationDialogOpen(false)}>
+          <Button 
+            onClick={() => setAllocationDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Cancel
           </Button>
           <Button 
@@ -1580,8 +1762,16 @@ const FinancePage = () => {
             disabled={allocationMethod === 'manual' && 
               manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100}
             sx={{ 
-              backgroundColor: '#274290',
-              '&:hover': { backgroundColor: '#1e3a8a' }
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
             }}
           >
             Complete Order & Apply Allocation

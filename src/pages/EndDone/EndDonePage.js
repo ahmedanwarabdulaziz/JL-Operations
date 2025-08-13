@@ -191,14 +191,14 @@ const EndDonePage = () => {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#e6e7e8', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290', mb: 1 }}>
-          <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#4caf50' }} />
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>
+          <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
           Completed Orders
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" sx={{ color: '#ffffff' }}>
           All orders that have been successfully completed and allocated
         </Typography>
       </Box>
@@ -213,12 +213,12 @@ const EndDonePage = () => {
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
-                <SearchIcon color="action" />
+                <SearchIcon sx={{ color: '#b98f33' }} />
               </InputAdornment>
             ),
             endAdornment: searchTerm && (
               <InputAdornment position="end">
-                <IconButton size="small" onClick={() => handleSearch('')}>
+                <IconButton size="small" onClick={() => handleSearch('')} sx={{ color: '#b98f33' }}>
                   <RefreshIcon />
                 </IconButton>
               </InputAdornment>
@@ -227,26 +227,34 @@ const EndDonePage = () => {
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
-              backgroundColor: 'background.paper'
+              backgroundColor: '#2a2a2a',
+              '&:hover fieldset': { borderColor: '#b98f33' },
+              '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff'
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33'
             }
           }}
         />
       </Box>
 
       {/* Orders Table */}
-      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+      <Paper sx={{ width: '100%', overflow: 'hidden', backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
         <TableContainer>
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: '#274290' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice #</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Revenue</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Cost</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Profit</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Completed</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Details</TableCell>
+              <TableRow sx={{ backgroundColor: '#b98f33' }}>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice #</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Customer</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Cost</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Status</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Completed</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Details</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -262,31 +270,31 @@ const EndDonePage = () => {
                 filteredOrders.map((order) => (
                   <React.Fragment key={order.id}>
                     <TableRow hover>
-                      <TableCell sx={{ fontWeight: 'bold', color: '#274290' }}>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                         #{order.orderDetails?.billInvoice || order.id}
                       </TableCell>
                       <TableCell>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                             {order.personalInfo?.customerName || 'Unknown Customer'}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" sx={{ color: '#b98f33' }}>
                             {order.personalInfo?.phone || 'No Phone'}
                           </Typography>
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ color: '#f27921', fontWeight: 'bold' }}>
+                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                           {formatCurrency(calculateOrderTotals(order).revenue)}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ color: '#f44336', fontWeight: 'bold' }}>
+                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                           {formatCurrency(calculateOrderTotals(order).cost)}
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                           {formatCurrency(calculateOrderTotals(order).profit)}
                         </Typography>
                       </TableCell>
@@ -302,7 +310,7 @@ const EndDonePage = () => {
                         />
                       </TableCell>
                                              <TableCell>
-                         <Typography variant="body2">
+                         <Typography variant="body2" sx={{ color: '#ffffff' }}>
                            {formatDateDisplay(order.completedAt || order.statusUpdatedAt || order.updatedAt)}
                          </Typography>
                        </TableCell>
@@ -310,6 +318,7 @@ const EndDonePage = () => {
                         <MuiIconButton
                           size="small"
                           onClick={() => handleRowToggle(order.id)}
+                          sx={{ color: '#b98f33' }}
                         >
                           {expandedRows.has(order.id) ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                         </MuiIconButton>
@@ -323,14 +332,15 @@ const EndDonePage = () => {
                               <CardContent>
                                 {/* Customer Information */}
                                 <Box sx={{ mb: 3 }}>
-                                  <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                                    <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                                  <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                                    <PersonIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                                     Customer Information
                                   </Typography>
                                   <Card sx={{ 
-                                    background: 'linear-gradient(135deg, #274290 0%, #1976d2 100%)', 
+                                    background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                     color: 'white',
-                                    boxShadow: 3
+                                    boxShadow: 3,
+                                    border: '1px solid #333333'
                                   }}>
                                     <CardContent>
                                       <Grid container spacing={3}>
@@ -381,22 +391,23 @@ const EndDonePage = () => {
 
                                 {/* Financial Summary */}
                                 <Box sx={{ mb: 3 }}>
-                                  <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                                    <TrendingUpIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                                  <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                                    <TrendingUpIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                                     Financial Summary
                                   </Typography>
                                   <Grid container spacing={2}>
                                     <Grid item xs={12} sm={4}>
                                       <Card sx={{ 
-                                        background: 'linear-gradient(135deg, #f27921 0%, #ff9800 100%)', 
+                                        background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                         color: 'white',
-                                        boxShadow: 3
+                                        boxShadow: 3,
+                                        border: '1px solid #333333'
                                       }}>
                                         <CardContent sx={{ textAlign: 'center' }}>
-                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
                                             {formatCurrency(calculateOrderTotals(order).revenue)}
                                           </Typography>
-                                          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                          <Typography variant="body2" sx={{ opacity: 0.9, color: '#ffffff' }}>
                                             Total Revenue
                                           </Typography>
                                         </CardContent>
@@ -404,15 +415,16 @@ const EndDonePage = () => {
                                     </Grid>
                                     <Grid item xs={12} sm={4}>
                                       <Card sx={{ 
-                                        background: 'linear-gradient(135deg, #f44336 0%, #e57373 100%)', 
+                                        background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                         color: 'white',
-                                        boxShadow: 3
+                                        boxShadow: 3,
+                                        border: '1px solid #333333'
                                       }}>
                                         <CardContent sx={{ textAlign: 'center' }}>
-                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
                                             {formatCurrency(calculateOrderTotals(order).cost)}
                                           </Typography>
-                                          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                          <Typography variant="body2" sx={{ opacity: 0.9, color: '#ffffff' }}>
                                             Total Cost
                                           </Typography>
                                         </CardContent>
@@ -420,15 +432,16 @@ const EndDonePage = () => {
                                     </Grid>
                                     <Grid item xs={12} sm={4}>
                                       <Card sx={{ 
-                                        background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)', 
+                                        background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                         color: 'white',
-                                        boxShadow: 3
+                                        boxShadow: 3,
+                                        border: '1px solid #333333'
                                       }}>
                                         <CardContent sx={{ textAlign: 'center' }}>
-                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
                                             {formatCurrency(calculateOrderTotals(order).profit)}
                                           </Typography>
-                                          <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                          <Typography variant="body2" sx={{ opacity: 0.9, color: '#ffffff' }}>
                                             Total Profit
                                           </Typography>
                                         </CardContent>
@@ -440,14 +453,15 @@ const EndDonePage = () => {
                                 {/* Allocation Information */}
                                 {getAllocationInfo(order) && (
                                   <Box sx={{ mb: 3 }}>
-                                    <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                                      <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                                    <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                                      <AssignmentIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                                       Financial Allocation Details
                                     </Typography>
                                     <Card sx={{ 
-                                      background: 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)', 
+                                      background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                       color: 'white',
-                                      boxShadow: 3
+                                      boxShadow: 3,
+                                      border: '1px solid #333333'
                                     }}>
                                       <CardContent>
                                         <Grid container spacing={3}>
@@ -499,14 +513,15 @@ const EndDonePage = () => {
 
                                 {/* Completion Details */}
                                 <Box>
-                                  <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                                    <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#4caf50' }} />
+                                  <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                                    <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                                     Completion Details
                                   </Typography>
                                   <Card sx={{ 
-                                    background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)', 
+                                    background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
                                     color: 'white',
-                                    boxShadow: 3
+                                    boxShadow: 3,
+                                    border: '1px solid #333333'
                                   }}>
                                     <CardContent>
                                       <Grid container spacing={3}>

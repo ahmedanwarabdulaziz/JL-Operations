@@ -23,11 +23,12 @@ const SectionHeader = ({ icon, label }) => (
   <Box sx={{
     display: 'flex',
     alignItems: 'center',
-    background: (theme) => theme.palette.grey[100],
+    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+    color: '#000000',
     px: 2, py: 1.5, borderRadius: 2, mb: 2
   }}>
-    {icon}
-    <Typography variant="h6" sx={{ fontWeight: 700, ml: 1 }}>{label}</Typography>
+    {React.cloneElement(icon, { sx: { color: '#000000' } })}
+    <Typography variant="h6" sx={{ fontWeight: 700, ml: 1, color: '#000000' }}>{label}</Typography>
   </Box>
 );
 
@@ -141,16 +142,16 @@ const Step5Review = ({
               }}>
                 <Box sx={{
                   width: '100%',
-                  border: '2px solid #e3f2fd',
+                  border: '2px solid #333333',
                   boxShadow: 2,
                   borderRadius: 2,
                   p: 0,
-                  backgroundColor: '#fff',
+                  backgroundColor: 'background.paper',
                   overflow: 'hidden'
                 }}>
                   <Box sx={{
-                    backgroundColor: '#1976d2',
-                    color: 'white',
+                    backgroundColor: 'primary.main',
+                    color: '#000000',
                     p: 2,
                     borderTopLeftRadius: 8,
                     borderTopRightRadius: 8,
@@ -158,7 +159,7 @@ const Step5Review = ({
                     textAlign: 'left',
                     fontFamily: 'Enta Sans Serif, Arial, sans-serif'
                   }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.1rem', letterSpacing: 1, color: '#000000' }}>
                       {group.furnitureType || `Furniture Group ${index + 1}`}
                     </Typography>
                   </Box>
@@ -238,7 +239,7 @@ const Step5Review = ({
           <Box>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary">Required Deposit Amount</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#1976d2' }}>${paymentDetails.deposit}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.deposit}</Typography>
             </Box>
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary">Amount Paid by Customer</Typography>
@@ -249,7 +250,7 @@ const Step5Review = ({
             {paymentDetails.pickupDeliveryEnabled && (
               <Box>
                 <Typography variant="body2" color="text.secondary">Pickup & Delivery Cost</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1976d2' }}>${paymentDetails.pickupDeliveryCost}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.pickupDeliveryCost}</Typography>
               </Box>
             )}
             {paymentDetails.notes && (

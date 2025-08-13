@@ -38,7 +38,6 @@ import {
 import {
   FileDownload as DownloadIcon,
   Visibility as ViewIcon,
-  ArrowBack as BackIcon,
   Receipt as ReceiptIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -647,13 +646,15 @@ const InvoicePage = () => {
           justifyContent: 'center', 
           height: '100%',
           textAlign: 'center',
-          p: 4
+          p: 4,
+          backgroundColor: '#ffffff',
+          color: '#000000'
         }}>
-          <ReceiptIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+          <ReceiptIcon sx={{ fontSize: 64, color: '#666666', mb: 2 }} />
+          <Typography variant="h6" sx={{ color: '#000000', mb: 1 }}>
             Select an order to view invoice details
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#666666' }}>
             Choose an order from the list to generate and view the invoice
           </Typography>
         </Box>
@@ -665,7 +666,8 @@ const InvoicePage = () => {
     return (
       <Box sx={{ 
         p: 3, 
-        backgroundColor: 'white',
+        backgroundColor: '#ffffff',
+        color: '#000000',
         minHeight: '297mm',
         width: '210mm',
         margin: '0 auto',
@@ -683,19 +685,19 @@ const InvoicePage = () => {
         }}>
           {/* Left Side - Customer Info */}
           <Box sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1, color: '#000000' }}>
               Name: {selectedOrder.personalInfo?.customerName || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
               Email: {selectedOrder.personalInfo?.email || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
               Phone: {selectedOrder.personalInfo?.phone || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
               Platform: {selectedOrder.orderDetails?.platform || 'N/A'}
             </Typography>
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ color: '#000000' }}>
               Address: {selectedOrder.personalInfo?.address || 'N/A'}
             </Typography>
           </Box>
@@ -709,7 +711,7 @@ const InvoicePage = () => {
             }}>
               {selectedOrder.orderDetails?.billInvoice || 'N/A'}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: '#666666' }}>
               {formatDate(selectedOrder.createdAt)}
             </Typography>
           </Box>
@@ -731,7 +733,8 @@ const InvoicePage = () => {
             backgroundColor: '#f0f0f0',
             border: '1px solid #ccc',
             fontWeight: 'bold',
-            fontSize: '0.875rem'
+            fontSize: '0.875rem',
+            color: '#000000'
           }}>
             <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>Description</Box>
             <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Price</Box>
@@ -749,7 +752,8 @@ const InvoicePage = () => {
                 border: '1px solid #ccc',
                 borderTop: 'none',
                 fontWeight: 'bold',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                color: '#000000'
               }}>
                 <Box sx={{ flex: 6, p: 1 }}>
                   {group.furnitureType || 'Furniture Group'}
@@ -762,7 +766,8 @@ const InvoicePage = () => {
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  color: '#000000'
                 }}>
                   <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
                     Labour {group.labourNote ? group.labourNote : 'without piping design'}
@@ -785,7 +790,8 @@ const InvoicePage = () => {
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  color: '#000000'
                 }}>
                   <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
                     Material {group.materialCompany || ''} {group.materialCode ? `(${group.materialCode})` : ''}
@@ -808,7 +814,8 @@ const InvoicePage = () => {
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  color: '#000000'
                 }}>
                   <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
                     Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
@@ -831,7 +838,8 @@ const InvoicePage = () => {
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  color: '#000000'
                 }}>
                   <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
                     Painting{group.paintingNote ? ` - ${group.paintingNote}` : ''}
@@ -862,7 +870,8 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               mb: 1,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               <span>Items Subtotal:</span>
               <span>${totals.itemsSubtotal.toFixed(2)}</span>
@@ -871,7 +880,8 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               mb: 1,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               <span>Tax (13% on M&F):</span>
               <span>${totals.taxAmount.toFixed(2)}</span>
@@ -880,7 +890,8 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               mb: 2,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               <span>Pickup & Delivery:</span>
               <span>${totals.pickupDeliveryCost.toFixed(2)}</span>
@@ -892,7 +903,8 @@ const InvoicePage = () => {
               fontWeight: 'bold',
               fontSize: '1rem',
               borderTop: '1px solid #ccc',
-              pt: 1
+              pt: 1,
+              color: '#000000'
             }}>
               <span>Grand Total:</span>
               <span>${totals.grandTotal.toFixed(2)}</span>
@@ -901,7 +913,8 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               mb: 2,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               <span>Deposit Paid:</span>
               <span>-${totals.amountPaid.toFixed(2)}</span>
@@ -913,7 +926,8 @@ const InvoicePage = () => {
               p: 1,
               borderRadius: 1,
               fontWeight: 'bold',
-              fontSize: '1rem'
+              fontSize: '1rem',
+              color: '#000000'
             }}>
               <span>Balance Due:</span>
               <span>${totals.balanceDue.toFixed(2)}</span>
@@ -935,7 +949,8 @@ const InvoicePage = () => {
               border: '1px solid #ccc',
               borderBottom: 'none',
               fontWeight: 'bold',
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               Internal Notes
             </Box>
@@ -943,7 +958,9 @@ const InvoicePage = () => {
               border: '1px solid #ccc',
               minHeight: 80,
               p: 2,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              color: '#000000'
             }}>
               {selectedOrder.paymentData?.generalNotes || ''}
             </Box>
@@ -957,7 +974,8 @@ const InvoicePage = () => {
               border: '1px solid #ccc',
               borderBottom: 'none',
               fontWeight: 'bold',
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               Customer's Item Notes
             </Box>
@@ -965,7 +983,9 @@ const InvoicePage = () => {
               border: '1px solid #ccc',
               minHeight: 80,
               p: 2,
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              color: '#000000'
             }}>
               {selectedOrder.paymentData?.customerNotes || ''}
             </Box>
@@ -988,7 +1008,8 @@ const InvoicePage = () => {
             backgroundColor: '#f0f0f0',
             border: '1px solid #ccc',
             fontWeight: 'bold',
-            fontSize: '0.875rem'
+            fontSize: '0.875rem',
+            color: '#000000'
           }}>
             <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>Component</Box>
             <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
@@ -1008,7 +1029,8 @@ const InvoicePage = () => {
                 border: '1px solid #ccc',
                 borderTop: 'none',
                 fontWeight: 'bold',
-                fontSize: '0.875rem'
+                fontSize: '0.875rem',
+                color: '#000000'
               }}>
                 <Box sx={{ flex: 6, p: 1 }}>
                   {group.furnitureType || 'Furniture Group'}
@@ -1021,7 +1043,8 @@ const InvoicePage = () => {
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  color: '#000000'
                 }}>
                   <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
                     Material ({group.materialCode || 'N/A'})
@@ -1064,7 +1087,8 @@ const InvoicePage = () => {
               justifyContent: 'space-between',
               mb: 1,
               fontWeight: 'bold',
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              color: '#000000'
             }}>
               <span>Subtotal (Before Tax):</span>
               <span style={{ color: '#274290' }}>${totals.jlSubtotalBeforeTax.toFixed(2)}</span>
@@ -1075,7 +1099,8 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               fontWeight: 'bold',
-              fontSize: '1rem'
+              fontSize: '1rem',
+              color: '#000000'
             }}>
               <span>Grand Total (JL Internal Cost):</span>
               <span style={{ color: '#f27921' }}>${totals.jlGrandTotal.toFixed(2)}</span>
@@ -1090,7 +1115,7 @@ const InvoicePage = () => {
           pt: 2,
           borderTop: '1px solid #ccc',
           fontSize: '0.875rem',
-          color: 'text.secondary'
+          color: '#666666'
         }}>
           Payment is due upon receipt.
         </Box>
@@ -1109,10 +1134,10 @@ const InvoicePage = () => {
   }
 
   return (
-    <Box sx={{ p: 3, width: '100%', backgroundColor: 'white' }}>
+    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Invoice Management
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -1121,29 +1146,37 @@ const InvoicePage = () => {
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
-            startIcon={<BackIcon />}
-            onClick={() => navigate('/')}
-            variant="outlined"
-            sx={{
-              borderColor: '#274290',
-              color: '#274290',
-              '&:hover': {
-                borderColor: '#1e2d5a',
-                backgroundColor: 'rgba(39, 66, 144, 0.04)'
-              }
-            }}
-          >
-            Back to Dashboard
-          </Button>
-          <Button
             variant="contained"
-            startIcon={<PrintIcon />}
+            startIcon={<PrintIcon sx={{ color: '#000000' }} />}
             onClick={handleReviewAndPrint}
             disabled={!selectedOrder}
             sx={{
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >
@@ -1155,9 +1188,26 @@ const InvoicePage = () => {
               color="secondary"
               onClick={handleOpenExpenseModal}
               sx={{
-                backgroundColor: '#f27921',
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #f27921',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
                 '&:hover': {
-                  backgroundColor: '#e65100'
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #e06810',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  borderRadius: '6px 6px 0 0',
+                  pointerEvents: 'none'
                 }
               }}
             >
@@ -1170,15 +1220,15 @@ const InvoicePage = () => {
       <Box sx={{ display: 'flex', gap: 3, height: '70vh' }}>
         {/* Orders List */}
         <Box sx={{ width: 300, flexShrink: 0 }}>
-          <Paper elevation={2} sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '2px solid #e3f2fd' }}>
-            <Box sx={{ p: 2, backgroundColor: '#274290', color: 'white' }}>
+          <Paper elevation={2} sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '2px solid #333333' }}>
+            <Box sx={{ p: 2, backgroundColor: 'background.paper', color: 'text.primary' }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 📋 Orders ({orders.length})
               </Typography>
             </Box>
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
-                <CircularProgress sx={{ color: '#274290' }} />
+                <CircularProgress sx={{ color: '#b98f33' }} />
               </Box>
             ) : (
               <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -1191,21 +1241,21 @@ const InvoicePage = () => {
                         onClick={() => handleSelectOrder(order)}
                         sx={{
                           '&.Mui-selected': {
-                            backgroundColor: '#e3f2fd',
-                            borderLeft: '4px solid #274290',
+                            backgroundColor: '#3a3a3a',
+                            borderLeft: '4px solid #b98f33',
                             '&:hover': {
-                              backgroundColor: '#e3f2fd',
+                              backgroundColor: '#3a3a3a',
                             },
                           },
                           '&:hover': {
-                            backgroundColor: '#f5f5f5',
+                            backgroundColor: '#2a2a2a',
                           }
                         }}
                       >
                         <ListItemText
                           primary={
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                                 🧾 #{order.orderDetails?.billInvoice || 'N/A'}
                               </Typography>
                               <Chip 
@@ -1248,7 +1298,8 @@ const InvoicePage = () => {
             height: '100%', 
             overflow: 'auto', 
             minHeight: '297mm',
-            width: '100%'
+            width: '100%',
+            backgroundColor: '#ffffff'
           }}>
             {renderInvoiceDetails()}
           </Paper>
@@ -1271,15 +1322,40 @@ const InvoicePage = () => {
       </Snackbar>
 
       <Dialog open={expenseModalOpen} onClose={handleCloseExpenseModal} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ color: 'primary.main', fontWeight: 'bold' }}>Add Extra Expense</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
+          Add Extra Expense
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
           <MuiBox sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
               label="Bill No"
               value={selectedOrder?.orderDetails?.billInvoice || ''}
               InputProps={{ readOnly: true }}
               fullWidth
-              sx={{ backgroundColor: 'grey.100' }}
+              sx={{ 
+                backgroundColor: '#2a2a2a',
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
             />
             <TextField
               label="Expense Description"
@@ -1288,6 +1364,25 @@ const InvoicePage = () => {
               onChange={handleExpenseInputChange}
               fullWidth
               required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
             />
             <MuiBox sx={{ display: 'flex', gap: 2 }}>
               <TextField
@@ -1298,6 +1393,25 @@ const InvoicePage = () => {
                 type="number"
                 fullWidth
                 required
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
               />
               <TextField
                 label="Unit"
@@ -1307,6 +1421,25 @@ const InvoicePage = () => {
                 fullWidth
                 required
                 placeholder="e.g. 1, hour, piece"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
               />
             </MuiBox>
             <MuiBox sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -1317,6 +1450,25 @@ const InvoicePage = () => {
                 onChange={handleExpenseInputChange}
                 type="number"
                 fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end" sx={{ p: 0, m: 0 }}>
@@ -1325,10 +1477,30 @@ const InvoicePage = () => {
                         onChange={handleTaxTypeChange}
                         variant="standard"
                         disableUnderline
-                        sx={{ minWidth: 48, maxWidth: 60, background: 'transparent', ml: 0.5, '& .MuiSelect-select': { p: 0, pr: 1, fontWeight: 'bold', color: '#274290' } }}
+                        sx={{ 
+                          minWidth: 48, 
+                          maxWidth: 60, 
+                          background: 'transparent', 
+                          ml: 0.5, 
+                          '& .MuiSelect-select': { 
+                            p: 0, 
+                            pr: 1, 
+                            fontWeight: 'bold', 
+                            color: '#b98f33' 
+                          } 
+                        }}
                         MenuProps={{
                           PaperProps: {
-                            sx: { minWidth: 80 }
+                            sx: { 
+                              minWidth: 80,
+                              backgroundColor: '#2a2a2a',
+                              '& .MuiMenuItem-root': {
+                                color: '#ffffff',
+                                '&:hover': {
+                                  backgroundColor: '#3a3a3a',
+                                },
+                              },
+                            }
                           }
                         }}
                       >
@@ -1343,8 +1515,24 @@ const InvoicePage = () => {
                 label="Tax Value"
                 name="taxValue"
                 value={expenseForm.taxValue || ''}
-                InputProps={{ readOnly: true, style: { color: '#274290', fontWeight: 'bold' } }}
+                InputProps={{ readOnly: true, style: { color: '#b98f33', fontWeight: 'bold' } }}
                 fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                }}
               />
               <TextField
                 label="Total"
@@ -1353,14 +1541,35 @@ const InvoicePage = () => {
                 onChange={handleExpenseInputChange}
                 type="number"
                 fullWidth
-                InputProps={{ style: { fontWeight: 'bold', color: '#f27921' } }}
+                InputProps={{ style: { fontWeight: 'bold', color: '#b98f33' } }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                }}
               />
             </MuiBox>
             <MuiBox sx={{ display: 'flex', justifyContent: 'flex-end' }}>
               <MuiTooltip title="Add to list">
                 <span>
                   <MuiIconButton
-                    color="primary"
+                    sx={{
+                      color: '#b98f33',
+                      '&:hover': {
+                        backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                      },
+                    }}
                     onClick={handleAddExpenseToList}
                     disabled={!(expenseForm.description && expenseForm.price && expenseForm.unit)}
                   >
@@ -1372,17 +1581,36 @@ const InvoicePage = () => {
             {/* List of added expenses */}
             {expenseList.length > 0 && (
               <MuiBox sx={{ mt: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>
                   Added Expenses
                 </Typography>
                 {expenseList.map((exp, idx) => (
-                  <MuiBox key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, backgroundColor: 'grey.50', p: 1, borderRadius: 1 }}>
-                    <Typography sx={{ flex: 2 }}>{exp.description}</Typography>
-                    <Typography sx={{ flex: 1 }}>{exp.price}</Typography>
-                    <Typography sx={{ flex: 1 }}>{exp.unit}</Typography>
-                    <Typography sx={{ flex: 1 }}>{exp.taxType === 'percent' ? `${((exp.tax / (exp.price * (isNaN(Number(exp.unit)) ? 1 : parseFloat(exp.unit) || 1))) * 100).toFixed(2)}%` : exp.tax}</Typography>
-                    <Typography sx={{ flex: 1, fontWeight: 'bold', color: '#f27921' }}>{exp.total}</Typography>
-                    <MuiIconButton color="error" onClick={() => handleDeleteExpense(idx)} size="small">
+                  <MuiBox key={idx} sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    mb: 1, 
+                    backgroundColor: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)',
+                    border: '1px solid #333333',
+                    p: 1, 
+                    borderRadius: 1,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}>
+                    <Typography sx={{ flex: 2, color: '#ffffff' }}>{exp.description}</Typography>
+                    <Typography sx={{ flex: 1, color: '#b98f33' }}>{exp.price}</Typography>
+                    <Typography sx={{ flex: 1, color: '#ffffff' }}>{exp.unit}</Typography>
+                    <Typography sx={{ flex: 1, color: '#b98f33' }}>{exp.taxType === 'percent' ? `${((exp.tax / (exp.price * (isNaN(Number(exp.unit)) ? 1 : parseFloat(exp.unit) || 1))) * 100).toFixed(2)}%` : exp.tax}</Typography>
+                    <Typography sx={{ flex: 1, fontWeight: 'bold', color: '#b98f33' }}>{exp.total}</Typography>
+                    <MuiIconButton 
+                      sx={{
+                        color: '#ff6b6b',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        },
+                      }}
+                      onClick={() => handleDeleteExpense(idx)} 
+                      size="small"
+                    >
                       <DeleteIcon fontSize="small" />
                     </MuiIconButton>
                   </MuiBox>
@@ -1391,9 +1619,45 @@ const InvoicePage = () => {
             )}
           </MuiBox>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseExpenseModal}>Cancel</Button>
-          <Button onClick={handleSaveAllExpenses} disabled={expenseList.length === 0} variant="contained" color="primary">
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={handleCloseExpenseModal}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveAllExpenses} 
+            disabled={expenseList.length === 0} 
+            variant="contained"
+            sx={{
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #555555',
+                transform: 'none',
+                boxShadow: 'none',
+              },
+            }}
+          >
             Save All
           </Button>
         </DialogActions>

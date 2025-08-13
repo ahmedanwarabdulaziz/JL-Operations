@@ -231,22 +231,33 @@ const PLPage = () => {
   const currentData = getCurrentPeriodData();
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#e6e7e8', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <TrendingUpIcon sx={{ fontSize: 32, color: '#274290', mr: 2 }} />
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <TrendingUpIcon sx={{ fontSize: 32, color: '#b98f33', mr: 2 }} />
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Profit & Loss Statement
           </Typography>
         </Box>
         
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<SettingsIcon />}
             onClick={() => setViewMode(viewMode === 'summary' ? 'detailed' : 'summary')}
-            sx={{ color: '#274290', borderColor: '#274290' }}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
           >
             {viewMode === 'summary' ? 'Detailed View' : 'Summary View'}
           </Button>
@@ -255,7 +266,18 @@ const PLPage = () => {
             variant="contained"
             startIcon={<RefreshIcon />}
             onClick={fetchOrders}
-            sx={{ backgroundColor: '#f27921', '&:hover': { backgroundColor: '#e66a1a' } }}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
           >
             Refresh
           </Button>
@@ -270,8 +292,19 @@ const PLPage = () => {
           action={
             <Button 
               size="small" 
+              variant="contained"
               onClick={() => setViewMode('detailed')}
-              sx={{ color: '#274290' }}
+              sx={{ 
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '1px solid #8b6b1f',
+                boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                }
+              }}
             >
               Review Allocations
             </Button>
@@ -283,7 +316,7 @@ const PLPage = () => {
       )}
 
       {/* Period Selection */}
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
         <Grid container spacing={3} alignItems="center">
           <Grid item xs={12} md={4}>
             <FormControl fullWidth>
@@ -334,33 +367,45 @@ const PLPage = () => {
       {/* P&L Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: '#274290', color: 'white' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <MonetizationOnIcon sx={{ mr: 1 }} />
-                <Typography variant="h6">Revenue</Typography>
-              </Box>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                {formatCurrency(currentData.revenue)}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                {currentData.orderCount} orders
-              </Typography>
-            </CardContent>
-          </Card>
+                      <Card sx={{ 
+              backgroundColor: '#2a2a2a', 
+              color: '#ffffff',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, justifyContent: 'center' }}>
+                  <MonetizationOnIcon sx={{ mr: 1, color: '#b98f33' }} />
+                  <Typography variant="h6" sx={{ color: '#b98f33' }}>Revenue</Typography>
+                </Box>
+                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }}>
+                  {formatCurrency(currentData.revenue)}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.8, color: '#b98f33', textAlign: 'center' }}>
+                  {currentData.orderCount} orders
+                </Typography>
+              </CardContent>
+            </Card>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: '#ff9800', color: 'white' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <AccountBalanceIcon sx={{ mr: 1 }} />
-                <Typography variant="h6">Costs</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, justifyContent: 'center' }}>
+                <AccountBalanceIcon sx={{ mr: 1, color: '#b98f33' }} />
+                <Typography variant="h6" sx={{ color: '#b98f33' }}>Costs</Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }}>
                 {formatCurrency(currentData.costs)}
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              <Typography variant="body2" sx={{ opacity: 0.8, color: '#b98f33', textAlign: 'center' }}>
                 {formatPercentage(currentData.profitMargin)} of revenue
               </Typography>
             </CardContent>
@@ -368,16 +413,22 @@ const PLPage = () => {
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: '#4caf50', color: 'white' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <TrendingUpIcon sx={{ mr: 1 }} />
-                <Typography variant="h6">Gross Profit</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, justifyContent: 'center' }}>
+                <TrendingUpIcon sx={{ mr: 1, color: '#b98f33' }} />
+                <Typography variant="h6" sx={{ color: '#b98f33' }}>Gross Profit</Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }}>
                 {formatCurrency(currentData.profit)}
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              <Typography variant="body2" sx={{ opacity: 0.8, color: '#b98f33', textAlign: 'center' }}>
                 {formatPercentage(currentData.profitMargin)} margin
               </Typography>
             </CardContent>
@@ -385,16 +436,22 @@ const PLPage = () => {
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ backgroundColor: '#795548', color: 'white' }}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
             <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <BarChartIcon sx={{ mr: 1 }} />
-                <Typography variant="h6">Avg Order</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, justifyContent: 'center' }}>
+                <BarChartIcon sx={{ mr: 1, color: '#b98f33' }} />
+                <Typography variant="h6" sx={{ color: '#b98f33' }}>Avg Order</Typography>
               </Box>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }}>
                 {formatCurrency(currentData.orderCount > 0 ? currentData.revenue / currentData.orderCount : 0)}
               </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              <Typography variant="body2" sx={{ opacity: 0.8, color: '#b98f33', textAlign: 'center' }}>
                 per order
               </Typography>
             </CardContent>
@@ -403,47 +460,47 @@ const PLPage = () => {
       </Grid>
 
       {/* YTD Summary */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+      <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+        <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
           Year-to-Date Summary ({selectedYear})
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                 {formatCurrency(getYTDData().revenue)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
                 YTD Revenue
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                 {formatCurrency(getYTDData().costs)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
                 YTD Costs
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                 {formatCurrency(getYTDData().profit)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
                 YTD Profit
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
             <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#795548' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                 {formatPercentage(getYTDData().profitMargin)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
                 YTD Margin
               </Typography>
             </Box>
@@ -453,8 +510,8 @@ const PLPage = () => {
 
       {/* Detailed View */}
       {viewMode === 'detailed' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+        <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+          <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
             Cross-Month Order Allocations
           </Typography>
           
@@ -463,16 +520,16 @@ const PLPage = () => {
           ) : (
             <TableContainer>
               <Table>
-                <TableHead>
+                <TableHead sx={{ backgroundColor: '#b98f33' }}>
                   <TableRow>
-                    <TableCell>Order #</TableCell>
-                    <TableCell>Customer</TableCell>
-                    <TableCell>Period</TableCell>
-                    <TableCell>Revenue</TableCell>
-                    <TableCell>Costs</TableCell>
-                    <TableCell>Profit</TableCell>
-                    <TableCell>Allocation</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Order #</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Customer</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Period</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Costs</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Allocation</TableCell>
+                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -504,8 +561,20 @@ const PLPage = () => {
                       <TableCell>
                         <Button
                           size="small"
+                          variant="contained"
                           startIcon={<EditIcon />}
                           onClick={() => handleAllocationDialog(order)}
+                          sx={{ 
+                            backgroundColor: '#b98f33',
+                            color: '#000000',
+                            border: '1px solid #8b6b1f',
+                            boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                            background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                            '&:hover': { 
+                              backgroundColor: '#d4af5a',
+                              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                            }
+                          }}
                         >
                           Allocate
                         </Button>
@@ -528,7 +597,7 @@ const PLPage = () => {
       >
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CalendarIcon sx={{ mr: 1, color: '#274290' }} />
+            <CalendarIcon sx={{ mr: 1, color: '#b98f33' }} />
             Order Allocation: {selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id}
           </Box>
         </DialogTitle>
@@ -537,8 +606,8 @@ const PLPage = () => {
           {selectedOrder && (
             <Box sx={{ mt: 2 }}>
               {/* Order Summary */}
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#f5f5f5' }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
+              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#3a3a3a' }}>
+                <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
                   Order Summary
                 </Typography>
                 <Grid container spacing={2}>
@@ -647,13 +716,38 @@ const PLPage = () => {
         </DialogContent>
         
         <DialogActions>
-          <Button onClick={() => setAllocationDialogOpen(false)}>
+          <Button 
+            onClick={() => setAllocationDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Cancel
           </Button>
           <Button 
             onClick={applyAllocation}
             variant="contained"
-            sx={{ backgroundColor: '#274290' }}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
           >
             Apply Allocation
           </Button>

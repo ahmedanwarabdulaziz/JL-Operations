@@ -1562,10 +1562,13 @@ const WorkshopPage = () => {
                     onClick={() => handleOrderSelection(order)}
                     sx={{
                       '&.Mui-selected': {
-                        backgroundColor: 'primary.light',
+                        backgroundColor: '#e0e0e0',
                         '&:hover': {
-                          backgroundColor: 'primary.light',
+                          backgroundColor: '#d0d0d0',
                         },
+                      },
+                      '&:hover': {
+                        backgroundColor: '#f5f5f5',
                       },
                     }}
                   >
@@ -1639,7 +1642,7 @@ const WorkshopPage = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Order Details • <span style={{ color: '#1976d2' }}>{selectedOrder.personalInfo?.customerName}</span>
+                    Order Details • <span style={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.customerName}</span>
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
@@ -1654,7 +1657,7 @@ const WorkshopPage = () => {
                 <Button
                   variant="contained"
                   size="medium"
-                  startIcon={sendingEmail ? <CircularProgress size={16} color="inherit" /> : <SendIcon />}
+                  startIcon={sendingEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SendIcon sx={{ color: '#000000' }} />}
                   onClick={handleSendEmail}
                   disabled={sendingEmail || !selectedOrder?.personalInfo?.email}
                   sx={{
@@ -1663,12 +1666,35 @@ const WorkshopPage = () => {
                     fontSize: '1rem',
                     fontWeight: 'bold',
                     borderRadius: 2,
-                    boxShadow: 2,
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #4CAF50',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
                     '&:hover': {
-                      boxShadow: 4,
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #45a049',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
                       transform: 'translateY(-1px)'
                     },
-                    transition: 'all 0.3s ease'
+                    '&:disabled': {
+                      background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                      border: '3px solid #666666',
+                      color: '#666666',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                    },
+                    transition: 'all 0.3s ease',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
                   }}
                 >
                   {sendingEmail ? 'Sending Email...' : 'Send Order Email'}
@@ -1717,8 +1743,8 @@ const WorkshopPage = () => {
                 <CardContent sx={{ p: 0 }}>
                   {/* Header */}
                   <Box sx={{
-                    backgroundColor: '#274290',
-                    color: 'white',
+                    backgroundColor: '#b98f33',
+                    color: '#000000',
                     p: 2,
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1732,8 +1758,8 @@ const WorkshopPage = () => {
                   }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <PersonIcon sx={{ mr: 1 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      <PersonIcon sx={{ mr: 1, color: '#000000' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                         Personal Information
                       </Typography>
                     </Box>
@@ -1742,7 +1768,7 @@ const WorkshopPage = () => {
                         <IconButton onClick={(e) => {
                           e.stopPropagation();
                           handleEditPersonal();
-                        }} sx={{ color: 'white' }} size="small">
+                        }} sx={{ color: '#000000' }} size="small">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
@@ -1753,7 +1779,7 @@ const WorkshopPage = () => {
                           setPersonalInfoExpanded(newExpanded);
                           setOrderDetailsExpanded(newExpanded);
                         }} 
-                        sx={{ color: 'white' }} 
+                        sx={{ color: '#000000' }} 
                         size="small"
                       >
                         {personalInfoExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -1809,8 +1835,8 @@ const WorkshopPage = () => {
                 <CardContent sx={{ p: 0 }}>
                   {/* Header */}
                   <Box sx={{
-                    backgroundColor: '#274290',
-                    color: 'white',
+                    backgroundColor: '#b98f33',
+                    color: '#000000',
                     p: 2,
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1824,8 +1850,8 @@ const WorkshopPage = () => {
                   }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <ReceiptIcon sx={{ mr: 1 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      <ReceiptIcon sx={{ mr: 1, color: '#000000' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                         Order Details
                       </Typography>
                     </Box>
@@ -1834,7 +1860,7 @@ const WorkshopPage = () => {
                         <IconButton onClick={(e) => {
                           e.stopPropagation();
                           handleEditOrder();
-                        }} sx={{ color: 'white' }} size="small">
+                        }} sx={{ color: '#000000' }} size="small">
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
@@ -1845,7 +1871,7 @@ const WorkshopPage = () => {
                           setOrderDetailsExpanded(newExpanded);
                           setPersonalInfoExpanded(newExpanded);
                         }} 
-                        sx={{ color: 'white' }} 
+                        sx={{ color: '#000000' }} 
                         size="small"
                       >
                         {orderDetailsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -1911,16 +1937,16 @@ const WorkshopPage = () => {
               <CardContent sx={{ p: 0 }}>
                 {/* Header */}
                 <Box sx={{
-                  backgroundColor: '#274290',
-                  color: 'white',
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
                   p: 2,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <PaymentIcon sx={{ mr: 1 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    <PaymentIcon sx={{ mr: 1, color: '#000000' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                       Payment & Financial Information
                     </Typography>
                   </Box>
@@ -1930,11 +1956,11 @@ const WorkshopPage = () => {
                       size="small"
                       onClick={handleOpenPaymentDialogWithRefresh}
                       sx={{
-                        color: 'white',
-                        borderColor: 'white',
+                        color: '#000000',
+                        borderColor: '#000000',
                         '&:hover': {
-                          borderColor: '#f27921',
-                          backgroundColor: 'rgba(242, 121, 33, 0.1)'
+                          borderColor: '#8b6b1f',
+                          backgroundColor: 'rgba(139, 107, 31, 0.1)'
                         }
                       }}
                     >
@@ -1947,16 +1973,38 @@ const WorkshopPage = () => {
                         onClick={handleDepositReceived}
                         disabled={processingDeposit}
                         sx={{
-                          backgroundColor: '#f27921',
-                          color: 'white',
+                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                          color: '#000000',
+                          border: '3px solid #f27921',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                          position: 'relative',
                           '&:hover': {
-                            backgroundColor: '#e65100'
+                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                            border: '3px solid #e65100',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                          },
+                          '&:disabled': {
+                            background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                            border: '3px solid #666666',
+                            color: '#666666',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                          },
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '50%',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                            borderRadius: '4px 4px 0 0',
+                            pointerEvents: 'none'
                           }
                         }}
                       >
                         {processingDeposit ? (
                           <>
-                            <CircularProgress size={12} color="inherit" sx={{ mr: 0.5 }} />
+                            <CircularProgress size={12} sx={{ color: '#000000', mr: 0.5 }} />
                             Processing...
                           </>
                         ) : (
@@ -1965,7 +2013,7 @@ const WorkshopPage = () => {
                       </Button>
                     )}
                     <Tooltip title="Edit Payment Information">
-                      <IconButton onClick={handleEditPayment} sx={{ color: 'white' }} size="small">
+                      <IconButton onClick={handleEditPayment} sx={{ color: '#000000' }} size="small">
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
@@ -1985,10 +2033,10 @@ const WorkshopPage = () => {
                             <CardContent sx={{ p: 2 }}>
                               {/* Top Row: Deposit Label and Amount */}
                               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290', mr: 1 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#d4af5a', mr: 1 }}>
                                   💰 Deposit
                                 </Typography>
-                                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
                                   ${selectedOrder.paymentData?.deposit || '0.00'}
                                 </Typography>
                               </Box>
@@ -2034,12 +2082,12 @@ const WorkshopPage = () => {
                               <CardContent sx={{ p: 2 }}>
                                 {/* Top Row: Service Type and Amount */}
                                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290', mr: 1 }}>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#d4af5a', mr: 1 }}>
                                     🚚 {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'Pickup' : 
                                          selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery' : 
                                          'Pickup & Delivery'}
                                   </Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
                                     ${selectedOrder.paymentData.pickupDeliveryCost || '0.00'}
                                   </Typography>
                                 </Box>
@@ -2072,63 +2120,105 @@ const WorkshopPage = () => {
 
                     {/* Right Side: Financial Summary Cards */}
                     <Grid item xs={12} lg={7}>
-                      <Grid container spacing={2} sx={{ height: '100%', justifyContent: 'flex-end' }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-end', justifyContent: 'flex-end', width: '100%' }}>
                         {/* Total Invoice Amount */}
-                        <Grid item xs={12} md={4}>
-                          <Card sx={{ 
-                            background: 'linear-gradient(135deg, #f27921 0%, #ff9800 100%)', 
-                            color: 'white',
-                            height: '100%'
-                          }}>
-                            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                              <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                          color: '#000000',
+                          width: '280px',
+                          border: '2px solid #4CAF50',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                          position: 'relative',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '50%',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                            borderRadius: '4px 4px 0 0',
+                            pointerEvents: 'none'
+                          }
+                        }}>
+                          <CardContent sx={{ py: 0.5, px: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 Total Invoice Amount
                               </Typography>
-                              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 ${selectedOrder ? calculateInvoiceTotals(selectedOrder).grandTotal.toFixed(2) : '0.00'}
                               </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
+                            </Box>
+                          </CardContent>
+                        </Card>
 
                         {/* Amount Paid */}
-                        <Grid item xs={12} md={4}>
-                          <Card sx={{ 
-                            background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)', 
-                            color: 'white',
-                            height: '100%'
-                          }}>
-                            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                              <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                          color: '#000000',
+                          width: '280px',
+                          border: '2px solid #4CAF50',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                          position: 'relative',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '50%',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                            borderRadius: '4px 4px 0 0',
+                            pointerEvents: 'none'
+                          }
+                        }}>
+                          <CardContent sx={{ py: 0.5, px: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 Total Paid by Customer
                               </Typography>
-                              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 ${selectedOrder.paymentData?.amountPaid || '0.00'}
                               </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
+                            </Box>
+                          </CardContent>
+                        </Card>
 
                         {/* Remaining Balance */}
-                        <Grid item xs={12} md={4}>
-                          <Card sx={{ 
-                            background: selectedOrder && (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))) > 0
-                              ? 'linear-gradient(135deg, #f44336 0%, #e57373 100%)'
-                              : 'linear-gradient(135deg, #2e7d32 0%, #4caf50 100%)', 
-                            color: 'white',
-                            height: '100%'
-                          }}>
-                            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                              <Typography variant="body2" sx={{ opacity: 0.9, mb: 1 }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                          color: '#000000',
+                          width: '280px',
+                          border: selectedOrder && (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))) > 0
+                            ? '2px solid #f44336'
+                            : '2px solid #4CAF50',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                          position: 'relative',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '50%',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                            borderRadius: '4px 4px 0 0',
+                            pointerEvents: 'none'
+                          }
+                        }}>
+                          <CardContent sx={{ py: 0.5, px: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 Outstanding Balance
                               </Typography>
-                              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                 ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
                               </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
-                      </Grid>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Box>
                     </Grid>
                   </Grid>
 
@@ -2177,21 +2267,21 @@ const WorkshopPage = () => {
               <CardContent sx={{ p: 0 }}>
                 {/* Header */}
                 <Box sx={{
-                  backgroundColor: '#274290',
-                  color: 'white',
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
                   p: 2,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <ChairIcon sx={{ mr: 1 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    <ChairIcon sx={{ mr: 1, color: '#000000' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                       Furniture Details
                     </Typography>
                   </Box>
                   <Tooltip title="Edit Furniture Details">
-                    <IconButton onClick={handleEditFurniture} sx={{ color: 'white' }} size="small">
+                    <IconButton onClick={handleEditFurniture} sx={{ color: '#000000' }} size="small">
                       <EditIcon />
                     </IconButton>
                   </Tooltip>
@@ -2209,8 +2299,8 @@ const WorkshopPage = () => {
                         return (
                           <Card key={index} sx={{ p: 2, border: '2px solid #e3f2fd' }}>
                             <Box sx={{ 
-                              backgroundColor: '#1976d2', 
-                              color: 'white', 
+                              backgroundColor: '#d4af5a', 
+                              color: '#000000', 
                               p: 1.5, 
                               borderRadius: 1, 
                               mb: 2,
@@ -2218,7 +2308,7 @@ const WorkshopPage = () => {
                               justifyContent: 'space-between',
                               alignItems: 'center'
                             }}>
-                              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem' }}>
+                              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem', color: '#000000' }}>
                                 {currentGroup.furnitureType || 'Furniture Group ' + (index + 1)}
                               </Typography>
                               <Tooltip title={`Save Furniture Group ${index + 1}`}>
@@ -2242,10 +2332,12 @@ const WorkshopPage = () => {
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
-                                    backgroundColor: 'white',
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff',
                                     px: 1,
                                     '&.Mui-focused': {
-                                      backgroundColor: 'white'
+                                      backgroundColor: '#2a2a2a',
+                                      color: '#ffffff'
                                     }
                                   }}
                                 >
@@ -2289,23 +2381,35 @@ const WorkshopPage = () => {
                                 fullWidth
                               />
                               <FormControl fullWidth size="small">
-                                <InputLabel>Treatment</InputLabel>
+                                <InputLabel sx={{ 
+                                  backgroundColor: '#2a2a2a',
+                                  color: '#ffffff',
+                                  px: 1,
+                                  '&.Mui-focused': {
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff'
+                                  }
+                                }}>Treatment</InputLabel>
                                 <Select
                                   value={currentGroup.treatment || ''}
                                   onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
                                   label="Treatment"
                                   sx={{
                                     '& .MuiOutlinedInput-root': {
-                                      borderColor: '#1976d2',
-                                      backgroundColor: '#f3f8ff',
+                                      borderColor: '#2a2a2a',
+                                      backgroundColor: '#2a2a2a',
+                                      color: '#ffffff',
                                       '&:hover': {
-                                        borderColor: '#1565c0',
-                                        backgroundColor: '#e3f2fd'
+                                        borderColor: '#3a3a3a',
+                                        backgroundColor: '#3a3a3a'
                                       },
                                       '&.Mui-focused': {
-                                        borderColor: '#1976d2',
-                                        backgroundColor: '#e3f2fd'
+                                        borderColor: '#2a2a2a',
+                                        backgroundColor: '#2a2a2a'
                                       }
+                                    },
+                                    '& .MuiSelect-icon': {
+                                      color: '#ffffff'
                                     }
                                   }}
                                 >
@@ -2338,16 +2442,26 @@ const WorkshopPage = () => {
                                 fullWidth
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
-                                    borderColor: '#1976d2',
-                                    backgroundColor: '#f3f8ff',
+                                    borderColor: '#2a2a2a',
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff',
                                     '&:hover': {
-                                      borderColor: '#1565c0',
-                                      backgroundColor: '#e3f2fd'
+                                      borderColor: '#3a3a3a',
+                                      backgroundColor: '#3a3a3a'
                                     },
                                     '&.Mui-focused': {
-                                      borderColor: '#1976d2',
-                                      backgroundColor: '#e3f2fd'
+                                      borderColor: '#2a2a2a',
+                                      backgroundColor: '#2a2a2a'
                                     }
+                                  },
+                                  '& .MuiInputLabel-root': {
+                                    color: '#ffffff',
+                                    '&.Mui-focused': {
+                                      color: '#ffffff'
+                                    }
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#ffffff'
                                   }
                                 }}
                               />
@@ -2368,16 +2482,26 @@ const WorkshopPage = () => {
                                 fullWidth
                                 sx={{
                                   '& .MuiOutlinedInput-root': {
-                                    borderColor: '#1976d2',
-                                    backgroundColor: '#f3f8ff',
+                                    borderColor: '#2a2a2a',
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff',
                                     '&:hover': {
-                                      borderColor: '#1565c0',
-                                      backgroundColor: '#e3f2fd'
+                                      borderColor: '#3a3a3a',
+                                      backgroundColor: '#3a3a3a'
                                     },
                                     '&.Mui-focused': {
-                                      borderColor: '#1976d2',
-                                      backgroundColor: '#e3f2fd'
+                                      borderColor: '#2a2a2a',
+                                      backgroundColor: '#2a2a2a'
                                     }
+                                  },
+                                  '& .MuiInputLabel-root': {
+                                    color: '#ffffff',
+                                    '&.Mui-focused': {
+                                      color: '#ffffff'
+                                    }
+                                  },
+                                  '& .MuiInputBase-input': {
+                                    color: '#ffffff'
                                   }
                                 }}
                               />
@@ -2410,7 +2534,7 @@ const WorkshopPage = () => {
                             </Box>
 
                             {/* Foam Toggle */}
-                            <Box sx={{ mb: 2, p: 2, backgroundColor: '#f8f9fa', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
                               <FormControlLabel
                                 control={
                                   <Switch
@@ -2421,7 +2545,7 @@ const WorkshopPage = () => {
                                 }
                                 label={
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                       🪣 Enable Foam
                                     </Typography>
                                     {currentGroup.foamEnabled && (
@@ -2458,16 +2582,26 @@ const WorkshopPage = () => {
                                     fullWidth
                                     sx={{
                                       '& .MuiOutlinedInput-root': {
-                                        borderColor: '#1976d2',
-                                        backgroundColor: '#f3f8ff',
+                                        borderColor: '#2a2a2a',
+                                        backgroundColor: '#2a2a2a',
+                                        color: '#ffffff',
                                         '&:hover': {
-                                          borderColor: '#1565c0',
-                                          backgroundColor: '#e3f2fd'
+                                          borderColor: '#3a3a3a',
+                                          backgroundColor: '#3a3a3a'
                                         },
                                         '&.Mui-focused': {
-                                          borderColor: '#1976d2',
-                                          backgroundColor: '#e3f2fd'
+                                          borderColor: '#2a2a2a',
+                                          backgroundColor: '#2a2a2a'
                                         }
+                                      },
+                                      '& .MuiInputLabel-root': {
+                                        color: '#ffffff',
+                                        '&.Mui-focused': {
+                                          color: '#ffffff'
+                                        }
+                                      },
+                                      '& .MuiInputBase-input': {
+                                        color: '#ffffff'
                                       }
                                     }}
                                   />
@@ -2497,7 +2631,7 @@ const WorkshopPage = () => {
                             )}
                             
                             {/* Painting Section */}
-                            <Box sx={{ mb: 2, p: 2, backgroundColor: '#f8f9fa', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
                               <FormControlLabel
                                 control={
                                   <Switch
@@ -2508,7 +2642,7 @@ const WorkshopPage = () => {
                                 }
                                 label={
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                       🎨 Enable Painting
                                     </Typography>
                                     {currentGroup.paintingEnabled && (
@@ -2634,7 +2768,29 @@ const WorkshopPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditPersonalDialog(false)}>Cancel</Button>
-          <Button onClick={handleSavePersonal} variant="contained">Save</Button>
+          <Button onClick={handleSavePersonal} variant="contained" sx={{
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
+            '&:hover': {
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
+            }
+          }}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -2691,7 +2847,29 @@ const WorkshopPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditOrderDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveOrder} variant="contained">Save</Button>
+          <Button onClick={handleSaveOrder} variant="contained" sx={{
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
+            '&:hover': {
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
+            }
+          }}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -3318,20 +3496,21 @@ const WorkshopPage = () => {
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
           display: 'flex',
           alignItems: 'center',
-          gap: 2
+          gap: 2,
+          fontWeight: 'bold'
         }}>
           <AssignmentIcon />
           Update Invoice Status
         </DialogTitle>
 
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 3, backgroundColor: '#3a3a3a' }}>
           {/* Current Status Display */}
-          <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-            <Typography variant="subtitle2" sx={{ color: '#666', mb: 1 }}>
+          <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+            <Typography variant="subtitle2" sx={{ color: '#b98f33', mb: 1, fontWeight: 'bold' }}>
               Current Status
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -3343,7 +3522,7 @@ const WorkshopPage = () => {
                   backgroundColor: getStatusInfo(editingStatus)?.color || '#607d8b'
                 }}
               />
-              <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                 {getStatusInfo(editingStatus)?.label || editingStatus || 'Unknown Status'}
               </Typography>
             </Box>
@@ -3351,11 +3530,28 @@ const WorkshopPage = () => {
 
           {/* Status Dropdown */}
           <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Select New Status</InputLabel>
+            <InputLabel sx={{ color: '#b98f33' }}>Select New Status</InputLabel>
             <Select
               value={editingStatus || ''}
               onChange={(e) => setEditingStatus(e.target.value)}
               label="Select New Status"
+              sx={{
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#333333',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33',
+                },
+                '& .MuiSelect-icon': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
             >
               {invoiceStatuses
                 .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
@@ -3371,10 +3567,10 @@ const WorkshopPage = () => {
                         }}
                       />
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                           {status.label}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: '#666' }}>
+                        <Typography variant="caption" sx={{ color: '#b98f33' }}>
                           {status.description || `Order is ${status.label.toLowerCase()}`}
                         </Typography>
                       </Box>
@@ -3386,22 +3582,30 @@ const WorkshopPage = () => {
 
           {/* Status Description */}
           {editingStatus && (
-            <Box sx={{ p: 2, backgroundColor: '#e3f2fd', borderRadius: 1 }}>
-              <Typography variant="body2" sx={{ color: '#1976d2' }}>
+            <Box sx={{ p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                 <strong>Selected:</strong> {getStatusInfo(editingStatus)?.label || editingStatus}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+              <Typography variant="caption" sx={{ color: '#ffffff', display: 'block', mt: 1 }}>
                 {getStatusInfo(editingStatus)?.description || 'Status will be updated for this order.'}
               </Typography>
             </Box>
           )}
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, gap: 1 }}>
+        <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
           <Button 
             onClick={() => setStatusDialogOpen(false)}
             variant="outlined"
             size="small"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
           >
             Cancel
           </Button>
@@ -3411,10 +3615,21 @@ const WorkshopPage = () => {
             disabled={!editingStatus}
             size="small"
             sx={{
-              backgroundColor: '#1976d2',
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
               '&:hover': {
-                backgroundColor: '#1565c0'
-              }
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #444444',
+              },
             }}
           >
             Update Status
@@ -3749,4 +3964,4 @@ const WorkshopPage = () => {
   );
 };
 
-export default WorkshopPage; 
+export default WorkshopPage;

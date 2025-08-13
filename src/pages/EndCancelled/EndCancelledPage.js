@@ -170,14 +170,14 @@ const EndCancelledPage = () => {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#e6e7e8', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290', mb: 1 }}>
-          <CancelIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
+        <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>
+          <CancelIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
           Cancelled Orders
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography variant="body1" sx={{ color: '#ffffff' }}>
           All orders that have been cancelled and removed from active workflow
         </Typography>
       </Box>
@@ -192,17 +192,19 @@ const EndCancelledPage = () => {
             width: 400, 
             height: '100%', 
             overflow: 'auto',
-            borderRight: '2px solid #e0e0e0',
+            borderRight: '2px solid #333333',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            backgroundColor: '#2a2a2a',
+            border: '1px solid #333333'
           }}
         >
           {/* Header */}
-          <Box sx={{ p: 2, borderBottom: '2px solid #e0e0e0' }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
+          <Box sx={{ p: 2, borderBottom: '2px solid #333333' }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>
               Cancelled Orders
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ color: '#ffffff', mb: 2 }}>
               {filteredOrders.length} cancelled order{filteredOrders.length !== 1 ? 's' : ''}
             </Typography>
             
@@ -215,12 +217,12 @@ const EndCancelledPage = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon color="action" />
+                    <SearchIcon sx={{ color: '#b98f33' }} />
                   </InputAdornment>
                 ),
                 endAdornment: searchTerm && (
                   <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => handleSearch('')}>
+                    <IconButton size="small" onClick={() => handleSearch('')} sx={{ color: '#b98f33' }}>
                       <RefreshIcon />
                     </IconButton>
                   </InputAdornment>
@@ -229,7 +231,15 @@ const EndCancelledPage = () => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
-                  backgroundColor: 'background.paper'
+                  backgroundColor: '#3a3a3a',
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff'
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33'
                 }
               }}
             />
@@ -247,22 +257,25 @@ const EndCancelledPage = () => {
               {filteredOrders.map((order, index) => (
                 <React.Fragment key={order.id}>
                   <ListItem disablePadding>
-                    <ListItemButton
-                      selected={selectedOrder?.id === order.id}
-                      onClick={() => handleOrderSelection(order)}
-                      sx={{
-                        '&.Mui-selected': {
-                          backgroundColor: 'primary.light',
-                          '&:hover': {
-                            backgroundColor: 'primary.light',
-                          },
-                        },
-                      }}
-                    >
+                                         <ListItemButton
+                       selected={selectedOrder?.id === order.id}
+                       onClick={() => handleOrderSelection(order)}
+                       sx={{
+                         '&.Mui-selected': {
+                           backgroundColor: '#4a4a4a',
+                           '&:hover': {
+                             backgroundColor: '#4a4a4a',
+                           },
+                         },
+                         '&:hover': {
+                           backgroundColor: '#4a4a4a',
+                         },
+                       }}
+                     >
                       <ListItemText
                         primary={
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                               #{order.orderDetails?.billInvoice || order.id}
                             </Typography>
                             <Chip
@@ -278,10 +291,10 @@ const EndCancelledPage = () => {
                         }
                         secondary={
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                               {order.personalInfo?.customerName || 'Unknown Customer'}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{ color: '#b98f33' }}>
                               {formatCurrency(calculateOrderProfit(order).revenue)} • {formatDateDisplay(order.cancelledAt)}
                             </Typography>
                           </Box>
@@ -301,10 +314,10 @@ const EndCancelledPage = () => {
           {selectedOrder ? (
             <Box>
               {/* Order Header */}
-              <Card sx={{ mb: 3 }}>
+              <Card sx={{ mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       Order #{selectedOrder.orderDetails?.billInvoice || selectedOrder.id}
                     </Typography>
                     <Chip
@@ -319,64 +332,76 @@ const EndCancelledPage = () => {
 
                   {/* Customer Info */}
                   <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                      <PersonIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                      <PersonIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                       Customer Information
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Name:</Typography>
-                        <Typography variant="body1">{selectedOrder.personalInfo?.customerName || 'N/A'}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Name:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.customerName || 'N/A'}</Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Phone:</Typography>
-                        <Typography variant="body1">{selectedOrder.personalInfo?.phone || 'N/A'}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Phone:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.phone || 'N/A'}</Typography>
                       </Grid>
                       <Grid item xs={12}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Email:</Typography>
-                        <Typography variant="body1">{selectedOrder.personalInfo?.email || 'N/A'}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Email:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.email || 'N/A'}</Typography>
                       </Grid>
                       <Grid item xs={12}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Address:</Typography>
-                        <Typography variant="body1">{selectedOrder.personalInfo?.address || 'N/A'}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Address:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.address || 'N/A'}</Typography>
                       </Grid>
                     </Grid>
                   </Box>
 
                   {/* Financial Summary */}
                   <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                      <TrendingDownIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                      <TrendingDownIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                       Financial Summary
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={4}>
-                        <Card sx={{ backgroundColor: '#fff3e0', border: '1px solid #ff9800' }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
+                          border: '1px solid #333333',
+                          boxShadow: 3
+                        }}>
                           <CardContent sx={{ textAlign: 'center' }}>
-                            <Typography variant="h6" sx={{ color: '#f57c00', fontWeight: 'bold' }}>
+                            <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                               {formatCurrency(calculateOrderTotals(selectedOrder).revenue)}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">Original Revenue</Typography>
+                            <Typography variant="body2" sx={{ color: '#ffffff' }}>Original Revenue</Typography>
                           </CardContent>
                         </Card>
                       </Grid>
                       <Grid item xs={12} sm={4}>
-                        <Card sx={{ backgroundColor: '#ffebee', border: '1px solid #f44336' }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
+                          border: '1px solid #333333',
+                          boxShadow: 3
+                        }}>
                           <CardContent sx={{ textAlign: 'center' }}>
-                            <Typography variant="h6" sx={{ color: '#d32f2f', fontWeight: 'bold' }}>
+                            <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                               {formatCurrency(calculateOrderTotals(selectedOrder).cost)}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">Original Cost</Typography>
+                            <Typography variant="body2" sx={{ color: '#ffffff' }}>Original Cost</Typography>
                           </CardContent>
                         </Card>
                       </Grid>
                       <Grid item xs={12} sm={4}>
-                        <Card sx={{ backgroundColor: '#f3e5f5', border: '1px solid #9c27b0' }}>
+                        <Card sx={{ 
+                          background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
+                          border: '1px solid #333333',
+                          boxShadow: 3
+                        }}>
                           <CardContent sx={{ textAlign: 'center' }}>
-                            <Typography variant="h6" sx={{ color: '#7b1fa2', fontWeight: 'bold' }}>
+                            <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                               $0.00
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">Final Payment</Typography>
+                            <Typography variant="body2" sx={{ color: '#ffffff' }}>Final Payment</Typography>
                           </CardContent>
                         </Card>
                       </Grid>
@@ -385,29 +410,33 @@ const EndCancelledPage = () => {
 
                   {/* Cancellation Details */}
                   <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                      <CancelIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#f44336' }} />
+                    <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                      <CancelIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                       Cancellation Details
                     </Typography>
-                    <Card sx={{ backgroundColor: '#ffebee', border: '1px solid #f44336' }}>
+                    <Card sx={{ 
+                      background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
+                      border: '1px solid #333333',
+                      boxShadow: 3
+                    }}>
                       <CardContent>
                         <Grid container spacing={2}>
                           <Grid item xs={12} sm={6}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Cancelled At:</Typography>
-                            <Typography variant="body1">
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Cancelled At:</Typography>
+                            <Typography variant="body1" sx={{ color: '#ffffff' }}>
                               {formatDateDisplay(selectedOrder.cancelledAt)}
                             </Typography>
                           </Grid>
                           <Grid item xs={12} sm={6}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Status Updated:</Typography>
-                            <Typography variant="body1">
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Status Updated:</Typography>
+                            <Typography variant="body1" sx={{ color: '#ffffff' }}>
                               {formatDateDisplay(selectedOrder.statusUpdatedAt)}
                             </Typography>
                           </Grid>
                           {selectedOrder.cancellationReason && (
                             <Grid item xs={12}>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Cancellation Reason:</Typography>
-                              <Typography variant="body1" sx={{ fontStyle: 'italic' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Cancellation Reason:</Typography>
+                              <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#ffffff' }}>
                                 "{selectedOrder.cancellationReason}"
                               </Typography>
                             </Grid>
@@ -419,32 +448,32 @@ const EndCancelledPage = () => {
 
                   {/* Order Details */}
                   <Box>
-                    <Typography variant="h6" sx={{ mb: 2, color: '#274290' }}>
-                      <ReceiptIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
+                      <ReceiptIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
                       Order Details
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Description:</Typography>
-                        <Typography variant="body1">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Description:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>
                           {selectedOrder.orderDetails?.description || 'N/A'}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Platform:</Typography>
-                        <Typography variant="body1">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Platform:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>
                           {selectedOrder.orderDetails?.platform || 'N/A'}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Timeline:</Typography>
-                        <Typography variant="body1">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Timeline:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>
                           {selectedOrder.orderDetails?.timeline || 'N/A'}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Created:</Typography>
-                        <Typography variant="body1">
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>Created:</Typography>
+                        <Typography variant="body1" sx={{ color: '#ffffff' }}>
                           {formatDateDisplay(selectedOrder.createdAt)}
                         </Typography>
                       </Grid>
@@ -461,8 +490,8 @@ const EndCancelledPage = () => {
               height: '100%',
               flexDirection: 'column'
             }}>
-              <CancelIcon sx={{ fontSize: 64, color: '#f44336', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">
+              <CancelIcon sx={{ fontSize: 64, color: '#b98f33', mb: 2 }} />
+              <Typography variant="h6" sx={{ color: '#ffffff' }}>
                 Select a cancelled order to view details
               </Typography>
             </Box>

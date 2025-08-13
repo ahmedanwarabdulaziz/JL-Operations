@@ -159,10 +159,10 @@ const FastOrderStep1 = ({
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom sx={{ color: '#b98f33', fontWeight: 'bold' }}>
         Personal Information
       </Typography>
-      <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" sx={{ mb: 3, color: '#ffffff' }}>
         Enter customer details or search for existing customers
       </Typography>
 
@@ -178,17 +178,24 @@ const FastOrderStep1 = ({
           placeholder="Enter customer's full name"
           required
           sx={{
+            backgroundColor: '#2a2a2a',
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
-              borderColor: errors.customerName ? 'error.main' : 'grey.300',
+              borderColor: errors.customerName ? 'error.main' : '#333333',
               borderRadius: 2,
             },
             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.customerName ? 'error.main' : 'primary.main',
+              borderColor: errors.customerName ? 'error.main' : '#b98f33',
             },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.customerName ? 'error.main' : 'primary.main',
+              borderColor: errors.customerName ? 'error.main' : '#b98f33',
               borderWidth: '2px',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33',
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff',
             },
           }}
         />
@@ -204,17 +211,24 @@ const FastOrderStep1 = ({
           helperText={errors.email}
           placeholder="Enter email address (optional)"
           sx={{
+            backgroundColor: '#2a2a2a',
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
-              borderColor: errors.email ? 'error.main' : 'grey.300',
+              borderColor: errors.email ? 'error.main' : '#333333',
               borderRadius: 2,
             },
             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.email ? 'error.main' : 'primary.main',
+              borderColor: errors.email ? 'error.main' : '#b98f33',
             },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.email ? 'error.main' : 'primary.main',
+              borderColor: errors.email ? 'error.main' : '#b98f33',
               borderWidth: '2px',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33',
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff',
             },
           }}
         />
@@ -229,17 +243,24 @@ const FastOrderStep1 = ({
           helperText={errors.phone}
           placeholder="Enter phone number"
           sx={{
+            backgroundColor: '#2a2a2a',
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
-              borderColor: errors.phone ? 'error.main' : 'grey.300',
+              borderColor: errors.phone ? 'error.main' : '#333333',
               borderRadius: 2,
             },
             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.phone ? 'error.main' : 'primary.main',
+              borderColor: errors.phone ? 'error.main' : '#b98f33',
             },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.phone ? 'error.main' : 'primary.main',
+              borderColor: errors.phone ? 'error.main' : '#b98f33',
               borderWidth: '2px',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33',
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff',
             },
           }}
         />
@@ -256,17 +277,24 @@ const FastOrderStep1 = ({
           helperText={errors.address}
           placeholder="Enter complete address"
           sx={{
+            backgroundColor: '#2a2a2a',
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
-              borderColor: errors.address ? 'error.main' : 'grey.300',
+              borderColor: errors.address ? 'error.main' : '#333333',
               borderRadius: 2,
             },
             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.address ? 'error.main' : 'primary.main',
+              borderColor: errors.address ? 'error.main' : '#b98f33',
             },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.address ? 'error.main' : 'primary.main',
+              borderColor: errors.address ? 'error.main' : '#b98f33',
               borderWidth: '2px',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33',
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff',
             },
           }}
         />
@@ -278,6 +306,14 @@ const FastOrderStep1 = ({
             variant="outlined"
             onClick={handleCustomerSearch}
             startIcon={<PersonIcon />}
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
           >
             Search Existing Customers
           </Button>
@@ -291,15 +327,19 @@ const FastOrderStep1 = ({
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <WarningIcon color="warning" sx={{ mr: 1 }} />
-            <Typography variant="h6">
+            <WarningIcon sx={{ mr: 1, color: '#000000' }} />
+            <Typography variant="h6" sx={{ color: '#000000', fontWeight: 'bold' }}>
               {duplicateCustomers.length === 1 ? 'Existing Customer Found' : 'Multiple Customers Found'}
             </Typography>
           </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
           <Alert severity="warning" sx={{ mb: 2 }}>
             {duplicateCustomers.length === 1 
               ? 'A customer with similar information already exists. You can use the existing customer or create a new one.'
@@ -339,6 +379,14 @@ const FastOrderStep1 = ({
                     variant="outlined"
                     size="small"
                     onClick={() => handleUseExistingCustomer(customer)}
+                    sx={{
+                      borderColor: '#b98f33',
+                      color: '#b98f33',
+                      '&:hover': {
+                        borderColor: '#d4af5a',
+                        backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                      }
+                    }}
                   >
                     Use This Customer
                   </Button>
@@ -348,11 +396,42 @@ const FastOrderStep1 = ({
             ))}
           </List>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCreateNewCustomer} color="primary">
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={handleCreateNewCustomer}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #555555'
+              }
+            }}
+          >
             Create New Customer
           </Button>
-          <Button onClick={() => setDuplicateDialogOpen(false)}>
+          <Button 
+            onClick={() => setDuplicateDialogOpen(false)}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>

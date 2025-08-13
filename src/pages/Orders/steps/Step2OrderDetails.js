@@ -74,7 +74,16 @@ const Step2OrderDetails = ({
                   startIcon={<RefreshIcon />}
                   onClick={onRefreshBillNumber}
                   variant="outlined"
-                  sx={{ minWidth: 'auto', px: 1 }}
+                  sx={{ 
+                    minWidth: 'auto', 
+                    px: 1,
+                    borderColor: '#e0e0e0',
+                    color: '#666',
+                    '&:hover': {
+                      borderColor: '#bdbdbd',
+                      backgroundColor: '#f5f5f5'
+                    }
+                  }}
                 >
                   Refresh
                 </Button>

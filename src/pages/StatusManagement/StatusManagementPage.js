@@ -180,7 +180,7 @@ const SortableTableRow = ({
         <IconButton 
           size="small" 
           onClick={() => handleEditStatus(status)}
-          sx={{ color: '#274290' }}
+          sx={{ color: '#b98f33' }}
         >
           <EditIcon />
         </IconButton>
@@ -189,7 +189,7 @@ const SortableTableRow = ({
           onClick={() => handleDeleteStatus(status)}
           disabled={deleting === status.id}
           sx={{ 
-            color: deleting === status.id ? '#ccc' : '#f44336',
+            color: deleting === status.id ? '#ccc' : '#b98f33',
             '&:disabled': { color: '#ccc' }
           }}
         >
@@ -742,24 +742,31 @@ const StatusManagementPage = () => {
   const statusStats = getStatusStats();
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#e6e7e8', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <SettingsIcon sx={{ fontSize: 32, color: '#274290', mr: 2 }} />
-          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <SettingsIcon sx={{ fontSize: 32, color: '#b98f33', mr: 2 }} />
+          <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Status Management
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<RefreshIcon />}
             onClick={fetchData}
             sx={{ 
-              color: '#274290',
-              borderColor: '#274290',
-              '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
             }}
           >
             Refresh
@@ -769,8 +776,16 @@ const StatusManagementPage = () => {
             startIcon={<AddIcon />}
             onClick={handleCreateStatus}
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' }
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
             }}
           >
             Add Status
@@ -785,8 +800,19 @@ const StatusManagementPage = () => {
         action={
           <Button 
             size="small" 
+            variant="contained"
             onClick={() => setBusinessRulesDialogOpen(true)}
-            sx={{ color: '#274290' }}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
           >
             View Rules
           </Button>
@@ -798,8 +824,8 @@ const StatusManagementPage = () => {
       <Grid container spacing={3}>
         {/* Status List */}
         <Grid item xs={12} lg={8}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+          <Paper sx={{ p: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
               Invoice Statuses
             </Typography>
             
@@ -820,19 +846,19 @@ const StatusManagementPage = () => {
             >
               <TableContainer>
                 <Table>
-                  <TableHead sx={{ backgroundColor: '#274290' }}>
+                  <TableHead sx={{ backgroundColor: '#b98f33' }}>
                     <TableRow>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center' }}>
                           <DragIndicatorIcon sx={{ mr: 1, opacity: 0.7 }} />
                           Status
                         </Box>
                       </TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Type</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Usage</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Default</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Description</TableCell>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Type</TableCell>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Usage</TableCell>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Default</TableCell>
+                      <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <SortableContext 
@@ -860,8 +886,8 @@ const StatusManagementPage = () => {
 
         {/* Statistics Panel */}
         <Grid item xs={12} lg={4}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+          <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
               Status Statistics
             </Typography>
             
@@ -887,21 +913,27 @@ const StatusManagementPage = () => {
             </List>
           </Paper>
 
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+          <Paper sx={{ p: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
               Quick Actions
             </Typography>
             
             <Button
               fullWidth
-              variant="outlined"
+              variant="contained"
               startIcon={<FlagIcon />}
               onClick={() => setBusinessRulesDialogOpen(true)}
               sx={{ 
                 mb: 2,
-                color: '#274290',
-                borderColor: '#274290',
-                '&:hover': { borderColor: '#274290', backgroundColor: '#f5f8ff' }
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '1px solid #8b6b1f',
+                boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                }
               }}
             >
               View Business Rules
@@ -909,13 +941,19 @@ const StatusManagementPage = () => {
             
             <Button
               fullWidth
-              variant="outlined"
+              variant="contained"
               startIcon={<MonetizationOnIcon />}
               onClick={() => window.open('/finance', '_blank')}
               sx={{ 
-                color: '#f27921',
-                borderColor: '#f27921',
-                '&:hover': { borderColor: '#f27921', backgroundColor: '#fff8f5' }
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '1px solid #8b6b1f',
+                boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                }
               }}
             >
               Open Finance Page
@@ -1084,6 +1122,18 @@ const StatusManagementPage = () => {
               setSaving(false);
             }}
             disabled={saving}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
           >
             Cancel
           </Button>
@@ -1093,8 +1143,16 @@ const StatusManagementPage = () => {
             disabled={saving}
             startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' },
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              },
               '&:disabled': { backgroundColor: '#ccc' }
             }}
           >
@@ -1122,7 +1180,21 @@ const StatusManagementPage = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setStatusChangeDialogOpen(false)}>
+          <Button 
+            onClick={() => setStatusChangeDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Cancel
           </Button>
           <Button 
@@ -1136,8 +1208,19 @@ const StatusManagementPage = () => {
               }
             }}
             variant="contained"
-            color="error"
             disabled={!cancellationReason.trim()}
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                transform: 'translateY(-1px)'
+              }
+            }}
           >
             Confirm Cancellation
           </Button>
@@ -1155,10 +1238,21 @@ const StatusManagementPage = () => {
           {validationError.type === 'done' && (
             <Button 
               variant="contained" 
-              color="success"
               onClick={handleMakeFullyPaid}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                }
+              }}
               startIcon={<CheckCircleIcon />}
             >
               Make ${validationError.pendingAmount.toFixed(2)} as Paid
@@ -1168,10 +1262,21 @@ const StatusManagementPage = () => {
           {validationError.type === 'cancelled' && (
             <Button 
               variant="contained" 
-              color="error"
               onClick={handleSetPaymentToZero}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': { 
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                }
+              }}
               startIcon={<CancelIcon />}
             >
               Set Payment Amount to $0.00
@@ -1183,7 +1288,21 @@ const StatusManagementPage = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setValidationDialogOpen(false)}>
+          <Button 
+            onClick={() => setValidationDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>
@@ -1258,7 +1377,21 @@ const StatusManagementPage = () => {
           </List>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setBusinessRulesDialogOpen(false)}>
+          <Button 
+            onClick={() => setBusinessRulesDialogOpen(false)}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '1px solid #8b6b1f',
+              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': { 
+                backgroundColor: '#d4af5a',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+              }
+            }}
+          >
             Close
           </Button>
         </DialogActions>

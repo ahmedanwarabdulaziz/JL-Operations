@@ -119,7 +119,22 @@
     cursor: not-allowed;
   }
 
-  .uploaded-image {
+  .uploading-message {
+    margin-top: 15px;
+    padding: 15px;
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 6px;
+  }
+
+  .uploading-message p {
+    color: #856404;
+    font-weight: 600;
+    margin: 0;
+    text-align: center;
+  }
+
+  .uploaded-images {
     margin-top: 15px;
     padding: 15px;
     background: #f8f9fa;
@@ -127,10 +142,56 @@
     border-radius: 6px;
   }
 
-  .uploaded-image p {
+  .uploaded-images p {
     color: #28a745;
     font-weight: 600;
-    margin: 0 0 10px 0;
+    margin: 0 0 15px 0;
+    text-align: center;
+  }
+
+  .images-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 10px;
+  }
+
+  .image-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .image-item img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .remove-image-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .remove-image-btn:hover {
+    background: #c82333;
+    transform: scale(1.1);
   }
 
 .success-message {

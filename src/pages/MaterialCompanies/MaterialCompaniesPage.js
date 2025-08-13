@@ -397,17 +397,20 @@ const MaterialCompaniesPage = () => {
     };
 
     return (
-      <TableRow
-        ref={setNodeRef}
-        style={style}
-        hover
-        sx={{
-          cursor: 'grab',
-          '&:active': {
-            cursor: 'grabbing'
-          }
-        }}
-      >
+             <TableRow
+         ref={setNodeRef}
+         style={style}
+         hover
+         sx={{
+           cursor: 'grab',
+           '&:hover': {
+             backgroundColor: '#3a3a3a'
+           },
+           '&:active': {
+             cursor: 'grabbing'
+           }
+         }}
+       >
         {React.Children.map(children, (child, index) => {
           if (index === 0) {
             return React.cloneElement(child, {
@@ -433,7 +436,7 @@ const MaterialCompaniesPage = () => {
     <Box sx={{ p: 3 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Material Companies
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -442,14 +445,31 @@ const MaterialCompaniesPage = () => {
         </Box>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ color: '#000000' }} />}
           onClick={() => handleOpenDialog()}
           sx={{ 
             minWidth: 150,
             px: 3,
-            backgroundColor: '#274290',
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
             '&:hover': {
-              backgroundColor: '#1e2d5a'
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
             }
           }}
         >
@@ -465,114 +485,114 @@ const MaterialCompaniesPage = () => {
         >
           <TableContainer>
             <Table>
-              <TableHead sx={{ backgroundColor: '#274290' }}>
-                <TableRow>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'name'}
-                      direction={sortConfig.key === 'name' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('name')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Company Name
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'contactPerson'}
-                      direction={sortConfig.key === 'contactPerson' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('contactPerson')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Contact Person
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'phone'}
-                      direction={sortConfig.key === 'phone' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('phone')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Phone
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'email'}
-                      direction={sortConfig.key === 'email' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('email')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Email
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'website'}
-                      direction={sortConfig.key === 'website' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('website')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Website
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'taxRate'}
-                      direction={sortConfig.key === 'taxRate' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('taxRate')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Tax Rate
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>
-                    <TableSortLabel
-                      active={sortConfig.key === 'createdAt'}
-                      direction={sortConfig.key === 'createdAt' ? sortConfig.direction : 'asc'}
-                      onClick={() => handleSort('createdAt')}
-                      sx={{ 
-                        color: 'white !important',
-                        '& .MuiTableSortLabel-icon': {
-                          color: 'white !important'
-                        }
-                      }}
-                    >
-                      Date Added
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell align="center" sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
+                             <TableHead sx={{ backgroundColor: '#b98f33' }}>
+                 <TableRow>
+                                       <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                      <TableSortLabel
+                        active={sortConfig.key === 'name'}
+                        direction={sortConfig.key === 'name' ? sortConfig.direction : 'asc'}
+                        onClick={() => handleSort('name')}
+                        sx={{ 
+                          color: '#b98f33 !important',
+                          '& .MuiTableSortLabel-icon': {
+                            color: '#b98f33 !important'
+                          }
+                        }}
+                      >
+                        Company Name
+                      </TableSortLabel>
+                    </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'contactPerson'}
+                       direction={sortConfig.key === 'contactPerson' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('contactPerson')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Contact Person
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'phone'}
+                       direction={sortConfig.key === 'phone' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('phone')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Phone
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'email'}
+                       direction={sortConfig.key === 'email' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('email')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Email
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'website'}
+                       direction={sortConfig.key === 'website' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('website')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Website
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'taxRate'}
+                       direction={sortConfig.key === 'taxRate' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('taxRate')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Tax Rate
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>
+                     <TableSortLabel
+                       active={sortConfig.key === 'createdAt'}
+                       direction={sortConfig.key === 'createdAt' ? sortConfig.direction : 'asc'}
+                       onClick={() => handleSort('createdAt')}
+                       sx={{ 
+                         color: '#b98f33 !important',
+                         '& .MuiTableSortLabel-icon': {
+                           color: '#b98f33 !important'
+                         }
+                       }}
+                     >
+                       Date Added
+                     </TableSortLabel>
+                   </TableCell>
+                                     <TableCell align="center" sx={{ color: '#b98f33 !important', fontWeight: 'bold' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <SortableContext
@@ -592,41 +612,45 @@ const MaterialCompaniesPage = () => {
                               '&:active': { cursor: 'grabbing' }
                             }} 
                           />
-                          <Typography variant="subtitle2" fontWeight="medium">
-                            {company.name}
-                          </Typography>
+                                                     <Typography variant="subtitle2" fontWeight="medium" sx={{ color: '#b98f33' }}>
+                             {company.name}
+                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>{company.contactPerson || '-'}</TableCell>
-                      <TableCell>{company.phone || '-'}</TableCell>
-                      <TableCell>{company.email || '-'}</TableCell>
-                      <TableCell>
-                        {company.website ? (
-                          <a href={company.website} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
-                            {company.website}
-                          </a>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={company.taxRate ? `${company.taxRate}%` : '13%'}
-                          size="small"
-                          color={company.taxRate === 2 ? 'warning' : company.taxRate === 13 ? 'primary' : 'default'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {company.createdAt ? (
-                          <Typography variant="body2" color="text.secondary">
-                            {company.createdAt.seconds 
-                              ? new Date(company.createdAt.seconds * 1000).toLocaleDateString()
-                              : new Date(company.createdAt).toLocaleDateString()
-                            }
-                          </Typography>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">-</Typography>
-                        )}
-                      </TableCell>
+                                             <TableCell sx={{ color: '#b98f33' }}>{company.contactPerson || '-'}</TableCell>
+                       <TableCell sx={{ color: '#b98f33' }}>{company.phone || '-'}</TableCell>
+                       <TableCell sx={{ color: '#b98f33' }}>{company.email || '-'}</TableCell>
+                                             <TableCell sx={{ color: '#b98f33' }}>
+                         {company.website ? (
+                           <a href={company.website} target="_blank" rel="noopener noreferrer" style={{ color: '#b98f33' }}>
+                             {company.website}
+                           </a>
+                         ) : '-'}
+                       </TableCell>
+                                             <TableCell>
+                         <Chip
+                           label={company.taxRate ? `${company.taxRate}%` : '13%'}
+                           size="small"
+                           sx={{
+                             backgroundColor: '#d4af5a',
+                             color: '#000000',
+                             border: '1px solid #b98f33'
+                           }}
+                           variant="outlined"
+                         />
+                       </TableCell>
+                                             <TableCell>
+                         {company.createdAt ? (
+                           <Typography variant="body2" sx={{ color: '#b98f33' }}>
+                             {company.createdAt.seconds 
+                               ? new Date(company.createdAt.seconds * 1000).toLocaleDateString()
+                               : new Date(company.createdAt).toLocaleDateString()
+                             }
+                           </Typography>
+                         ) : (
+                           <Typography variant="body2" sx={{ color: '#b98f33' }}>-</Typography>
+                         )}
+                       </TableCell>
                       <TableCell align="center">
                         <Box display="flex" gap={1} justifyContent="center">
                           <Tooltip title="View Details">

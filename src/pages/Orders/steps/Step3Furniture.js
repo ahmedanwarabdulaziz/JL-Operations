@@ -584,6 +584,14 @@ const Step3Furniture = ({
           variant="outlined"
           startIcon={<AddIcon />}
           onClick={addFurnitureGroup}
+          sx={{
+            borderColor: '#e0e0e0',
+            color: '#666',
+            '&:hover': {
+              borderColor: '#bdbdbd',
+              backgroundColor: '#f5f5f5'
+            }
+          }}
         >
           Add Furniture Group
         </Button>

@@ -465,35 +465,36 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
     >
       {/* Dialog Header */}
       <DialogTitle sx={{ 
-        bgcolor: '#274290', 
-        color: 'white',
+        background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+        color: '#000000',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        py: 2
+        py: 2,
+        fontWeight: 'bold'
       }}>
         <Box display="flex" alignItems="center">
-          <FlashOnIcon sx={{ mr: 1 }} />
-          <Typography variant="h6">Fast Order Creation</Typography>
+          <FlashOnIcon sx={{ mr: 1, color: '#000000' }} />
+          <Typography variant="h6" sx={{ color: '#000000', fontWeight: 'bold' }}>Fast Order Creation</Typography>
         </Box>
-        <IconButton onClick={handleClose} sx={{ color: 'white' }} disabled={isSubmitting}>
+        <IconButton onClick={handleClose} sx={{ color: '#000000' }} disabled={isSubmitting}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
 
       {/* Stepper */}
-      <Box sx={{ px: 3, pt: 3 }}>
+      <Box sx={{ px: 3, pt: 3, backgroundColor: '#3a3a3a' }}>
         <Stepper activeStep={activeStep} alternativeLabel>
           {steps.map((label) => (
             <Step key={label}>
-              <StepLabel>{label}</StepLabel>
+              <StepLabel sx={{ color: '#b98f33' }}>{label}</StepLabel>
             </Step>
           ))}
         </Stepper>
       </Box>
 
       {/* Dialog Content */}
-      <DialogContent sx={{ px: 3, py: 2, flex: 1 }}>
+      <DialogContent sx={{ px: 3, py: 2, flex: 1, backgroundColor: '#3a3a3a' }}>
         {errors.submit && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {errors.submit}
@@ -523,11 +524,19 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
       </DialogContent>
 
       {/* Dialog Actions */}
-      <DialogActions sx={{ px: 3, pb: 3, pt: 1 }}>
+      <DialogActions sx={{ px: 3, pb: 3, pt: 1, backgroundColor: '#3a3a3a' }}>
         <Button 
           onClick={handleClose} 
           disabled={isSubmitting}
-          sx={{ color: '#666' }}
+          variant="outlined"
+          sx={{ 
+            borderColor: '#b98f33',
+            color: '#b98f33',
+            '&:hover': {
+              borderColor: '#d4af5a',
+              backgroundColor: 'rgba(185, 143, 51, 0.1)'
+            }
+          }}
         >
           Cancel
         </Button>
@@ -537,7 +546,35 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
             startIcon={<ArrowBackIcon />}
             onClick={handleBack}
             disabled={isSubmitting}
-            sx={{ color: '#274290' }}
+            sx={{ 
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
           >
             Back
           </Button>
@@ -550,8 +587,33 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
             onClick={handleNext}
             disabled={isSubmitting}
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e06810' }
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
             }}
           >
             Next
@@ -562,8 +624,33 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
             onClick={handleSubmit}
             disabled={isSubmitting}
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e06810' }
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
             }}
           >
             {isSubmitting ? 'Creating Order...' : 'Save Order'}
@@ -578,15 +665,19 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <WarningIcon color="warning" sx={{ mr: 1 }} />
-            <Typography variant="h6">
+            <WarningIcon sx={{ mr: 1, color: '#000000' }} />
+            <Typography variant="h6" sx={{ color: '#000000', fontWeight: 'bold' }}>
               {duplicateCustomers.length === 1 ? 'Existing Customer Found' : 'Multiple Customers Found'}
             </Typography>
           </Box>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
           <Alert severity="warning" sx={{ mb: 2 }}>
             {duplicateCustomers.length === 1 
               ? 'A customer with similar information already exists. You can use the existing customer or create a new one.'
@@ -626,6 +717,14 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
                     variant="outlined"
                     size="small"
                     onClick={() => handleUseExistingCustomer(customer)}
+                    sx={{
+                      borderColor: '#b98f33',
+                      color: '#b98f33',
+                      '&:hover': {
+                        borderColor: '#d4af5a',
+                        backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                      }
+                    }}
                   >
                     Use This Customer
                   </Button>
@@ -635,7 +734,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
             ))}
           </List>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
           <Button 
             onClick={() => {
               setDuplicateDialogOpen(false);
@@ -643,11 +742,39 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
               // Allow proceeding to next step when creating new customer
               setActiveStep(prev => prev + 1);
             }} 
-            color="primary"
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #555555'
+              }
+            }}
           >
             Create New Customer
           </Button>
-          <Button onClick={() => setDuplicateDialogOpen(false)}>
+          <Button 
+            onClick={() => setDuplicateDialogOpen(false)}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>

@@ -57,8 +57,8 @@ const Header = () => {
     <AppBar 
       position="static" 
       sx={{ 
-        backgroundColor: '#fff',
-        color: '#333',
+        backgroundColor: 'background.paper',
+        color: 'text.primary',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         zIndex: (theme) => theme.zIndex.drawer + 1,
       }}

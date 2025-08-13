@@ -9,7 +9,9 @@ import {
   Typography, 
   Box, 
   Tooltip,
-  IconButton
+  IconButton,
+  Collapse,
+  ListItemIcon
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EmailIcon from '@mui/icons-material/Email';
@@ -21,7 +23,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import PublicIcon from '@mui/icons-material/Public';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
-import FlashOnIcon from '@mui/icons-material/FlashOn';
+
 import StorageIcon from '@mui/icons-material/Storage';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -34,6 +36,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import WebIcon from '@mui/icons-material/Web';
 import GroupIcon from '@mui/icons-material/Group';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ConstructionIcon from '@mui/icons-material/Construction';
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
@@ -42,20 +47,25 @@ const menuItems = [
   { text: 'Customers', path: '/customers', icon: <PeopleIcon /> },
   { text: 'Orders', path: '/orders', icon: <ReceiptIcon /> },
   { text: 'Workshop', path: '/workshop', icon: <BuildIcon /> },
-  { text: 'Treatment', path: '/treatment', icon: <ScienceIcon /> },
-  { text: 'Material Companies', path: '/material-companies', icon: <BusinessIcon /> },
-  { text: 'Platforms', path: '/platforms', icon: <PublicIcon /> },
   { text: 'Invoices', path: '/invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/finance', icon: <AccountBalanceIcon /> },
   { text: 'P&L Statement', path: '/pl', icon: <TrendingUpIcon /> },
-  { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
   { text: 'Completed Orders', path: '/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/end-cancelled', icon: <CancelIcon /> },
+];
+
+const settingsItems = [
+  { text: 'Treatment', path: '/treatment', icon: <ScienceIcon /> },
+  { text: 'Material Companies', path: '/material-companies', icon: <BusinessIcon /> },
+  { text: 'Platforms', path: '/platforms', icon: <PublicIcon /> },
+  { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
+];
+
+const underConstructionItems = [
   { text: 'Lead Form', path: '/lead-form', icon: <WebIcon /> },
   { text: 'Leads Management', path: '/leads', icon: <GroupIcon /> },
   { text: 'Email Settings', path: '/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
-  { text: 'Rapid Invoice Settings', path: '/rapid-invoice-settings', icon: <FlashOnIcon /> },
   { text: 'Data Management', path: '/data-management', icon: <SettingsIcon /> },
 ];
 
@@ -66,9 +76,19 @@ const Sidebar = ({ onToggle, onPin }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [underConstructionOpen, setUnderConstructionOpen] = useState(false);
 
   const handleNavigation = (path) => {
     navigate(path);
+  };
+
+  const handleSettingsToggle = () => {
+    setSettingsOpen(!settingsOpen);
+  };
+
+  const handleUnderConstructionToggle = () => {
+    setUnderConstructionOpen(!underConstructionOpen);
   };
 
   const toggleSidebar = () => {
@@ -125,18 +145,20 @@ const Sidebar = ({ onToggle, onPin }) => {
       sx={{
         width: drawerWidth,
         flexShrink: 0,
+        position: 'fixed',
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          backgroundColor: '#b98f33', // Custom gold background
-          borderRight: '1px solid #e0e0e0',
+          backgroundColor: '#b98f33', // Gold background as requested
+          borderRight: '1px solid #333333',
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
           transition: 'width 0.3s ease',
           overflow: 'hidden',
+          position: 'fixed',
         },
       }}
     >
-      <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', minHeight: 64 }}>
+      <Box sx={{ p: 2, borderBottom: '1px solid #333333', minHeight: 64 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {isExpanded ? (
             <>
@@ -145,11 +167,11 @@ const Sidebar = ({ onToggle, onPin }) => {
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Tooltip title={isPinned ? 'Unpin sidebar' : 'Pin sidebar'}>
-                  <IconButton onClick={togglePin} size="small" color={isPinned ? 'primary' : 'default'}>
+                  <IconButton onClick={togglePin} size="small" sx={{ color: '#000000' }}>
                     {isPinned ? <PushPinIcon /> : <PushPinOutlinedIcon />}
                   </IconButton>
                 </Tooltip>
-                <IconButton onClick={toggleSidebar} size="small">
+                <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#000000' }}>
                   <ChevronLeftIcon />
                 </IconButton>
               </Box>
@@ -164,53 +186,54 @@ const Sidebar = ({ onToggle, onPin }) => {
         </Box>
         
         {!isExpanded && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-            <Tooltip title={isChecking ? 'Checking connection...' : (isConnected ? 'Connected to Firebase' : 'Disconnected from Firebase')}>
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: isChecking ? '#ff9800' : (isConnected ? '#4caf50' : '#f44336'),
-                  border: '1px solid #fff',
-                  boxShadow: '0 0 0 1px #e0e0e0',
-                  animation: isChecking ? 'pulse 2s infinite' : 'none',
-                  '@keyframes pulse': {
-                    '0%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                    '100%': { opacity: 1 }
-                  }
-                }}
-              />
-            </Tooltip>
-          </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+          <Tooltip title={isChecking ? 'Checking connection...' : (isConnected ? 'Connected to Firebase' : 'Disconnected from Firebase')}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: isChecking ? '#ff9800' : (isConnected ? '#4caf50' : '#f44336'),
+                border: '1px solid #000000',
+                boxShadow: '0 0 0 1px #000000',
+                animation: isChecking ? 'pulse 2s infinite' : 'none',
+                '@keyframes pulse': {
+                  '0%': { opacity: 1 },
+                  '50%': { opacity: 0.5 },
+                  '100%': { opacity: 1 }
+                }
+              }}
+            />
+          </Tooltip>
+        </Box>
         )}
         
         {isExpanded && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-            <Tooltip title={isChecking ? 'Checking connection...' : (isConnected ? 'Connected to Firebase' : 'Disconnected from Firebase')}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  backgroundColor: isChecking ? '#ff9800' : (isConnected ? '#4caf50' : '#f44336'),
-                  border: '2px solid #fff',
-                  boxShadow: '0 0 0 2px #e0e0e0',
-                  animation: isChecking ? 'pulse 2s infinite' : 'none',
-                  '@keyframes pulse': {
-                    '0%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                    '100%': { opacity: 1 }
-                  }
-                }}
-              />
-            </Tooltip>
-          </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+          <Tooltip title={isChecking ? 'Checking connection...' : (isConnected ? 'Connected to Firebase' : 'Disconnected from Firebase')}>
+            <Box
+              sx={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                backgroundColor: isChecking ? '#ff9800' : (isConnected ? '#4caf50' : '#f44336'),
+                border: '2px solid #000000',
+                boxShadow: '0 0 0 2px #000000',
+                animation: isChecking ? 'pulse 2s infinite' : 'none',
+                '@keyframes pulse': {
+                  '0%': { opacity: 1 },
+                  '50%': { opacity: 0.5 },
+                  '100%': { opacity: 1 }
+                }
+              }}
+            />
+          </Tooltip>
+        </Box>
         )}
       </Box>
       
       <List sx={{ pt: 1 }}>
+        {/* Main Menu Items */}
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
             <ListItemButton
@@ -221,21 +244,21 @@ const Sidebar = ({ onToggle, onPin }) => {
                 borderRadius: 1,
                 minHeight: 48,
                 justifyContent: isExpanded ? 'flex-start' : 'center',
-                color: '#000000', // Black text
+                color: '#000000',
                 '&:hover': {
-                  backgroundColor: 'rgba(0,0,0,0.1)', // Darker gold on hover
+                  backgroundColor: 'rgba(0,0,0,0.15)',
                 },
                 '&.Mui-selected': {
-                  backgroundColor: 'rgba(0,0,0,0.2)', // Even darker for selected
+                  backgroundColor: 'rgba(0,0,0,0.25)',
                   color: '#000000',
                   '&:hover': {
-                    backgroundColor: 'rgba(0,0,0,0.2)',
+                    backgroundColor: 'rgba(0,0,0,0.25)',
                   },
                 },
               }}
             >
               <Box sx={{ 
-                color: '#000000', // Black color for icons and text
+                color: '#000000',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: isExpanded ? 'flex-start' : 'center',
@@ -247,10 +270,10 @@ const Sidebar = ({ onToggle, onPin }) => {
                     primary={item.text} 
                     sx={{
                       ml: 2,
-                      color: '#000000', // Black text
+                      color: '#000000',
                       '& .MuiListItemText-primary': {
                         fontWeight: 500,
-                        color: '#000000', // Ensure text is black
+                        color: '#000000',
                       },
                     }}
                   />
@@ -259,6 +282,196 @@ const Sidebar = ({ onToggle, onPin }) => {
             </ListItemButton>
           </ListItem>
         ))}
+
+        {/* Settings Section */}
+        <ListItem disablePadding sx={{ mb: 1 }}>
+          <ListItemButton
+            onClick={handleSettingsToggle}
+            sx={{
+              mx: 1,
+              borderRadius: 1,
+              minHeight: 48,
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              color: '#000000',
+              backgroundColor: 'rgba(0,0,0,0.1)',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              },
+            }}
+          >
+            <Box sx={{ 
+              color: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              width: '100%'
+            }}>
+              <SettingsIcon />
+              {isExpanded && (
+                <>
+                  <ListItemText 
+                    primary="Settings" 
+                    sx={{
+                      ml: 2,
+                      color: '#000000',
+                      '& .MuiListItemText-primary': {
+                        fontWeight: 600,
+                        color: '#000000',
+                      },
+                    }}
+                  />
+                  {settingsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </>
+              )}
+            </Box>
+          </ListItemButton>
+        </ListItem>
+
+        <Collapse in={settingsOpen && isExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {settingsItems.map((item) => (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => handleNavigation(item.path)}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    mx: 1,
+                    ml: 3,
+                    borderRadius: 1,
+                    minHeight: 40,
+                    color: '#000000',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0,0,0,0.15)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(0,0,0,0.25)',
+                      color: '#000000',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0,0,0,0.25)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ 
+                    color: '#000000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%'
+                  }}>
+                    {item.icon}
+                    <ListItemText 
+                      primary={item.text} 
+                      sx={{
+                        ml: 2,
+                        color: '#000000',
+                        '& .MuiListItemText-primary': {
+                          fontWeight: 400,
+                          fontSize: '0.9rem',
+                          color: '#000000',
+                        },
+                      }}
+                    />
+                  </Box>
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+
+        {/* Under Construction Section */}
+        <ListItem disablePadding sx={{ mb: 1 }}>
+          <ListItemButton
+            onClick={handleUnderConstructionToggle}
+            sx={{
+              mx: 1,
+              borderRadius: 1,
+              minHeight: 48,
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              color: '#000000',
+              backgroundColor: 'rgba(255,152,0,0.2)',
+              '&:hover': {
+                backgroundColor: 'rgba(255,152,0,0.3)',
+              },
+            }}
+          >
+            <Box sx={{ 
+              color: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              width: '100%'
+            }}>
+              <ConstructionIcon />
+              {isExpanded && (
+                <>
+                  <ListItemText 
+                    primary="Under Construction" 
+                    sx={{
+                      ml: 2,
+                      color: '#000000',
+                      '& .MuiListItemText-primary': {
+                        fontWeight: 600,
+                        color: '#000000',
+                      },
+                    }}
+                  />
+                  {underConstructionOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </>
+              )}
+            </Box>
+          </ListItemButton>
+        </ListItem>
+
+        <Collapse in={underConstructionOpen && isExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {underConstructionItems.map((item) => (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => handleNavigation(item.path)}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    mx: 1,
+                    ml: 3,
+                    borderRadius: 1,
+                    minHeight: 40,
+                    color: '#000000',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,152,0,0.2)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(255,152,0,0.3)',
+                      color: '#000000',
+                      '&:hover': {
+                        backgroundColor: 'rgba(255,152,0,0.3)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ 
+                    color: '#000000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%'
+                  }}>
+                    {item.icon}
+                    <ListItemText 
+                      primary={item.text} 
+                      sx={{
+                        ml: 2,
+                        color: '#000000',
+                        '& .MuiListItemText-primary': {
+                          fontWeight: 400,
+                          fontSize: '0.9rem',
+                          color: '#000000',
+                        },
+                      }}
+                    />
+                  </Box>
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
       </List>
       
       {!isExpanded && (
@@ -269,7 +482,7 @@ const Sidebar = ({ onToggle, onPin }) => {
           transform: 'translateX(-50%)' 
         }}>
           <Tooltip title="Expand sidebar">
-            <IconButton onClick={toggleSidebar} size="small">
+            <IconButton onClick={toggleSidebar} size="small" sx={{ color: '#000000' }}>
               <ChevronRightIcon />
             </IconButton>
           </Tooltip>

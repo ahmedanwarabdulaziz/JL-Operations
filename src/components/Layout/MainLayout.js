@@ -26,13 +26,14 @@ const MainLayout = ({ children }) => {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>
       <Sidebar onToggle={handleSidebarToggle} onPin={handleSidebarPin} />
       <Box 
         sx={{ 
           display: 'flex', 
           flexDirection: 'column', 
           flexGrow: 1,
+          backgroundColor: 'background.default',
           marginLeft: sidebarExpanded ? '280px' : '80px',
           transition: 'margin-left 0.3s ease',
         }}
@@ -42,7 +43,7 @@ const MainLayout = ({ children }) => {
           component="main" 
           sx={{ 
             flexGrow: 1, 
-            backgroundColor: '#f5f5f5',
+            backgroundColor: 'background.default',
             overflow: 'auto', // Allow scrolling
             p: 3, // Professional padding for all pages
           }}

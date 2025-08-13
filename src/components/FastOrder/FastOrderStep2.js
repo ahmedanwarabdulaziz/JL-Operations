@@ -144,17 +144,17 @@ const FastOrderStep2 = ({
 
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom sx={{ color: '#b98f33', fontWeight: 'bold' }}>
         Order Details
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" sx={{ mb: 3, color: '#ffffff' }}>
         Configure order details with toggles for different sections
       </Typography>
 
       {/* Bill Invoice - Always shown */}
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#ffffff' }}>
             Bill number is automatically generated from the highest existing bill number (6 digits)
           </Typography>
           <Tooltip title="Refresh bill number">
@@ -163,7 +163,16 @@ const FastOrderStep2 = ({
               startIcon={<RefreshIcon />}
               onClick={handleRefreshBillNumber}
               variant="outlined"
-              sx={{ minWidth: 'auto', px: 1 }}
+              sx={{ 
+                minWidth: 'auto', 
+                px: 1,
+                borderColor: '#b98f33',
+                color: '#b98f33',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                }
+              }}
             >
               Refresh
             </Button>
@@ -182,24 +191,37 @@ const FastOrderStep2 = ({
             pattern: '[0-9]{6}'
           }}
           sx={{
+            backgroundColor: '#2a2a2a',
             '& .MuiOutlinedInput-notchedOutline': {
               borderWidth: '2px',
-              borderColor: errors.billInvoice ? 'error.main' : 'grey.300',
+              borderColor: errors.billInvoice ? 'error.main' : '#333333',
               borderRadius: 2,
             },
             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.billInvoice ? 'error.main' : 'primary.main',
+              borderColor: errors.billInvoice ? 'error.main' : '#b98f33',
             },
             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: errors.billInvoice ? 'error.main' : 'primary.main',
+              borderColor: errors.billInvoice ? 'error.main' : '#b98f33',
               borderWidth: '2px',
+            },
+            '& .MuiInputLabel-root': {
+              color: '#b98f33',
+            },
+            '& .MuiInputBase-input': {
+              color: '#ffffff',
             },
           }}
         />
       </Box>
 
       {/* Toggle 1: Order Details */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ 
+        mb: 3, 
+        backgroundColor: '#2a2a2a',
+        border: '1px solid #333333',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+        background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+      }}>
         <CardContent>
           <FormControlLabel
             control={
@@ -208,7 +230,7 @@ const FastOrderStep2 = ({
                 onChange={(e) => onToggleChange('orderDetails', e.target.checked)}
               />
             }
-            label="Order Details"
+            label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Order Details</Typography>}
           />
           
           {toggles.orderDetails && (
@@ -220,17 +242,24 @@ const FastOrderStep2 = ({
                 onChange={(e) => handleOrderDetailsChange('description', e.target.value)}
                 placeholder="Describe the order details"
                 sx={{
+                  backgroundColor: '#2a2a2a',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderWidth: '2px',
-                    borderColor: 'grey.300',
+                    borderColor: '#333333',
                     borderRadius: 2,
                   },
                   '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                   },
                   '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                     borderWidth: '2px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
                   },
                 }}
               />
@@ -241,17 +270,37 @@ const FastOrderStep2 = ({
                   onChange={(e) => handleOrderDetailsChange('platform', e.target.value)}
                   displayEmpty
                   sx={{
+                    backgroundColor: '#2a2a2a',
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderWidth: '2px',
-                      borderColor: errors.platform ? 'error.main' : 'grey.300',
+                      borderColor: errors.platform ? 'error.main' : '#333333',
                       borderRadius: 2,
                     },
                     '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: errors.platform ? 'error.main' : 'primary.main',
+                      borderColor: errors.platform ? 'error.main' : '#b98f33',
                     },
                     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: errors.platform ? 'error.main' : 'primary.main',
+                      borderColor: errors.platform ? 'error.main' : '#b98f33',
                       borderWidth: '2px',
+                    },
+                    '& .MuiSelect-select': {
+                      color: '#ffffff',
+                    },
+                    '& .MuiSelect-icon': {
+                      color: '#b98f33',
+                    },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        backgroundColor: '#2a2a2a',
+                        '& .MuiMenuItem-root': {
+                          color: '#ffffff',
+                          '&:hover': {
+                            backgroundColor: '#3a3a3a',
+                          },
+                        },
+                      },
                     },
                   }}
                 >
@@ -284,17 +333,24 @@ const FastOrderStep2 = ({
                 }}
                 required
                 sx={{
+                  backgroundColor: '#2a2a2a',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderWidth: '2px',
-                    borderColor: errors.startDate ? 'error.main' : 'grey.300',
+                    borderColor: errors.startDate ? 'error.main' : '#333333',
                     borderRadius: 2,
                   },
                   '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: errors.startDate ? 'error.main' : 'primary.main',
+                    borderColor: errors.startDate ? 'error.main' : '#b98f33',
                   },
                   '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: errors.startDate ? 'error.main' : 'primary.main',
+                    borderColor: errors.startDate ? 'error.main' : '#b98f33',
                     borderWidth: '2px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
                   },
                 }}
               />
@@ -306,17 +362,24 @@ const FastOrderStep2 = ({
                 onChange={(e) => handleOrderDetailsChange('timeline', e.target.value)}
                 placeholder="e.g., 2 weeks, 1 month, etc."
                 sx={{
+                  backgroundColor: '#2a2a2a',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderWidth: '2px',
-                    borderColor: 'grey.300',
+                    borderColor: '#333333',
                     borderRadius: 2,
                   },
                   '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                   },
                   '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                     borderWidth: '2px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
                   },
                 }}
               />
@@ -327,15 +390,21 @@ const FastOrderStep2 = ({
 
       {/* Furniture Groups - Furniture Type always shown */}
       {data.furnitureData.groups.map((group, index) => (
-        <Card key={group.id || index} sx={{ mb: 3 }}>
+        <Card key={group.id || index} sx={{ 
+          mb: 3, 
+          backgroundColor: '#2a2a2a',
+          border: '1px solid #333333',
+          boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+          background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+        }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Typography variant="h6">
+              <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
                 Furniture Group {index + 1}
               </Typography>
               <IconButton 
                 onClick={() => removeFurnitureGroup(index)}
-                color="error"
+                sx={{ color: '#ff6b6b' }}
                 size="small"
               >
                 <DeleteIcon />
@@ -352,24 +421,38 @@ const FastOrderStep2 = ({
                 placeholder="Enter furniture type"
                 required
                 sx={{
+                  backgroundColor: '#2a2a2a',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderWidth: '2px',
-                    borderColor: 'grey.300',
+                    borderColor: '#333333',
                     borderRadius: 2,
                   },
                   '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                   },
                   '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                     borderWidth: '2px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
                   },
                 }}
               />
             </Box>
 
             {/* Toggle 2: Materials */}
-            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+            <Card sx={{ 
+              mb: 3, 
+              p: 2, 
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -377,7 +460,7 @@ const FastOrderStep2 = ({
                     onChange={(e) => onToggleChange('materials', e.target.checked)}
                   />
                 }
-                label="Materials"
+                label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Materials</Typography>}
               />
               
               {toggles.materials && (
@@ -389,17 +472,24 @@ const FastOrderStep2 = ({
                         onChange={(e) => updateFurnitureGroup(index, 'materialCompany', e.target.value)}
                         displayEmpty
                         sx={{
+                          backgroundColor: '#2a2a2a',
                           '& .MuiOutlinedInput-notchedOutline': {
                             borderWidth: '2px',
-                            borderColor: errors.materialCompany ? 'error.main' : 'grey.300',
+                            borderColor: errors.materialCompany ? 'error.main' : '#333333',
                             borderRadius: 2,
                           },
                           '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: errors.materialCompany ? 'error.main' : 'primary.main',
+                            borderColor: errors.materialCompany ? 'error.main' : '#b98f33',
                           },
                           '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                            borderColor: errors.materialCompany ? 'error.main' : 'primary.main',
+                            borderColor: errors.materialCompany ? 'error.main' : '#b98f33',
                             borderWidth: '2px',
+                          },
+                          '& .MuiSelect-select': {
+                            color: '#ffffff',
+                          },
+                          '& .MuiSelect-icon': {
+                            color: '#b98f33',
                           },
                         }}
                       >
@@ -429,17 +519,24 @@ const FastOrderStep2 = ({
                       error={!!errors.materialCode}
                       helperText={errors.materialCode}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.materialCode ? 'error.main' : 'grey.300',
+                          borderColor: errors.materialCode ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialCode ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialCode ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialCode ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialCode ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -456,17 +553,24 @@ const FastOrderStep2 = ({
                       error={!!errors.materialQnty}
                       helperText={errors.materialQnty}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.materialQnty ? 'error.main' : 'grey.300',
+                          borderColor: errors.materialQnty ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialQnty ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialQnty ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -483,17 +587,24 @@ const FastOrderStep2 = ({
                       error={!!errors.materialPrice}
                       helperText={errors.materialPrice}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.materialPrice ? 'error.main' : 'grey.300',
+                          borderColor: errors.materialPrice ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialPrice ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.materialPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.materialPrice ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -503,7 +614,14 @@ const FastOrderStep2 = ({
             </Card>
 
             {/* Toggle 3: Labour */}
-            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+            <Card sx={{ 
+              mb: 3, 
+              p: 2, 
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -511,7 +629,7 @@ const FastOrderStep2 = ({
                     onChange={(e) => onToggleChange('labour', e.target.checked)}
                   />
                 }
-                label="Labour"
+                label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Labour</Typography>}
               />
               
               {toggles.labour && (
@@ -528,17 +646,24 @@ const FastOrderStep2 = ({
                       error={!!errors.labourPrice}
                       helperText={errors.labourPrice}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.labourPrice ? 'error.main' : 'grey.300',
+                          borderColor: errors.labourPrice ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.labourPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.labourPrice ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.labourPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.labourPrice ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -551,17 +676,24 @@ const FastOrderStep2 = ({
                       onChange={(e) => updateFurnitureGroup(index, 'labourNote', e.target.value)}
                       placeholder="Labour notes"
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: 'grey.300',
+                          borderColor: '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -578,17 +710,24 @@ const FastOrderStep2 = ({
                       error={!!errors.labourQnty}
                       helperText={errors.labourQnty}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.labourQnty ? 'error.main' : 'grey.300',
+                          borderColor: errors.labourQnty ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.labourQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.labourQnty ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.labourQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.labourQnty ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -598,7 +737,14 @@ const FastOrderStep2 = ({
             </Card>
 
             {/* Toggle 4: Foam */}
-            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+            <Card sx={{ 
+              mb: 3, 
+              p: 2, 
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -606,7 +752,7 @@ const FastOrderStep2 = ({
                     onChange={(e) => onToggleChange('foam', e.target.checked)}
                   />
                 }
-                label="Foam"
+                label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Foam</Typography>}
               />
               
               {toggles.foam && (
@@ -623,17 +769,24 @@ const FastOrderStep2 = ({
                       error={!!errors.foamPrice}
                       helperText={errors.foamPrice}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.foamPrice ? 'error.main' : 'grey.300',
+                          borderColor: errors.foamPrice ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.foamPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.foamPrice ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.foamPrice ? 'error.main' : 'primary.main',
+                          borderColor: errors.foamPrice ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -646,17 +799,24 @@ const FastOrderStep2 = ({
                       onChange={(e) => updateFurnitureGroup(index, 'foamThickness', e.target.value)}
                       placeholder="Thickness"
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: 'grey.300',
+                          borderColor: '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -669,17 +829,24 @@ const FastOrderStep2 = ({
                       onChange={(e) => updateFurnitureGroup(index, 'foamNote', e.target.value)}
                       placeholder="Foam notes"
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: 'grey.300',
+                          borderColor: '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -696,17 +863,24 @@ const FastOrderStep2 = ({
                       error={!!errors.foamQnty}
                       helperText={errors.foamQnty}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.foamQnty ? 'error.main' : 'grey.300',
+                          borderColor: errors.foamQnty ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.foamQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.foamQnty ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.foamQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.foamQnty ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -716,7 +890,14 @@ const FastOrderStep2 = ({
             </Card>
 
             {/* Toggle 5: Painting */}
-            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+            <Card sx={{ 
+              mb: 3, 
+              p: 2, 
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -731,7 +912,7 @@ const FastOrderStep2 = ({
                     }}
                   />
                 }
-                label="Painting"
+                label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Painting</Typography>}
               />
               
               {toggles.painting && (
@@ -748,17 +929,24 @@ const FastOrderStep2 = ({
                       error={!!errors.paintingLabour}
                       helperText={errors.paintingLabour}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.paintingLabour ? 'error.main' : 'grey.300',
+                          borderColor: errors.paintingLabour ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.paintingLabour ? 'error.main' : 'primary.main',
+                          borderColor: errors.paintingLabour ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.paintingLabour ? 'error.main' : 'primary.main',
+                          borderColor: errors.paintingLabour ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -771,17 +959,24 @@ const FastOrderStep2 = ({
                       onChange={(e) => updateFurnitureGroup(index, 'paintingNote', e.target.value)}
                       placeholder="Painting notes"
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: 'grey.300',
+                          borderColor: '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -798,17 +993,24 @@ const FastOrderStep2 = ({
                       error={!!errors.paintingQnty}
                       helperText={errors.paintingQnty}
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: errors.paintingQnty ? 'error.main' : 'grey.300',
+                          borderColor: errors.paintingQnty ? 'error.main' : '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.paintingQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.paintingQnty ? 'error.main' : '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: errors.paintingQnty ? 'error.main' : 'primary.main',
+                          borderColor: errors.paintingQnty ? 'error.main' : '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
                         },
                       }}
                     />
@@ -818,7 +1020,14 @@ const FastOrderStep2 = ({
             </Card>
 
             {/* Toggle 6: Customer Note */}
-            <Card sx={{ mb: 3, p: 2, backgroundColor: '#f8f9fa' }}>
+            <Card sx={{ 
+              mb: 3, 
+              p: 2, 
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+            }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -826,7 +1035,7 @@ const FastOrderStep2 = ({
                     onChange={(e) => onToggleChange('customerNote', e.target.checked)}
                   />
                 }
-                label="Customer Note"
+                label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Customer Note</Typography>}
               />
               
               {toggles.customerNote && (
@@ -841,17 +1050,24 @@ const FastOrderStep2 = ({
                   placeholder="Enter customer notes for this furniture item"
                   sx={{
                     mt: 2,
+                    backgroundColor: '#2a2a2a',
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderWidth: '2px',
-                      borderColor: 'grey.300',
+                      borderColor: '#333333',
                       borderRadius: 2,
                     },
                     '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'primary.main',
+                      borderColor: '#b98f33',
                     },
                     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'primary.main',
+                      borderColor: '#b98f33',
                       borderWidth: '2px',
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
                     },
                   }}
                 />
@@ -866,18 +1082,36 @@ const FastOrderStep2 = ({
       {/* Add Furniture Group Button */}
       <Box sx={{ mb: 3 }}>
         <Button
-          variant="outlined"
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={addFurnitureGroup}
+          sx={{
+            backgroundColor: '#b98f33',
+            color: '#000000',
+            border: '2px solid #8b6b1f',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+            '&:hover': {
+              backgroundColor: '#d4af5a',
+              transform: 'translateY(-1px)',
+              boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+            },
+          }}
         >
           Add Furniture Group
         </Button>
       </Box>
 
       {/* Payment Section - Always shown */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ 
+        mb: 3, 
+        backgroundColor: '#2a2a2a',
+        border: '1px solid #333333',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+        background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+      }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" gutterBottom sx={{ color: '#b98f33', fontWeight: 'bold' }}>
             Payment Details
           </Typography>
           
@@ -894,17 +1128,24 @@ const FastOrderStep2 = ({
               placeholder="Enter required deposit amount"
               helperText="Amount the customer needs to pay"
               sx={{
+                backgroundColor: '#2a2a2a',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderWidth: '2px',
-                  borderColor: 'grey.300',
+                  borderColor: '#333333',
                   borderRadius: 2,
                 },
                 '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: '#b98f33',
                 },
                 '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: '#b98f33',
                   borderWidth: '2px',
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
                 },
               }}
             />
@@ -919,7 +1160,7 @@ const FastOrderStep2 = ({
                   onChange={(e) => handlePaymentChange('amountPaidEnabled', e.target.checked)}
                 />
               }
-              label="Enable Amount Paid by Customer"
+              label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Enable Amount Paid by Customer</Typography>}
             />
           </Box>
 
@@ -937,17 +1178,24 @@ const FastOrderStep2 = ({
                 placeholder="Enter amount actually paid"
                 helperText="Amount the customer has actually paid"
                 sx={{
+                  backgroundColor: '#2a2a2a',
                   '& .MuiOutlinedInput-notchedOutline': {
                     borderWidth: '2px',
-                    borderColor: 'grey.300',
+                    borderColor: '#333333',
                     borderRadius: 2,
                   },
                   '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                   },
                   '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main',
+                    borderColor: '#b98f33',
                     borderWidth: '2px',
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
                   },
                 }}
               />
@@ -967,7 +1215,7 @@ const FastOrderStep2 = ({
                   }}
                 />
               }
-              label="Enable Pickup & Delivery"
+              label={<Typography sx={{ color: '#b98f33', fontWeight: 'bold' }}>Enable Pickup & Delivery</Typography>}
             />
           </Box>
 
@@ -982,17 +1230,24 @@ const FastOrderStep2 = ({
                       onChange={(e) => handleServiceTypeChange(e.target.value)}
                       displayEmpty
                       sx={{
+                        backgroundColor: '#2a2a2a',
                         '& .MuiOutlinedInput-notchedOutline': {
                           borderWidth: '2px',
-                          borderColor: 'grey.300',
+                          borderColor: '#333333',
                           borderRadius: 2,
                         },
                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                         },
                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'primary.main',
+                          borderColor: '#b98f33',
                           borderWidth: '2px',
+                        },
+                        '& .MuiSelect-select': {
+                          color: '#ffffff',
+                        },
+                        '& .MuiSelect-icon': {
+                          color: '#b98f33',
                         },
                       }}
                     >
@@ -1016,17 +1271,24 @@ const FastOrderStep2 = ({
                     inputProps={{ min: 0, step: 0.01 }}
                     placeholder="Enter service cost"
                     sx={{
+                      backgroundColor: '#2a2a2a',
                       '& .MuiOutlinedInput-notchedOutline': {
                         borderWidth: '2px',
-                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'grey.300',
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : '#333333',
                         borderRadius: 2,
                       },
                       '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : '#b98f33',
                       },
                       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                        borderColor: errors.pickupDeliveryCost ? 'error.main' : 'primary.main',
+                        borderColor: errors.pickupDeliveryCost ? 'error.main' : '#b98f33',
                         borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
                       },
                     }}
                   />
@@ -1046,17 +1308,24 @@ const FastOrderStep2 = ({
               onChange={(e) => handlePaymentChange('notes', e.target.value)}
               placeholder="Enter any additional notes or special instructions"
               sx={{
+                backgroundColor: '#2a2a2a',
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderWidth: '2px',
-                  borderColor: 'grey.300',
+                  borderColor: '#333333',
                   borderRadius: 2,
                 },
                 '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: '#b98f33',
                 },
                 '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: 'primary.main',
+                  borderColor: '#b98f33',
                   borderWidth: '2px',
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
                 },
               }}
             />

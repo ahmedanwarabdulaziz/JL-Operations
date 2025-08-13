@@ -287,6 +287,14 @@ const Step1PersonalInfo = ({
             variant="outlined"
             onClick={handleCustomerSearch}
             startIcon={<PersonIcon />}
+            sx={{
+              borderColor: '#e0e0e0',
+              color: '#666',
+              '&:hover': {
+                borderColor: '#bdbdbd',
+                backgroundColor: '#f5f5f5'
+              }
+            }}
           >
             Search Existing Customers
           </Button>
@@ -348,6 +356,14 @@ const Step1PersonalInfo = ({
                     variant="outlined"
                     size="small"
                     onClick={() => handleUseExistingCustomer(customer)}
+                    sx={{
+                      borderColor: '#e0e0e0',
+                      color: '#666',
+                      '&:hover': {
+                        borderColor: '#bdbdbd',
+                        backgroundColor: '#f5f5f5'
+                      }
+                    }}
                   >
                     Use This Customer
                   </Button>
@@ -358,10 +374,41 @@ const Step1PersonalInfo = ({
           </List>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCreateNewCustomer} color="primary">
+          <Button onClick={handleCreateNewCustomer} 
+          sx={{ 
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
+            '&:hover': {
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
+            }
+          }}>
             Create New Customer
           </Button>
-          <Button onClick={() => setDuplicateDialogOpen(false)}>
+          <Button onClick={() => setDuplicateDialogOpen(false)}
+          sx={{
+            borderColor: '#e0e0e0',
+            color: '#666',
+            '&:hover': {
+              borderColor: '#bdbdbd',
+              backgroundColor: '#f5f5f5'
+            }
+          }}>
             Cancel
           </Button>
         </DialogActions>

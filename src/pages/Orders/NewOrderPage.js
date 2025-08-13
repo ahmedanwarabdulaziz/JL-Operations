@@ -849,7 +849,36 @@ const NewOrderPage = () => {
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}
-            sx={{ mr: 1 }}
+            sx={{ 
+              mr: 1,
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
           >
             Back
           </Button>
@@ -857,7 +886,15 @@ const NewOrderPage = () => {
             <Button
               variant="outlined"
               onClick={() => navigate('/orders')}
-              sx={{ mr: 1 }}
+              sx={{ 
+                mr: 1,
+                borderColor: '#e0e0e0',
+                color: '#666',
+                '&:hover': {
+                  borderColor: '#bdbdbd',
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
             >
               Cancel
             </Button>
@@ -865,6 +902,35 @@ const NewOrderPage = () => {
               variant="contained"
               onClick={handleNext}
               disabled={loading}
+              sx={{ 
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #4CAF50',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
+                '&:hover': {
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #45a049',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                },
+                '&:disabled': {
+                  background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                  border: '3px solid #666666',
+                  color: '#666666',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  borderRadius: '6px 6px 0 0',
+                  pointerEvents: 'none'
+                }
+              }}
             >
               {activeStep === steps.length - 1 ? (isEditMode ? 'Update Order' : 'Create Order') : 'Next'}
             </Button>
@@ -931,6 +997,14 @@ const NewOrderPage = () => {
                       setDuplicateDialogOpen(false);
                       handleProceedToNextStep();
                     }}
+                    sx={{
+                      borderColor: '#e0e0e0',
+                      color: '#666',
+                      '&:hover': {
+                        borderColor: '#bdbdbd',
+                        backgroundColor: '#f5f5f5'
+                      }
+                    }}
                   >
                     Use This Customer
                   </Button>
@@ -944,7 +1018,30 @@ const NewOrderPage = () => {
           <Button onClick={() => {
             setDuplicateDialogOpen(false);
             handleProceedToNextStep();
-          }} color="primary">
+          }} 
+          sx={{ 
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
+            '&:hover': {
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
+            }
+          }}>
             Create New Customer
           </Button>
           <Button onClick={() => setDuplicateDialogOpen(false)}>

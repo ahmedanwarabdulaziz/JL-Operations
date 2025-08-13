@@ -269,7 +269,7 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 200,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
           <PersonIcon sx={{ fontSize: 20, mr: 1, color: 'primary.main' }} />
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
             {params.value}
@@ -283,7 +283,7 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 250,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
           <EmailIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
           <Typography variant="body2" color="text.secondary">
             {params.value}
@@ -297,7 +297,7 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 150,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
           <PhoneIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
           <Typography variant="body2" color="text.secondary">
             {params.value || 'N/A'}
@@ -311,7 +311,7 @@ const CustomersPage = () => {
       flex: 1,
       minWidth: 200,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
           <LocationIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
           <Typography variant="body2" color="text.secondary" sx={{ 
             overflow: 'hidden',
@@ -329,7 +329,7 @@ const CustomersPage = () => {
       width: 120,
       sortable: false,
       renderCell: (params) => (
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', width: '100%', height: '100%' }}>
           <Tooltip title="Edit Customer">
             <IconButton
               size="small"
@@ -344,20 +344,20 @@ const CustomersPage = () => {
               <EditIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete Customer">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => handleDelete(params.row.id)}
-              sx={{
-                '&:hover': {
-                  backgroundColor: '#ffebee'
-                }
-              }}
-            >
-              <DeleteIcon />
-            </IconButton>
-          </Tooltip>
+                      <Tooltip title="Delete Customer">
+              <IconButton
+                size="small"
+                color="error"
+                onClick={() => handleDelete(params.row.id)}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: '#ffebee'
+                  }
+                }}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
         </Box>
       )
     }
@@ -376,9 +376,10 @@ const CustomersPage = () => {
       {/* Professional Header */}
       <Card sx={{ 
         mb: 3,
-        backgroundColor: '#274290',
-        color: 'white',
-        borderRadius: 2
+        backgroundColor: 'background.paper',
+        color: 'text.primary',
+        borderRadius: 2,
+        border: '1px solid #333333'
       }}>
         <CardContent sx={{ p: 3 }}>
           <Box sx={{ 
@@ -401,10 +402,10 @@ const CustomersPage = () => {
               startIcon={<AddIcon />}
               onClick={handleAdd}
               sx={{ 
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
+                backgroundColor: 'primary.main',
+                color: 'primary.contrastText',
                 '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                  backgroundColor: 'primary.light',
                 }
               }}
             >
@@ -536,11 +537,14 @@ const CustomersPage = () => {
             }}
             sx={{
               '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid #e0e0e0'
+                borderBottom: '1px solid #e0e0e0',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px 16px'
               },
               '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: theme.palette.grey[50],
-                borderBottom: '2px solid #e0e0e0',
+                backgroundColor: 'background.paper',
+                borderBottom: '2px solid #333333',
                 fontWeight: 'bold'
               },
               '& .MuiDataGrid-root': {
@@ -559,7 +563,13 @@ const CustomersPage = () => {
                 width: '100% !important'
               },
               '& .MuiDataGrid-row:hover': {
-                backgroundColor: '#f5f5f5'
+                backgroundColor: '#3a3a3a'
+              },
+              '& .MuiDataGrid-cell:focus': {
+                outline: 'none'
+              },
+              '& .MuiDataGrid-cell:focus-within': {
+                outline: 'none'
               }
             }}
           />
@@ -569,12 +579,14 @@ const CustomersPage = () => {
       {/* Add/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCancel} maxWidth="md" fullWidth>
         <DialogTitle sx={{ 
-          backgroundColor: '#274290',
-          color: 'white'
+          backgroundColor: '#b98f33',
+          color: '#000000'
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <PersonIcon sx={{ mr: 1 }} />
-            {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+            <PersonIcon sx={{ mr: 1, color: '#000000' }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+              {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+            </Typography>
           </Box>
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
@@ -645,7 +657,15 @@ const CustomersPage = () => {
             onClick={handleCancel} 
             disabled={crudLoading}
             variant="outlined"
-            sx={{ borderRadius: 2 }}
+            sx={{ 
+              borderRadius: 2,
+              borderColor: '#e0e0e0',
+              color: '#666',
+              '&:hover': {
+                borderColor: '#bdbdbd',
+                backgroundColor: '#f5f5f5'
+              }
+            }}
           >
             Cancel
           </Button>
@@ -653,13 +673,36 @@ const CustomersPage = () => {
             onClick={handleSubmit} 
             variant="contained" 
             disabled={crudLoading}
-                          sx={{ 
-                borderRadius: 2,
-                backgroundColor: '#274290',
-                '&:hover': {
-                  backgroundColor: '#1e2d5a'
-                }
-              }}
+            sx={{ 
+              borderRadius: 2,
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
           >
             {crudLoading ? 'Saving...' : (editingCustomer ? 'Update Customer' : 'Add Customer')}
           </Button>

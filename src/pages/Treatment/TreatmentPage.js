@@ -184,7 +184,7 @@ const TreatmentPage = () => {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <CircularProgress size={60} sx={{ color: '#274290' }} />
+        <CircularProgress size={60} sx={{ color: '#b98f33' }} />
       </Box>
     );
   }
@@ -192,18 +192,35 @@ const TreatmentPage = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
           Treatment Management
         </Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ color: '#000000' }} />}
           onClick={() => handleOpenDialog()}
           sx={{ 
             px: 3,
-            backgroundColor: '#274290',
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
             '&:hover': {
-              backgroundColor: '#1e2d5a'
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
             }
           }}
         >
@@ -212,7 +229,7 @@ const TreatmentPage = () => {
       </Box>
 
       {treatments.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
+        <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: 'background.paper' }}>
           <Typography variant="h6" color="text.secondary" gutterBottom>
             No treatments found
           </Typography>
@@ -221,12 +238,29 @@ const TreatmentPage = () => {
           </Typography>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={<AddIcon sx={{ color: '#000000' }} />}
             onClick={() => handleOpenDialog()}
             sx={{
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >
@@ -236,19 +270,19 @@ const TreatmentPage = () => {
       ) : (
         <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
           <Table>
-            <TableHead sx={{ backgroundColor: '#274290' }}>
+            <TableHead sx={{ backgroundColor: '#b98f33' }}>
               <TableRow>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Treatment Kind</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Material Companies</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Website Link</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Treatment Kind</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Material Companies</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Website Link</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {treatments.map((treatment) => (
-                <TableRow key={treatment.id} sx={{ '&:hover': { backgroundColor: '#f5f5f5' } }}>
+                <TableRow key={treatment.id} sx={{ '&:hover': { backgroundColor: '#2a2a2a' } }}>
                   <TableCell>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 500, color: '#b98f33' }}>
                       {treatment.treatmentKind}
                     </Typography>
                   </TableCell>
@@ -261,9 +295,9 @@ const TreatmentPage = () => {
                             label={company}
                             size="small"
                             sx={{
-                              backgroundColor: '#e3f2fd',
-                              color: '#274290',
-                              border: '1px solid #bbdefb'
+                              backgroundColor: '#d4af5a',
+                              color: '#000000',
+                              border: '1px solid #b98f33'
                             }}
                           />
                         ))
@@ -300,8 +334,9 @@ const TreatmentPage = () => {
                           onClick={() => handleOpenDialog(treatment)}
                           size="small"
                           sx={{ 
+                            color: '#b98f33',
                             '&:hover': { 
-                              backgroundColor: '#e3f2fd' 
+                              backgroundColor: '#2a2a2a' 
                             } 
                           }}
                         >
@@ -314,8 +349,9 @@ const TreatmentPage = () => {
                           onClick={() => handleDelete(treatment)}
                           size="small"
                           sx={{ 
+                            color: '#f44336',
                             '&:hover': { 
-                              backgroundColor: '#ffebee' 
+                              backgroundColor: '#2a2a2a' 
                             } 
                           }}
                         >
@@ -346,8 +382,8 @@ const TreatmentPage = () => {
       >
         <DialogTitle 
           sx={{ 
-            backgroundColor: '#274290',
-            color: 'white',
+            backgroundColor: '#b98f33',
+            color: '#000000',
             py: 3,
             display: 'flex',
             alignItems: 'center',
@@ -355,17 +391,17 @@ const TreatmentPage = () => {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <CategoryIcon />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            <CategoryIcon sx={{ color: '#000000' }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
               {editingTreatment ? 'Edit Treatment' : 'Add New Treatment'}
             </Typography>
           </Box>
           <IconButton 
             onClick={handleCloseDialog}
             sx={{ 
-              color: 'white',
+              color: '#000000',
               '&:hover': { 
-                backgroundColor: 'rgba(255,255,255,0.1)' 
+                backgroundColor: 'rgba(0,0,0,0.1)' 
               } 
             }}
           >
@@ -381,7 +417,7 @@ const TreatmentPage = () => {
                 <Card 
                   variant="outlined" 
                   sx={{ 
-                    border: '2px solid #e3f2fd',
+                    border: '2px solid #b98f33',
                     borderRadius: 2
                   }}
                 >
@@ -391,13 +427,13 @@ const TreatmentPage = () => {
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
                       }}
                     >
-                      <CategoryIcon sx={{ fontSize: 20 }} />
+                      <CategoryIcon sx={{ fontSize: 20, color: '#b98f33' }} />
                       Treatment Information
                     </Typography>
                     <TextField
@@ -411,20 +447,20 @@ const TreatmentPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#274290',
+                            borderColor: '#b98f33',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#274290',
+                            borderColor: '#b98f33',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#274290',
+                          color: '#b98f33',
                         },
                       }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <CategoryIcon sx={{ color: '#274290' }} />
+                            <CategoryIcon sx={{ color: '#b98f33' }} />
                           </InputAdornment>
                         ),
                       }}
@@ -438,7 +474,7 @@ const TreatmentPage = () => {
                 <Card 
                   variant="outlined" 
                   sx={{ 
-                    border: '2px solid #e3f2fd',
+                    border: '2px solid #b98f33',
                     borderRadius: 2
                   }}
                 >
@@ -448,13 +484,13 @@ const TreatmentPage = () => {
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
                       }}
                     >
-                      <BusinessIcon sx={{ fontSize: 20 }} />
+                      <BusinessIcon sx={{ fontSize: 20, color: '#b98f33' }} />
                       Associated Material Companies
                     </Typography>
                     
@@ -464,14 +500,14 @@ const TreatmentPage = () => {
                         sx={{
                           '& .MuiOutlinedInput-root': {
                             '&:hover fieldset': {
-                              borderColor: '#274290',
+                              borderColor: '#b98f33',
                             },
                             '&.Mui-focused fieldset': {
-                              borderColor: '#274290',
+                              borderColor: '#b98f33',
                             },
                           },
                           '& .MuiInputLabel-root.Mui-focused': {
-                            color: '#274290',
+                            color: '#b98f33',
                           },
                         }}
                       >
@@ -491,7 +527,7 @@ const TreatmentPage = () => {
                           disabled={companiesLoading}
                           startAdornment={
                             <InputAdornment position="start">
-                              <BusinessIcon sx={{ color: '#274290' }} />
+                              <BusinessIcon sx={{ color: '#b98f33' }} />
                             </InputAdornment>
                           }
                         >
@@ -519,7 +555,7 @@ const TreatmentPage = () => {
                           sx={{ 
                             mb: 1, 
                             fontWeight: 500,
-                            color: '#274290'
+                            color: '#b98f33'
                           }}
                         >
                           Selected Companies:
@@ -549,7 +585,7 @@ const TreatmentPage = () => {
                       <Box 
                         sx={{ 
                           p: 2, 
-                          backgroundColor: '#f5f5f5', 
+                          backgroundColor: 'background.paper', 
                           borderRadius: 1,
                           textAlign: 'center'
                         }}
@@ -568,7 +604,7 @@ const TreatmentPage = () => {
                 <Card 
                   variant="outlined" 
                   sx={{ 
-                    border: '2px solid #e3f2fd',
+                    border: '2px solid #b98f33',
                     borderRadius: 2
                   }}
                 >
@@ -578,13 +614,13 @@ const TreatmentPage = () => {
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
                       }}
                     >
-                      <LinkIcon sx={{ fontSize: 20 }} />
+                      <LinkIcon sx={{ fontSize: 20, color: '#b98f33' }} />
                       Website Information
                     </Typography>
                     <TextField
@@ -598,20 +634,20 @@ const TreatmentPage = () => {
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           '&:hover fieldset': {
-                            borderColor: '#274290',
+                            borderColor: '#b98f33',
                           },
                           '&.Mui-focused fieldset': {
-                            borderColor: '#274290',
+                            borderColor: '#b98f33',
                           },
                         },
                         '& .MuiInputLabel-root.Mui-focused': {
-                          color: '#274290',
+                          color: '#b98f33',
                         },
                       }}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <LinkIcon sx={{ color: '#274290' }} />
+                            <LinkIcon sx={{ color: '#b98f33' }} />
                           </InputAdornment>
                         ),
                       }}
@@ -628,7 +664,7 @@ const TreatmentPage = () => {
         <DialogActions 
           sx={{ 
             p: 3, 
-            backgroundColor: '#f8f9fa',
+            backgroundColor: 'background.paper',
             gap: 2
           }}
         >
@@ -650,15 +686,35 @@ const TreatmentPage = () => {
             onClick={handleSubmit} 
             variant="contained"
             disabled={saving || !formData.treatmentKind.trim()}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+            startIcon={saving ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
             sx={{
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               px: 4,
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
               },
               '&:disabled': {
-                backgroundColor: '#e0e0e0'
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >

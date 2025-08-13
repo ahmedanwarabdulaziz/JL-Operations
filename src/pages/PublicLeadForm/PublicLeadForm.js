@@ -25,13 +25,14 @@ const PublicLeadForm = () => {
     email: '',
     phone: '',
     description: '',
-    imageUrl: ''
+    imageUrls: [] // Changed from imageUrl to imageUrls array
   });
   
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [errors, setErrors] = React.useState({});
-  const [uploadedImageUrl, setUploadedImageUrl] = React.useState('');
+  const [uploadedImages, setUploadedImages] = React.useState([]); // Track uploaded images
+  const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = React.useRef(null);
 
   const handleInputChange = (e) => {
@@ -67,41 +68,61 @@ const PublicLeadForm = () => {
   };
 
   const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB');
-      e.target.value = '';
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      e.target.value = '';
-      return;
-    }
+    setIsUploading(true);
 
     try {
-      const data = await uploadImageToImgBB(file);
+      const uploadPromises = files.map(async (file) => {
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(`File ${file.name} is too large. Must be less than 5MB.`);
+        }
+
+        if (!file.type.startsWith('image/')) {
+          throw new Error(`File ${file.name} is not an image.`);
+        }
+
+        const data = await uploadImageToImgBB(file);
+        
+        if (data.success) {
+          return {
+            url: data.data.url,
+            name: file.name,
+            size: file.size
+          };
+        } else {
+          throw new Error(`Failed to upload ${file.name}: ${data.error?.message || 'Unknown error'}`);
+        }
+      });
+
+      const uploadedImages = await Promise.all(uploadPromises);
       
-      if (data.success) {
-        const imageUrl = data.data.url;
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: imageUrl
-        }));
-        setUploadedImageUrl(imageUrl);
-      } else {
-        console.error('ImgBB upload failed:', data);
-        alert(`Failed to upload image: ${data.error?.message || 'Unknown error'}`);
-        e.target.value = '';
-      }
+      // Add new images to existing ones
+      setUploadedImages(prev => [...prev, ...uploadedImages]);
+      setFormData(prev => ({
+        ...prev,
+        imageUrls: [...prev.imageUrls, ...uploadedImages.map(img => img.url)]
+      }));
+
     } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Error uploading image. Please check your internet connection and try again.');
-      e.target.value = '';
+      console.error('Error uploading images:', error);
+      alert(`Error uploading images: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
+  };
+
+  const removeImage = (indexToRemove) => {
+    setUploadedImages(prev => prev.filter((_, index) => index !== indexToRemove));
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, index) => index !== indexToRemove)
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -129,10 +150,10 @@ const PublicLeadForm = () => {
         email: '',
         phone: '',
         description: '',
-        imageUrl: ''
+        imageUrls: []
       });
       
-      setUploadedImageUrl('');
+      setUploadedImages([]);
       
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -246,7 +267,7 @@ const PublicLeadForm = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="image">Attach Reference Image (Optional)</label>
+            <label htmlFor="image">Attach Reference Images (Optional)</label>
             <input
               type="file"
               id="image"
@@ -254,13 +275,34 @@ const PublicLeadForm = () => {
               ref={fileInputRef}
               onChange={handleImageUpload}
               accept="image/*"
+              multiple
               className="file-input"
             />
-            <small>Supported formats: JPG, PNG, GIF (Max 5MB)</small>
-            {uploadedImageUrl && (
-              <div className="uploaded-image">
-                <p>✅ Image uploaded successfully!</p>
-                <img src={uploadedImageUrl} alt="Uploaded" style={{maxWidth: '200px', maxHeight: '200px', marginTop: '10px'}} />
+            <small>Supported formats: JPG, PNG, GIF (Max 5MB each). You can select multiple images.</small>
+            
+            {isUploading && (
+              <div className="uploading-message">
+                <p>📤 Uploading images...</p>
+              </div>
+            )}
+
+            {uploadedImages.length > 0 && (
+              <div className="uploaded-images">
+                <p>✅ Images uploaded successfully!</p>
+                <div className="images-grid">
+                  {uploadedImages.map((image, index) => (
+                    <div key={index} className="image-item">
+                      <img src={image.url} alt={image.name} />
+                      <button 
+                        type="button" 
+                        className="remove-image-btn"
+                        onClick={() => removeImage(index)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -268,7 +310,7 @@ const PublicLeadForm = () => {
           <button 
             type="submit" 
             className="submit-btn"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploading}
           >
             {isSubmitting ? 'Submitting...' : 'Submit Request'}
           </button>

@@ -162,7 +162,7 @@ const PlatformsPage = () => {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <CircularProgress size={60} sx={{ color: '#274290' }} />
+        <CircularProgress size={60} sx={{ color: '#b98f33' }} />
       </Box>
     );
   }
@@ -170,18 +170,35 @@ const PlatformsPage = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
           Platform Management
         </Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ color: '#000000' }} />}
           onClick={() => handleOpenDialog()}
           sx={{ 
             px: 3,
-            backgroundColor: '#274290',
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            border: '3px solid #4CAF50',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
             '&:hover': {
-              backgroundColor: '#1e2d5a'
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+              border: '3px solid #45a049',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '6px 6px 0 0',
+              pointerEvents: 'none'
             }
           }}
         >
@@ -190,7 +207,7 @@ const PlatformsPage = () => {
       </Box>
 
       {platforms.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: '#f5f5f5' }}>
+        <Paper sx={{ p: 4, textAlign: 'center', backgroundColor: 'background.paper' }}>
           <Typography variant="h6" color="text.secondary" gutterBottom>
             No platforms found
           </Typography>
@@ -199,12 +216,29 @@ const PlatformsPage = () => {
           </Typography>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={<AddIcon sx={{ color: '#000000' }} />}
             onClick={() => handleOpenDialog()}
             sx={{
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >
@@ -214,21 +248,21 @@ const PlatformsPage = () => {
       ) : (
         <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
           <Table>
-            <TableHead sx={{ backgroundColor: '#274290' }}>
+            <TableHead sx={{ backgroundColor: '#b98f33' }}>
               <TableRow>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Platform Name</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Description</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date Added</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Platform Name</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Description</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Date Added</TableCell>
+                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {platforms.map((platform) => (
-                <TableRow key={platform.id} sx={{ '&:hover': { backgroundColor: '#f5f5f5' } }}>
+                <TableRow key={platform.id} sx={{ '&:hover': { backgroundColor: '#2a2a2a' } }}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PlatformIcon sx={{ color: '#274290', fontSize: 20 }} />
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      <PlatformIcon sx={{ color: '#b98f33', fontSize: 20 }} />
+                      <Typography variant="body1" sx={{ fontWeight: 500, color: '#b98f33' }}>
                         {platform.name}
                       </Typography>
                     </Box>
@@ -255,8 +289,9 @@ const PlatformsPage = () => {
                           onClick={() => handleOpenDialog(platform)}
                           size="small"
                           sx={{ 
+                            color: '#b98f33',
                             '&:hover': { 
-                              backgroundColor: '#e3f2fd' 
+                              backgroundColor: '#2a2a2a' 
                             } 
                           }}
                         >
@@ -269,8 +304,9 @@ const PlatformsPage = () => {
                           onClick={() => handleDelete(platform)}
                           size="small"
                           sx={{ 
+                            color: '#f44336',
                             '&:hover': { 
-                              backgroundColor: '#ffebee' 
+                              backgroundColor: '#2a2a2a' 
                             } 
                           }}
                         >
@@ -301,8 +337,8 @@ const PlatformsPage = () => {
       >
         <DialogTitle 
           sx={{ 
-            backgroundColor: '#274290',
-            color: 'white',
+            backgroundColor: '#b98f33',
+            color: '#000000',
             py: 3,
             display: 'flex',
             alignItems: 'center',
@@ -310,17 +346,17 @@ const PlatformsPage = () => {
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <PlatformIcon />
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            <PlatformIcon sx={{ color: '#000000' }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
               {editingPlatform ? 'Edit Platform' : 'Add New Platform'}
             </Typography>
           </Box>
           <IconButton 
             onClick={handleCloseDialog}
             sx={{ 
-              color: 'white',
+              color: '#000000',
               '&:hover': { 
-                backgroundColor: 'rgba(255,255,255,0.1)' 
+                backgroundColor: 'rgba(0,0,0,0.1)' 
               } 
             }}
           >
@@ -336,7 +372,7 @@ const PlatformsPage = () => {
                 <Card 
                   variant="outlined" 
                   sx={{ 
-                    border: '2px solid #e3f2fd',
+                    border: '2px solid #b98f33',
                     borderRadius: 2
                   }}
                 >
@@ -346,13 +382,13 @@ const PlatformsPage = () => {
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
                       }}
                     >
-                      <PlatformIcon sx={{ fontSize: 20 }} />
+                      <PlatformIcon sx={{ fontSize: 20, color: '#b98f33' }} />
                       Platform Information
                     </Typography>
                     <Grid container spacing={2}>
@@ -368,20 +404,20 @@ const PlatformsPage = () => {
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               '&:hover fieldset': {
-                                borderColor: '#274290',
+                                borderColor: '#b98f33',
                               },
                               '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
+                                borderColor: '#b98f33',
                               },
                             },
                             '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
+                              color: '#b98f33',
                             },
                           }}
                           InputProps={{
                             startAdornment: (
                               <InputAdornment position="start">
-                                <PlatformIcon sx={{ color: '#274290' }} />
+                                <PlatformIcon sx={{ color: '#b98f33' }} />
                               </InputAdornment>
                             ),
                           }}
@@ -400,20 +436,20 @@ const PlatformsPage = () => {
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               '&:hover fieldset': {
-                                borderColor: '#274290',
+                                borderColor: '#b98f33',
                               },
                               '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
+                                borderColor: '#b98f33',
                               },
                             },
                             '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
+                              color: '#b98f33',
                             },
                           }}
                           InputProps={{
                             startAdornment: (
                               <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}>
-                                <DescriptionIcon sx={{ color: '#274290' }} />
+                                <DescriptionIcon sx={{ color: '#b98f33' }} />
                               </InputAdornment>
                             ),
                           }}
@@ -432,7 +468,7 @@ const PlatformsPage = () => {
         <DialogActions 
           sx={{ 
             p: 3, 
-            backgroundColor: '#f8f9fa',
+            backgroundColor: 'background.paper',
             gap: 2
           }}
         >
@@ -454,15 +490,35 @@ const PlatformsPage = () => {
             onClick={handleSubmit} 
             variant="contained"
             disabled={saving || !formData.name.trim()}
-            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+            startIcon={saving ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
             sx={{
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               px: 4,
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
               },
               '&:disabled': {
-                backgroundColor: '#e0e0e0'
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >

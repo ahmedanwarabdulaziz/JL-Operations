@@ -371,7 +371,7 @@ const OrdersPage = () => {
         gap: 2
       }}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#274290' }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
             Orders Management
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -386,11 +386,29 @@ const OrdersPage = () => {
             sx={{
               minWidth: 150,
               px: 3,
-              backgroundColor: '#f27921',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #f27921',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#e06810'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #e06810',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
               },
-              flexShrink: 0
+              flexShrink: 0,
+              fontWeight: 'bold',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '4px 4px 0 0',
+                pointerEvents: 'none'
+              }
             }}
           >
             Fast Order
@@ -402,11 +420,29 @@ const OrdersPage = () => {
             sx={{
               minWidth: 150,
               px: 3,
-              backgroundColor: '#274290',
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
               },
-              flexShrink: 0
+              flexShrink: 0,
+              fontWeight: 'bold',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '4px 4px 0 0',
+                pointerEvents: 'none'
+              }
             }}
           >
             Add Order
@@ -448,12 +484,30 @@ const OrdersPage = () => {
           />
         </Grid>
         <Grid xs={12} md={4}>
-          <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+          <Card sx={{ 
+            background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+            color: '#000000',
+            border: '6px solid #4CAF50',
+            borderRadius: 2,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+            position: 'relative',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '50%',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+              borderRadius: '2px 2px 0 0',
+              pointerEvents: 'none'
+            }
+          }}>
             <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#000000' }}>
                 {filteredOrders.length}
               </Typography>
-              <Typography variant="body2">
+              <Typography variant="body2" sx={{ color: '#000000' }}>
                 {searchTerm ? 'Filtered Orders' : 'Total Orders'}
               </Typography>
             </CardContent>

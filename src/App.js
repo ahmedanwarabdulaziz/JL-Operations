@@ -1,5 +1,6 @@
 import React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
 import theme from './theme/theme';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
@@ -22,7 +23,7 @@ import FinancePage from './pages/Finance/FinancePage';
 import PLPage from './pages/Finance/PLPage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
-import RapidInvoiceSettingsPage from './pages/RapidInvoice/RapidInvoiceSettingsPage';
+
 import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
 
 import EndDonePage from './pages/EndDone/EndDonePage';
@@ -86,7 +87,7 @@ const AppContent = () => {
         <Route path="/lead-form" element={<LeadFormPage />} />
         <Route path="/leads" element={<LeadsManagement />} />
 
-        <Route path="/rapid-invoice-settings" element={<RapidInvoiceSettingsPage />} />
+
       </Routes>
     </MainLayout>
   );
@@ -95,6 +96,7 @@ const AppContent = () => {
 function App() {
   return (
     <ThemeProvider theme={theme}>
+      <CssBaseline />
       <AuthProvider>
         <FirebaseProvider>
           <NotificationProvider>
