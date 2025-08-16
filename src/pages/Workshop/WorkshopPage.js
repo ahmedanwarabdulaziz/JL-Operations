@@ -3652,19 +3652,51 @@ const WorkshopPage = () => {
           }
         }}
       >
-        <DialogTitle>Payment Validation Required</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 3 }}>
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <AssignmentIcon />
+          Payment Validation Required
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
+          <Typography variant="body1" sx={{ mb: 3, color: '#ffffff' }}>
             {validationError.message}
           </Typography>
           
           {validationError.type === 'done' && (
             <Button 
-              variant="contained" 
-              color="success"
+              variant="contained"
               onClick={handleMakeFullyPaid}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #4CAF50',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
+                '&:hover': {
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #45a049',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  borderRadius: '6px 6px 0 0',
+                  pointerEvents: 'none'
+                }
+              }}
               startIcon={<CheckCircleIcon />}
             >
               Make ${validationError.pendingAmount.toFixed(2)} as Paid
@@ -3673,19 +3705,52 @@ const WorkshopPage = () => {
           
           {validationError.type === 'cancelled' && (
             <Button 
-              variant="contained" 
-              color="error"
+              variant="contained"
               onClick={handleSetPaymentToZero}
               fullWidth
-              sx={{ mb: 2 }}
+              sx={{ 
+                mb: 2,
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #f27921',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
+                '&:hover': {
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #e06810',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  borderRadius: '6px 6px 0 0',
+                  pointerEvents: 'none'
+                }
+              }}
               startIcon={<CancelIcon />}
             >
               Refund ${validationError.currentAmount.toFixed(2)} and Cancel
             </Button>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setValidationDialogOpen(false)}>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={() => setValidationDialogOpen(false)}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>
@@ -3707,8 +3772,9 @@ const WorkshopPage = () => {
         }}
       >
         <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          color: 'white',
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
           display: 'flex',
           alignItems: 'center',
           gap: 2
@@ -3717,32 +3783,32 @@ const WorkshopPage = () => {
           Order Completion & Financial Allocation
         </DialogTitle>
         
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
           {/* Order Summary */}
           {selectedOrderForAllocation && (
-            <Box sx={{ mb: 3, p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Order Summary</Typography>
-              <Typography variant="body2">
-                <strong>Order #:</strong> {selectedOrderForAllocation.orderDetails?.billInvoice}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33' }}>
+              <Typography variant="h6" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>Order Summary</Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Order #:</strong> {selectedOrderForAllocation.orderDetails?.billInvoice}
               </Typography>
-              <Typography variant="body2">
-                <strong>Customer:</strong> {selectedOrderForAllocation.personalInfo?.customerName}
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Customer:</strong> {selectedOrderForAllocation.personalInfo?.customerName}
               </Typography>
-              <Typography variant="body2">
-                <strong>Total Revenue:</strong> ${totalRevenue.toFixed(2)}
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> ${totalRevenue.toFixed(2)}
               </Typography>
-              <Typography variant="body2">
-                <strong>Total Cost:</strong> ${totalCost.toFixed(2)}
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Cost:</strong> ${totalCost.toFixed(2)}
               </Typography>
-              <Typography variant="body2">
-                <strong>Total Profit:</strong> ${(totalRevenue - totalCost).toFixed(2)}
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Profit:</strong> ${(totalRevenue - totalCost).toFixed(2)}
               </Typography>
             </Box>
           )}
 
           {/* Editable Dates */}
           <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>Order Dates</Typography>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Order Dates</Typography>
             <Grid container spacing={2}>
               <Grid item xs={5}>
                 <TextField
@@ -3757,6 +3823,25 @@ const WorkshopPage = () => {
                   }}
                   fullWidth
                   InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: '#333333',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
                 />
               </Grid>
               <Grid item xs={5}>
@@ -3772,6 +3857,25 @@ const WorkshopPage = () => {
                   }}
                   fullWidth
                   InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: '#333333',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
                 />
               </Grid>
               <Grid item xs={2}>
@@ -3781,15 +3885,34 @@ const WorkshopPage = () => {
                   fullWidth
                   sx={{ 
                     height: '56px',
-                    backgroundColor: '#2e7d32',
-                    '&:hover': { backgroundColor: '#1b5e20' }
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #4CAF50',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #45a049',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                    },
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
                   }}
                 >
                   Save & Confirm
                 </Button>
               </Grid>
             </Grid>
-            <Typography variant="body2" sx={{ mt: 1, color: '#666', fontStyle: 'italic' }}>
+            <Typography variant="body2" sx={{ mt: 1, color: '#b98f33', fontStyle: 'italic' }}>
               Click "Save & Confirm" to update the allocation table with months between your selected dates
             </Typography>
           </Box>
@@ -3797,20 +3920,20 @@ const WorkshopPage = () => {
           {/* Financial Allocation Table */}
           {showAllocationTable && (
             <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>Monthly Financial Allocation</Typography>
-              <Typography variant="body2" sx={{ mb: 2, color: '#666' }}>
+              <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Monthly Financial Allocation</Typography>
+              <Typography variant="body2" sx={{ mb: 2, color: '#b98f33' }}>
                 Distribute the order's revenue and costs across the months between your selected dates. Total percentage must equal 100%.
               </Typography>
             
-            <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+            <TableContainer component={Paper} sx={{ maxHeight: 400, backgroundColor: '#2a2a2a' }}>
               <Table stickyHeader>
                 <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Month</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Percentage (%)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Revenue ($)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Cost ($)</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Profit ($)</TableCell>
+                  <TableRow sx={{ backgroundColor: '#b98f33' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Month</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Percentage (%)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Revenue ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Cost ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Profit ($)</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -3820,15 +3943,34 @@ const WorkshopPage = () => {
                     const profit = revenue - cost;
                     
                     return (
-                      <TableRow key={index}>
-                        <TableCell>{allocation.label}</TableCell>
+                      <TableRow key={index} sx={{ backgroundColor: '#3a3a3a', '&:hover': { backgroundColor: '#4a4a4a' } }}>
+                        <TableCell sx={{ color: '#ffffff' }}>{allocation.label}</TableCell>
                         <TableCell>
                           <TextField
                             type="number"
                             value={allocation.percentage}
                             onChange={(e) => updateAllocationPercentage(index, e.target.value)}
                             size="small"
-                            sx={{ width: 80 }}
+                            sx={{ 
+                              width: 80,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': {
+                                  borderColor: '#333333',
+                                },
+                                '&:hover fieldset': {
+                                  borderColor: '#b98f33',
+                                },
+                                '&.Mui-focused fieldset': {
+                                  borderColor: '#b98f33',
+                                },
+                              },
+                              '& .MuiInputLabel-root': {
+                                color: '#b98f33',
+                              },
+                              '& .MuiInputBase-input': {
+                                color: '#ffffff',
+                              },
+                            }}
                             inputProps={{ 
                               min: 0, 
                               max: 100, 
@@ -3836,31 +3978,31 @@ const WorkshopPage = () => {
                             }}
                           />
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
                           ${revenue.toFixed(2)}
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#f27921' }}>
                           ${cost.toFixed(2)}
                         </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', color: profit >= 0 ? '#2e7d32' : '#d32f2f' }}>
+                        <TableCell sx={{ fontWeight: 'bold', color: profit >= 0 ? '#4CAF50' : '#f27921' }}>
                           ${profit.toFixed(2)}
                         </TableCell>
                       </TableRow>
                     );
                   })}
                   {/* Totals Row */}
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>TOTAL</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>
+                  <TableRow sx={{ backgroundColor: '#b98f33' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>TOTAL</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
                       {calculateTotals(monthlyAllocations).totalPercentage.toFixed(1)}%
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
                       ${calculateTotals(monthlyAllocations).totalRevenue.toFixed(2)}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
                       ${calculateTotals(monthlyAllocations).totalCost.toFixed(2)}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
                       ${calculateTotals(monthlyAllocations).totalProfit.toFixed(2)}
                     </TableCell>
                   </TableRow>
@@ -3892,34 +4034,34 @@ const WorkshopPage = () => {
 
             {/* Allocation Summary */}
             {showAllocationTable && getAllocationStatus().status === 'valid' && (
-              <Box sx={{ mt: 3, p: 2, backgroundColor: '#e8f5e8', borderRadius: 1, border: '1px solid #4caf50' }}>
-                <Typography variant="h6" sx={{ mb: 1, color: '#2e7d32' }}>Allocation Summary</Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
+              <Box sx={{ mt: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33' }}>
+                <Typography variant="h6" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>Allocation Summary</Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Revenue:</strong> {formatCurrency(totalRevenue)}
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> {formatCurrency(totalRevenue)}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Cost:</strong> {formatCurrency(totalCost)}
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Cost:</strong> {formatCurrency(totalCost)}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Total Profit:</strong> {formatCurrency(totalRevenue - totalCost)}
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Profit:</strong> {formatCurrency(totalRevenue - totalCost)}
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Allocation Breakdown:</strong>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Allocation Breakdown:</strong>
                 </Typography>
                 <Box sx={{ ml: 2 }}>
                   {monthlyAllocations.map((allocation, index) => (
-                    <Typography key={index} variant="body2" sx={{ fontSize: '0.875rem' }}>
+                    <Typography key={index} variant="body2" sx={{ fontSize: '0.875rem', color: '#ffffff' }}>
                       • {allocation.label}: {allocation.percentage.toFixed(1)}% ({formatCurrency(totalRevenue * allocation.percentage / 100)})
                     </Typography>
                   ))}
                 </Box>
-                <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem', color: '#666', fontStyle: 'italic' }}>
+                <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem', color: '#b98f33', fontStyle: 'italic' }}>
                   Last recalculated: {new Date().toLocaleString()}
                 </Typography>
               </Box>
@@ -3928,11 +4070,19 @@ const WorkshopPage = () => {
           )}
         </DialogContent>
         
-        <DialogActions sx={{ p: 2, gap: 1 }}>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
           <Button 
             onClick={() => setAllocationDialogOpen(false)}
             variant="outlined"
             size="small"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
           >
             Cancel
           </Button>
@@ -3942,8 +4092,33 @@ const WorkshopPage = () => {
             disabled={Math.abs(calculateTotals(monthlyAllocations).totalPercentage - 100) > 0.01}
             size="small"
             sx={{ 
-              backgroundColor: '#f27921',
-              '&:hover': { backgroundColor: '#e66a1a' }
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #f27921',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #e06810',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
             }}
           >
             {(() => {

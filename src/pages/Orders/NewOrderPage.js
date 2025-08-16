@@ -697,7 +697,7 @@ const NewOrderPage = () => {
         }
       }
       
-      navigate('/orders');
+      navigate('/admin/orders');
     } catch (error) {
       console.error('Error saving order:', error);
       showError(`Failed to ${isEditMode ? 'update' : 'create'} order`);
@@ -885,7 +885,7 @@ const NewOrderPage = () => {
           <Box>
             <Button
               variant="outlined"
-              onClick={() => navigate('/orders')}
+              onClick={() => navigate('/admin/orders')}
               sx={{ 
                 mr: 1,
                 borderColor: '#e0e0e0',

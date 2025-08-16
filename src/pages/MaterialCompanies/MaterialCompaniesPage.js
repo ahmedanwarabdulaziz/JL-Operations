@@ -445,11 +445,9 @@ const MaterialCompaniesPage = () => {
         </Box>
         <Button
           variant="contained"
-          startIcon={<AddIcon sx={{ color: '#000000' }} />}
+          startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
-          sx={{ 
-            minWidth: 150,
-            px: 3,
+          sx={{
             background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
             color: '#000000',
             border: '3px solid #4CAF50',
@@ -706,12 +704,13 @@ const MaterialCompaniesPage = () => {
       >
         <DialogTitle 
           sx={{ 
-            backgroundColor: '#274290',
-            color: 'white',
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
             py: 3,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            borderBottom: '3px solid #4CAF50'
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -723,9 +722,9 @@ const MaterialCompaniesPage = () => {
           <IconButton 
             onClick={handleCloseDialog}
             sx={{ 
-              color: 'white',
+              color: '#000000',
               '&:hover': { 
-                backgroundColor: 'rgba(255,255,255,0.1)' 
+                backgroundColor: 'rgba(0,0,0,0.1)' 
               } 
             }}
           >
@@ -736,22 +735,23 @@ const MaterialCompaniesPage = () => {
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
-              {/* Company Information Section */}
-              <Grid item xs={12}>
-                <Card 
-                  variant="outlined" 
-                  sx={{ 
-                    border: '2px solid #e3f2fd',
-                    borderRadius: 2
-                  }}
-                >
+                             {/* Company Information Section */}
+               <Grid item xs={12}>
+                 <Card 
+                   variant="outlined" 
+                   sx={{ 
+                     border: '2px solid #b98f33',
+                     borderRadius: 2,
+                     backgroundColor: 'transparent'
+                   }}
+                 >
                   <CardContent sx={{ pb: '16px !important' }}>
                     <Typography 
                       variant="subtitle1" 
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
@@ -762,120 +762,135 @@ const MaterialCompaniesPage = () => {
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Company Name"
-                          value={formData.name}
-                          onChange={(e) => handleInputChange('name', e.target.value)}
-                          error={!!errors.name}
-                          helperText={errors.name}
-                          required
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <BusinessIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Company Name"
+                           value={formData.name}
+                           onChange={(e) => handleInputChange('name', e.target.value)}
+                           error={!!errors.name}
+                           helperText={errors.name}
+                           required
+                           variant="outlined"
+                           placeholder="Enter company name"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: errors.name ? 'error.main' : 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.name ? 'error.main' : '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.name ? 'error.main' : '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <BusinessIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Tax Rate (%)"
-                          type="number"
-                          value={formData.taxRate || 13}
-                          onChange={(e) => handleInputChange('taxRate', e.target.value)}
-                          inputProps={{ min: 0, max: 100, step: 0.01 }}
-                          helperText="Default: 13% (Charlotte: 2%)"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <PercentIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Tax Rate (%)"
+                           type="number"
+                           value={formData.taxRate || 13}
+                           onChange={(e) => handleInputChange('taxRate', e.target.value)}
+                           inputProps={{ min: 0, max: 100, step: 0.01 }}
+                           helperText="Default: 13% (Charlotte: 2%)"
+                           variant="outlined"
+                           placeholder="Enter tax rate"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <PercentIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Website"
-                          value={formData.website}
-                          onChange={(e) => handleInputChange('website', e.target.value)}
-                          placeholder="https://company-website.com"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <WebIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Website"
+                           value={formData.website}
+                           onChange={(e) => handleInputChange('website', e.target.value)}
+                           placeholder="https://company-website.com"
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <WebIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                     </Grid>
                   </CardContent>
                 </Card>
               </Grid>
 
-              {/* Contact Information Section */}
-              <Grid item xs={12}>
-                <Card 
-                  variant="outlined" 
-                  sx={{ 
-                    border: '2px solid #e3f2fd',
-                    borderRadius: 2
-                  }}
-                >
+                             {/* Contact Information Section */}
+               <Grid item xs={12}>
+                 <Card 
+                   variant="outlined" 
+                   sx={{ 
+                     border: '2px solid #b98f33',
+                     borderRadius: 2,
+                     backgroundColor: 'transparent'
+                   }}
+                 >
                   <CardContent sx={{ pb: '16px !important' }}>
                     <Typography 
                       variant="subtitle1" 
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
@@ -886,121 +901,134 @@ const MaterialCompaniesPage = () => {
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Contact Person"
-                          value={formData.contactPerson}
-                          onChange={(e) => handleInputChange('contactPerson', e.target.value)}
-                          placeholder="John Smith"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <PersonIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Contact Person"
+                           value={formData.contactPerson}
+                           onChange={(e) => handleInputChange('contactPerson', e.target.value)}
+                           placeholder="John Smith"
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <PersonIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Phone"
-                          value={formData.phone}
-                          onChange={(e) => handleInputChange('phone', e.target.value)}
-                          error={!!errors.phone}
-                          helperText={errors.phone}
-                          placeholder="+1 (555) 123-4567"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <PhoneIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Phone"
+                           value={formData.phone}
+                           onChange={(e) => handleInputChange('phone', e.target.value)}
+                           error={!!errors.phone}
+                           helperText={errors.phone}
+                           placeholder="+1 (555) 123-4567"
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: errors.phone ? 'error.main' : 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.phone ? 'error.main' : '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.phone ? 'error.main' : '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <PhoneIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Email"
-                          type="email"
-                          value={formData.email}
-                          onChange={(e) => handleInputChange('email', e.target.value)}
-                          error={!!errors.email}
-                          helperText={errors.email}
-                          placeholder="contact@company.com"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <EmailIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Email"
+                           type="email"
+                           value={formData.email}
+                           onChange={(e) => handleInputChange('email', e.target.value)}
+                           error={!!errors.email}
+                           helperText={errors.email}
+                           placeholder="contact@company.com"
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: errors.email ? 'error.main' : 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.email ? 'error.main' : '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: errors.email ? 'error.main' : '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start">
+                                 <EmailIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                     </Grid>
                   </CardContent>
                 </Card>
               </Grid>
 
-              {/* Customer Account Information Section */}
-              <Grid item xs={12}>
-                <Card 
-                  variant="outlined" 
-                  sx={{ 
-                    border: '2px solid #e3f2fd',
-                    borderRadius: 2
-                  }}
-                >
+                             {/* Customer Account Information Section */}
+               <Grid item xs={12}>
+                 <Card 
+                   variant="outlined" 
+                   sx={{ 
+                     border: '2px solid #b98f33',
+                     borderRadius: 2,
+                     backgroundColor: 'transparent'
+                   }}
+                 >
                   <CardContent sx={{ pb: '16px !important' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography 
                         variant="subtitle1" 
                         sx={{ 
                           fontWeight: 600,
-                          color: '#274290',
+                          color: '#b98f33',
                           display: 'flex',
                           alignItems: 'center',
                           gap: 1
@@ -1010,16 +1038,31 @@ const MaterialCompaniesPage = () => {
                         Customer Account Information
                       </Typography>
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         size="small"
                         startIcon={<AddIcon />}
                         onClick={addCustomerId}
                         sx={{
-                          borderColor: '#274290',
-                          color: '#274290',
+                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                          color: '#000000',
+                          border: '3px solid #4CAF50',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                          position: 'relative',
                           '&:hover': {
-                            borderColor: '#1e2d5a',
-                            backgroundColor: '#f5f8ff'
+                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                            border: '3px solid #45a049',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                          },
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '50%',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                            borderRadius: '6px 6px 0 0',
+                            pointerEvents: 'none'
                           }
                         }}
                       >
@@ -1036,14 +1079,14 @@ const MaterialCompaniesPage = () => {
                       <Grid container spacing={2}>
                         {formData.customerIds.map((customerId, index) => (
                           <Grid item xs={12} key={customerId.id}>
-                            <Card 
-                              variant="outlined" 
-                              sx={{ 
-                                border: '1px solid #e0e0e0',
-                                borderRadius: 1,
-                                backgroundColor: '#fafafa'
-                              }}
-                            >
+                                                         <Card 
+                               variant="outlined" 
+                               sx={{ 
+                                 border: '1px solid #e0e0e0',
+                                 borderRadius: 1,
+                                 backgroundColor: 'transparent'
+                               }}
+                             >
                               <CardContent sx={{ pb: '8px !important', p: 2 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                                   <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -1059,28 +1102,32 @@ const MaterialCompaniesPage = () => {
                                 </Box>
                                 <Grid container spacing={2}>
                                   <Grid item xs={12} sm={4}>
-                                    <TextField
-                                      fullWidth
-                                      select
-                                      label="ID Type"
-                                      value={customerId.type}
-                                      onChange={(e) => updateCustomerId(customerId.id, 'type', e.target.value)}
-                                      size="small"
-                                      variant="outlined"
-                                      sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                          '&:hover fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                          '&.Mui-focused fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                        },
-                                        '& .MuiInputLabel-root.Mui-focused': {
-                                          color: '#274290',
-                                        },
-                                      }}
-                                    >
+                                                                         <TextField
+                                       fullWidth
+                                       select
+                                       label="ID Type"
+                                       value={customerId.type}
+                                       onChange={(e) => updateCustomerId(customerId.id, 'type', e.target.value)}
+                                       size="small"
+                                       variant="outlined"
+                                       sx={{
+                                         '& .MuiOutlinedInput-notchedOutline': {
+                                           borderWidth: '2px',
+                                           borderColor: 'grey.300',
+                                           borderRadius: 2,
+                                         },
+                                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                         },
+                                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                           borderWidth: '2px',
+                                         },
+                                         '& .MuiInputLabel-root.Mui-focused': {
+                                           color: '#b98f33',
+                                         },
+                                       }}
+                                     >
                                       {customerIdTypes.map((option) => (
                                         <MenuItem key={option.value} value={option.value}>
                                           {option.label}
@@ -1089,52 +1136,60 @@ const MaterialCompaniesPage = () => {
                                     </TextField>
                                   </Grid>
                                   <Grid item xs={12} sm={4}>
-                                    <TextField
-                                      fullWidth
-                                      label="ID Value"
-                                      value={customerId.value}
-                                      onChange={(e) => updateCustomerId(customerId.id, 'value', e.target.value)}
-                                      size="small"
-                                      placeholder="Enter your ID/account number"
-                                      variant="outlined"
-                                      sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                          '&:hover fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                          '&.Mui-focused fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                        },
-                                        '& .MuiInputLabel-root.Mui-focused': {
-                                          color: '#274290',
-                                        },
-                                      }}
-                                    />
+                                                                         <TextField
+                                       fullWidth
+                                       label="ID Value"
+                                       value={customerId.value}
+                                       onChange={(e) => updateCustomerId(customerId.id, 'value', e.target.value)}
+                                       size="small"
+                                       placeholder="Enter your ID/account number"
+                                       variant="outlined"
+                                       sx={{
+                                         '& .MuiOutlinedInput-notchedOutline': {
+                                           borderWidth: '2px',
+                                           borderColor: 'grey.300',
+                                           borderRadius: 2,
+                                         },
+                                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                         },
+                                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                           borderWidth: '2px',
+                                         },
+                                         '& .MuiInputLabel-root.Mui-focused': {
+                                           color: '#b98f33',
+                                         },
+                                       }}
+                                     />
                                   </Grid>
                                   <Grid item xs={12} sm={4}>
-                                    <TextField
-                                      fullWidth
-                                      label="Notes (Optional)"
-                                      value={customerId.notes}
-                                      onChange={(e) => updateCustomerId(customerId.id, 'notes', e.target.value)}
-                                      size="small"
-                                      placeholder="Additional details"
-                                      variant="outlined"
-                                      sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                          '&:hover fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                          '&.Mui-focused fieldset': {
-                                            borderColor: '#274290',
-                                          },
-                                        },
-                                        '& .MuiInputLabel-root.Mui-focused': {
-                                          color: '#274290',
-                                        },
-                                      }}
-                                    />
+                                                                         <TextField
+                                       fullWidth
+                                       label="Notes (Optional)"
+                                       value={customerId.notes}
+                                       onChange={(e) => updateCustomerId(customerId.id, 'notes', e.target.value)}
+                                       size="small"
+                                       placeholder="Additional details"
+                                       variant="outlined"
+                                       sx={{
+                                         '& .MuiOutlinedInput-notchedOutline': {
+                                           borderWidth: '2px',
+                                           borderColor: 'grey.300',
+                                           borderRadius: 2,
+                                         },
+                                         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                         },
+                                         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                           borderColor: '#b98f33',
+                                           borderWidth: '2px',
+                                         },
+                                         '& .MuiInputLabel-root.Mui-focused': {
+                                           color: '#b98f33',
+                                         },
+                                       }}
+                                     />
                                   </Grid>
                                 </Grid>
                               </CardContent>
@@ -1147,22 +1202,23 @@ const MaterialCompaniesPage = () => {
                 </Card>
               </Grid>
 
-              {/* Address & Notes Section */}
-              <Grid item xs={12}>
-                <Card 
-                  variant="outlined" 
-                  sx={{ 
-                    border: '2px solid #e3f2fd',
-                    borderRadius: 2
-                  }}
-                >
+                             {/* Address & Notes Section */}
+               <Grid item xs={12}>
+                 <Card 
+                   variant="outlined" 
+                   sx={{ 
+                     border: '2px solid #b98f33',
+                     borderRadius: 2,
+                     backgroundColor: 'transparent'
+                   }}
+                 >
                   <CardContent sx={{ pb: '16px !important' }}>
                     <Typography 
                       variant="subtitle1" 
                       sx={{ 
                         mb: 2, 
                         fontWeight: 600,
-                        color: '#274290',
+                        color: '#b98f33',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1
@@ -1173,68 +1229,76 @@ const MaterialCompaniesPage = () => {
                     </Typography>
                     <Grid container spacing={2}>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Address"
-                          value={formData.address}
-                          onChange={(e) => handleInputChange('address', e.target.value)}
-                          multiline
-                          rows={2}
-                          placeholder="123 Business Street, City, State, ZIP"
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}>
-                                <LocationIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Address"
+                           value={formData.address}
+                           onChange={(e) => handleInputChange('address', e.target.value)}
+                           multiline
+                           rows={2}
+                           placeholder="123 Business Street, City, State, ZIP"
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}>
+                                 <LocationIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Notes"
-                          value={formData.notes}
-                          onChange={(e) => handleInputChange('notes', e.target.value)}
-                          multiline
-                          rows={3}
-                          placeholder="Additional notes about this company..."
-                          variant="outlined"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              '&:hover fieldset': {
-                                borderColor: '#274290',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#274290',
-                              },
-                            },
-                            '& .MuiInputLabel-root.Mui-focused': {
-                              color: '#274290',
-                            },
-                          }}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}>
-                                <NotesIcon sx={{ color: '#274290' }} />
-                              </InputAdornment>
-                            ),
-                          }}
-                        />
+                                                 <TextField
+                           fullWidth
+                           label="Notes"
+                           value={formData.notes}
+                           onChange={(e) => handleInputChange('notes', e.target.value)}
+                           multiline
+                           rows={3}
+                           placeholder="Additional notes about this company..."
+                           variant="outlined"
+                           sx={{
+                             '& .MuiOutlinedInput-notchedOutline': {
+                               borderWidth: '2px',
+                               borderColor: 'grey.300',
+                               borderRadius: 2,
+                             },
+                             '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                             },
+                             '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                               borderColor: '#b98f33',
+                               borderWidth: '2px',
+                             },
+                             '& .MuiInputLabel-root.Mui-focused': {
+                               color: '#b98f33',
+                             },
+                           }}
+                           InputProps={{
+                             startAdornment: (
+                               <InputAdornment position="start" sx={{ alignSelf: 'flex-start', mt: 1 }}>
+                                 <NotesIcon sx={{ color: '#b98f33' }} />
+                               </InputAdornment>
+                             ),
+                           }}
+                         />
                       </Grid>
                     </Grid>
                   </CardContent>
@@ -1246,13 +1310,13 @@ const MaterialCompaniesPage = () => {
 
         <Divider />
 
-        <DialogActions 
-          sx={{ 
-            p: 3, 
-            backgroundColor: '#f8f9fa',
-            gap: 2
-          }}
-        >
+                 <DialogActions 
+           sx={{ 
+             p: 3, 
+             backgroundColor: 'transparent',
+             gap: 2
+           }}
+         >
           <Button 
             onClick={handleCloseDialog}
             variant="outlined"
@@ -1273,13 +1337,32 @@ const MaterialCompaniesPage = () => {
             disabled={loading || !formData.name.trim()}
             startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
             sx={{
-              backgroundColor: '#274290',
-              px: 4,
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
               '&:hover': {
-                backgroundColor: '#1e2d5a'
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
               },
               '&:disabled': {
-                backgroundColor: '#e0e0e0'
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
               }
             }}
           >
@@ -1370,7 +1453,7 @@ const MaterialCompaniesPage = () => {
                     </Typography>
                     <Box sx={{ mt: 1 }}>
                       {viewingCompany.customerIds.map((customerId, index) => (
-                        <Card key={index} variant="outlined" sx={{ mb: 1, border: '1px solid #e0e0e0' }}>
+                                                 <Card key={index} variant="outlined" sx={{ mb: 1, border: '1px solid #e0e0e0', backgroundColor: 'transparent' }}>
                           <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
                               {customerIdTypes.find(type => type.value === customerId.type)?.label || customerId.type}

@@ -39,34 +39,36 @@ import GroupIcon from '@mui/icons-material/Group';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ConstructionIcon from '@mui/icons-material/Construction';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
 const menuItems = [
-  { text: 'Dashboard', path: '/', icon: <DashboardIcon /> },
-  { text: 'Customers', path: '/customers', icon: <PeopleIcon /> },
-  { text: 'Orders', path: '/orders', icon: <ReceiptIcon /> },
-  { text: 'Workshop', path: '/workshop', icon: <BuildIcon /> },
-  { text: 'Invoices', path: '/invoices', icon: <DescriptionIcon /> },
-  { text: 'Finance', path: '/finance', icon: <AccountBalanceIcon /> },
-  { text: 'P&L Statement', path: '/pl', icon: <TrendingUpIcon /> },
-  { text: 'Completed Orders', path: '/end-done', icon: <CheckCircleIcon /> },
-  { text: 'Cancelled Orders', path: '/end-cancelled', icon: <CancelIcon /> },
+  { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
+  { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
+  { text: 'Orders', path: '/admin/orders', icon: <ReceiptIcon /> },
+  { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
+  { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
+  { text: 'Flash Invoices', path: '/admin/flash-invoices', icon: <FlashOnIcon /> },
+  { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
+  { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
+  { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
+  { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
 ];
 
 const settingsItems = [
-  { text: 'Treatment', path: '/treatment', icon: <ScienceIcon /> },
-  { text: 'Material Companies', path: '/material-companies', icon: <BusinessIcon /> },
-  { text: 'Platforms', path: '/platforms', icon: <PublicIcon /> },
-  { text: 'Status Management', path: '/status-management', icon: <ManageAccountsIcon /> },
+  { text: 'Treatment', path: '/admin/treatment', icon: <ScienceIcon /> },
+  { text: 'Material Companies', path: '/admin/material-companies', icon: <BusinessIcon /> },
+  { text: 'Platforms', path: '/admin/platforms', icon: <PublicIcon /> },
+  { text: 'Status Management', path: '/admin/status-management', icon: <ManageAccountsIcon /> },
 ];
 
 const underConstructionItems = [
-  { text: 'Lead Form', path: '/lead-form', icon: <WebIcon /> },
-  { text: 'Leads Management', path: '/leads', icon: <GroupIcon /> },
-  { text: 'Email Settings', path: '/email-settings', icon: <EmailIcon /> },
-  { text: 'Email Test', path: '/test', icon: <EmailIcon /> },
-  { text: 'Data Management', path: '/data-management', icon: <SettingsIcon /> },
+  { text: 'Lead Form', path: '/admin/lead-form', icon: <WebIcon /> },
+  { text: 'Leads Management', path: '/admin/leads', icon: <GroupIcon /> },
+  { text: 'Email Settings', path: '/admin/email-settings', icon: <EmailIcon /> },
+  { text: 'Email Test', path: '/admin/test', icon: <EmailIcon /> },
+  { text: 'Data Management', path: '/admin/data-management', icon: <SettingsIcon /> },
 ];
 
 const Sidebar = ({ onToggle, onPin }) => {

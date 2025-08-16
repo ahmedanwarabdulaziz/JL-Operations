@@ -416,7 +416,7 @@ const OrdersPage = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => navigate('/orders/new')}
+            onClick={() => navigate('/admin/orders/new')}
             sx={{
               minWidth: 150,
               px: 3,
@@ -541,7 +541,7 @@ const OrdersPage = () => {
                       <Button
                         variant="outlined"
                         startIcon={<AddIcon />}
-                        onClick={() => navigate('/orders/new')}
+                        onClick={() => navigate('/admin/orders/new')}
                         sx={{ mt: 2 }}
                       >
                         Create First Order
@@ -641,7 +641,7 @@ const OrdersPage = () => {
                             color="primary"
                             onClick={() => {
                               // Navigate to edit order page with order data and go directly to review step
-                              navigate('/orders/new', { 
+                              navigate('/admin/orders/new', { 
                                 state: { 
                                   editMode: true, 
                                   orderData: order,
@@ -698,7 +698,7 @@ const OrdersPage = () => {
                 onEditStep={(stepIndex) => {
                   setViewDialogOpen(false);
                   // Navigate to edit order page with order data and specific step
-                  navigate('/orders/new', { 
+                  navigate('/admin/orders/new', { 
                     state: { 
                       editMode: true, 
                       orderData: selectedOrder,

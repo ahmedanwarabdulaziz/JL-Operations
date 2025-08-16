@@ -1062,12 +1062,152 @@ const InvoicePage = () => {
                     ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}
                   </Box>
                   <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * 1.13).toFixed(2)}
+                     ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * (1 + getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates))).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
+
+               {/* JL Foam */}
+               {group.foamJLPrice && parseFloat(group.foamJLPrice) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   border: '1px solid #ccc',
+                   borderTop: 'none',
+                   fontSize: '0.875rem',
+                   color: '#000000'
+                 }}>
+                   <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
+                     Foam ({group.foamThickness || 'N/A'}")
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     {(parseFloat(group.foamQnty) || 1).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${(parseFloat(group.foamJLPrice) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     $0.00
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                     ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
+
+               {/* Other Expenses */}
+               {group.otherExpenses && parseFloat(group.otherExpenses) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   border: '1px solid #ccc',
+                   borderTop: 'none',
+                   fontSize: '0.875rem',
+                   color: '#000000'
+                 }}>
+                   <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
+                     Other Expenses
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     1
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${(parseFloat(group.otherExpenses) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${(parseFloat(group.otherExpenses) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     $0.00
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                     ${(parseFloat(group.otherExpenses) || 0).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
+
+               {/* Shipping */}
+               {group.shipping && parseFloat(group.shipping) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   border: '1px solid #ccc',
+                   borderTop: 'none',
+                   fontSize: '0.875rem',
+                   color: '#000000'
+                 }}>
+                   <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
+                     Shipping
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     1
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${(parseFloat(group.shipping) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     ${(parseFloat(group.shipping) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                     $0.00
+                   </Box>
+                   <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                     ${(parseFloat(group.shipping) || 0).toFixed(2)}
                   </Box>
                 </Box>
               )}
             </Box>
           ))}
+
+          {/* Extra Expenses */}
+          {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
+            <Box>
+              {/* Extra Expenses Header */}
+              <Box sx={{ 
+                display: 'flex',
+                backgroundColor: '#f8f8f8',
+                border: '1px solid #ccc',
+                borderTop: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.875rem',
+                color: '#000000'
+              }}>
+                <Box sx={{ flex: 6, p: 1 }}>
+                  Extra Expenses
+                </Box>
+              </Box>
+
+              {/* Extra Expenses Items */}
+              {selectedOrder.extraExpenses.map((expense, expenseIndex) => (
+                <Box key={expenseIndex} sx={{ 
+                  display: 'flex',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontSize: '0.875rem',
+                  color: '#000000'
+                }}>
+                  <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
+                    {expense.description || 'Extra Expense'}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    {expense.unit || '1'}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(expense.price) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(expense.total) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
+                    ${(parseFloat(expense.tax) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
+                    ${(parseFloat(expense.total) || 0).toFixed(2)}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
         </Box>
 
         {/* JL Totals */}

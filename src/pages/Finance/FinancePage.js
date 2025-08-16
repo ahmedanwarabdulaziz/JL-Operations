@@ -137,14 +137,14 @@ const FinancePage = () => {
         ...doc.data()
       }));
 
-      // Filter out orders with end state statuses
-      const endStateStatuses = statusesData.filter(status => 
-        status.isEndState
+      // Filter out ONLY cancelled orders, include all other orders (including done)
+      const cancelledStatuses = statusesData.filter(status => 
+        status.isEndState && status.endStateType === 'cancelled'
       );
-      const endStateValues = endStateStatuses.map(status => status.value);
+      const cancelledValues = cancelledStatuses.map(status => status.value);
 
       const activeOrders = ordersData.filter(order => 
-        !endStateValues.includes(order.invoiceStatus)
+        !cancelledValues.includes(order.invoiceStatus)
       );
       
       setOrders(activeOrders);
@@ -447,7 +447,7 @@ const FinancePage = () => {
       // Show option to view P&L
       setTimeout(() => {
         if (window.confirm('Allocation applied successfully! Would you like to view the updated P&L Statement?')) {
-          navigate('/pl');
+          navigate('/admin/pl');
         }
       }, 1000);
     } catch (error) {
@@ -609,7 +609,7 @@ const FinancePage = () => {
           <Button
             variant="contained"
             startIcon={<SettingsIcon />}
-            onClick={() => navigate('/status-management')}
+            onClick={() => navigate('/admin/status-management')}
             sx={{ 
               backgroundColor: '#b98f33',
               color: '#000000',
@@ -628,7 +628,7 @@ const FinancePage = () => {
           <Button
             variant="contained"
             startIcon={<TrendingUpIcon />}
-            onClick={() => navigate('/pl')}
+            onClick={() => navigate('/admin/pl')}
             sx={{ 
               backgroundColor: '#b98f33',
               color: '#000000',
@@ -677,7 +677,7 @@ const FinancePage = () => {
           action={
             <Button 
               size="small" 
-              onClick={() => navigate('/status-management')}
+              onClick={() => navigate('/admin/status-management')}
               sx={{ 
                 backgroundColor: '#b98f33',
                 color: '#000000',
@@ -1296,7 +1296,7 @@ const FinancePage = () => {
                     <Tooltip title="View Order">
                       <IconButton 
                         size="small" 
-                        onClick={() => navigate(`/orders`, { state: { viewOrder: order } })}
+                        onClick={() => navigate(`/admin/orders`, { state: { viewOrder: order } })}
                         sx={{ color: '#b98f33' }}
                       >
                         <ViewIcon />
@@ -1305,7 +1305,7 @@ const FinancePage = () => {
                     <Tooltip title="View Invoice">
                       <IconButton 
                         size="small" 
-                        onClick={() => navigate(`/invoices`, { state: { viewOrder: order } })}
+                        onClick={() => navigate(`/admin/invoices`, { state: { viewOrder: order } })}
                         sx={{ color: '#b98f33' }}
                       >
                         <PdfIcon />
