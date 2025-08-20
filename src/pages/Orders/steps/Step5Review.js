@@ -241,12 +241,14 @@ const Step5Review = ({
               <Typography variant="body2" color="text.secondary">Required Deposit Amount</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.deposit}</Typography>
             </Box>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" color="text.secondary">Amount Paid by Customer</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: paymentDetails.amountPaid >= paymentDetails.deposit ? '#4caf50' : '#ff9800' }}>
-                ${paymentDetails.amountPaid}
-              </Typography>
-            </Box>
+            {paymentDetails.amountPaid > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary">Amount Paid by Customer</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: paymentDetails.amountPaid >= paymentDetails.deposit ? '#4caf50' : '#ff9800' }}>
+                  ${paymentDetails.amountPaid}
+                </Typography>
+              </Box>
+            )}
             {paymentDetails.pickupDeliveryEnabled && (
               <Box>
                 <Typography variant="body2" color="text.secondary">Pickup & Delivery Cost</Typography>

@@ -58,7 +58,8 @@ import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { calculateOrderProfit, normalizePaymentData } from '../../utils/orderCalculations';
-import { formatCurrency, formatPercentage, calculateTimeBasedAllocation } from '../../utils/plCalculations';
+import { formatCurrency, formatPercentage, calculateTimeBasedAllocation, processOrdersForPL } from '../../utils/plCalculations';
+import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 
 const PLPage = () => {
   const [orders, setOrders] = useState([]);
@@ -76,6 +77,15 @@ const PLPage = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
   const [selectedTab, setSelectedTab] = useState(0);
   const [expandedSection, setExpandedSection] = useState('summary');
+  const [appliedDateFrom, setAppliedDateFrom] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [appliedDateTo, setAppliedDateTo] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  });
+  const [materialTaxRates, setMaterialTaxRates] = useState({});
 
   const [financialData, setFinancialData] = useState({
     totalRevenue: 0,
@@ -116,6 +126,10 @@ const PLPage = () => {
     try {
       setLoading(true);
       
+      // Fetch material tax rates
+      const taxRates = await fetchMaterialCompanyTaxRates();
+      setMaterialTaxRates(taxRates);
+      
       const ordersRef = collection(db, 'orders');
       const q = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
       const querySnapshot = await getDocs(q);
@@ -137,28 +151,13 @@ const PLPage = () => {
 
   // Calculate comprehensive financial data
   const calculateFinancialData = (ordersData) => {
-    const summary = ordersData.reduce((acc, order) => {
-      const profitData = calculateOrderProfit(order);
-      const normalizedPayment = normalizePaymentData(order.paymentData);
-      
-      acc.totalRevenue += profitData.revenue;
-      acc.totalCosts += profitData.cost;
-      acc.grossProfit += profitData.profit;
-      acc.totalOrders += 1;
-      acc.totalPaid += normalizedPayment.amountPaid;
-      acc.totalPending += (profitData.revenue - normalizedPayment.amountPaid);
-      
-      // Payment analysis
-      if (normalizedPayment.amountPaid >= profitData.revenue) {
-        acc.fullyPaid += 1;
-      } else if (normalizedPayment.amountPaid > 0) {
-        acc.partiallyPaid += 1;
-      } else {
-        acc.unpaid += 1;
-      }
-      
-      return acc;
-    }, {
+    // Process orders with allocation support first
+    const summaryPlResult = processOrdersForPL(ordersData, materialTaxRates);
+    
+    console.log('PL Result for summary:', summaryPlResult);
+    
+    // Calculate summary from allocated data
+    const summary = {
       totalRevenue: 0,
       totalCosts: 0,
       grossProfit: 0,
@@ -168,6 +167,33 @@ const PLPage = () => {
       fullyPaid: 0,
       partiallyPaid: 0,
       unpaid: 0
+    };
+    
+    // Sum up all monthly data to get total allocated amounts
+    Object.values(summaryPlResult.monthly).forEach(monthData => {
+      summary.totalRevenue += monthData.revenue;
+      summary.totalCosts += monthData.costs;
+      summary.grossProfit += monthData.profit;
+      summary.totalOrders += monthData.orderCount;
+    });
+    
+    // Calculate payment data from original orders (payment data doesn't get allocated)
+    // Note: Payment amounts are based on actual payments received, not allocated amounts
+    ordersData.forEach(order => {
+      const profitData = calculateOrderProfit(order);
+      const normalizedPayment = normalizePaymentData(order.paymentData);
+      
+      summary.totalPaid += normalizedPayment.amountPaid;
+      summary.totalPending += (profitData.revenue - normalizedPayment.amountPaid);
+      
+      // Payment analysis
+      if (normalizedPayment.amountPaid >= profitData.revenue) {
+        summary.fullyPaid += 1;
+      } else if (normalizedPayment.amountPaid > 0) {
+        summary.partiallyPaid += 1;
+      } else {
+        summary.unpaid += 1;
+      }
     });
 
     // Calculate margins and averages
@@ -180,28 +206,24 @@ const PLPage = () => {
     summary.collectionRate = summary.totalRevenue > 0 ? 
       (summary.totalPaid / summary.totalRevenue) * 100 : 0;
 
-    // Monthly breakdown
+    // Monthly breakdown - Use allocation data for proper monthly distribution
     const monthlyData = {};
-    ordersData.forEach(order => {
-      const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-      const monthKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = {
-          month: monthKey,
-          revenue: 0,
-          costs: 0,
-          profit: 0,
-          orders: 0
-        };
-      }
-      
-      const profitData = calculateOrderProfit(order);
-      monthlyData[monthKey].revenue += profitData.revenue;
-      monthlyData[monthKey].costs += profitData.cost;
-      monthlyData[monthKey].profit += profitData.profit;
-      monthlyData[monthKey].orders += 1;
+    
+    // Use the same processed result from above
+    console.log('Monthly data from processOrdersForPL:', summaryPlResult.monthly);
+    
+    // Use the processed monthly data that includes allocations
+    Object.entries(summaryPlResult.monthly).forEach(([monthKey, data]) => {
+      monthlyData[monthKey] = {
+        month: monthKey,
+        revenue: data.revenue,
+        costs: data.costs,
+        profit: data.profit,
+        orders: data.orderCount
+      };
     });
+    
+    console.log('Final monthly breakdown:', monthlyData);
 
     const monthlyBreakdown = Object.values(monthlyData)
       .sort((a, b) => b.month.localeCompare(a.month))
@@ -291,17 +313,55 @@ const PLPage = () => {
   useEffect(() => {
     let filtered = orders;
     
-    // Apply date range filter
-    if (dateFrom && dateTo) {
+    // Apply date range filter based on allocation months for allocated orders, or start date for unallocated orders
+    if (appliedDateFrom && appliedDateTo) {
       filtered = filtered.filter(order => {
-        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-        const fromDate = new Date(dateFrom);
-        const toDate = new Date(dateTo);
+        const fromDate = new Date(appliedDateFrom);
+        const toDate = new Date(appliedDateTo);
         
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(23, 59, 59, 999);
         
-        return orderDate >= fromDate && orderDate <= toDate;
+        // For allocated orders, check if any allocation month falls within the date range
+        if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
+          // Check if any allocation month falls within the selected date range
+          const hasAllocationInRange = order.allocation.allocations.some(allocation => {
+            const allocationDate = new Date(allocation.label + '-01'); // Convert "2024-04" to Date
+            return allocationDate >= fromDate && allocationDate <= toDate;
+          });
+          
+          console.log(`Order ${order.orderDetails?.billInvoice}: Allocated order - ${hasAllocationInRange ? 'INCLUDED' : 'EXCLUDED'} in date range`, {
+            allocations: order.allocation.allocations.map(a => a.label),
+            dateRange: `${fromDate.toISOString().split('T')[0]} to ${toDate.toISOString().split('T')[0]}`,
+            hasAllocationInRange
+          });
+          
+          return hasAllocationInRange;
+        } else {
+          // For unallocated orders, use the start date (when work actually began)
+          let orderStartDate;
+          
+          if (order.orderDetails?.startDate) {
+            // Use the start date from order details
+            if (order.orderDetails.startDate.toDate) {
+              orderStartDate = order.orderDetails.startDate.toDate();
+            } else {
+              orderStartDate = new Date(order.orderDetails.startDate);
+            }
+          } else {
+            // Fallback to creation date if no start date is set
+            orderStartDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+          }
+          
+          const isInRange = orderStartDate >= fromDate && orderStartDate <= toDate;
+          
+          console.log(`Order ${order.orderDetails?.billInvoice}: Unallocated order - ${isInRange ? 'INCLUDED' : 'EXCLUDED'} in date range`, {
+            startDate: orderStartDate.toISOString().split('T')[0],
+            dateRange: `${fromDate.toISOString().split('T')[0]} to ${toDate.toISOString().split('T')[0]}`
+          });
+          
+          return isInRange;
+        }
       });
     }
     
@@ -313,40 +373,83 @@ const PLPage = () => {
       );
     }
     
+    console.log('Date filtering:', {
+      appliedDateFrom: appliedDateFrom?.toISOString(),
+      appliedDateTo: appliedDateTo?.toISOString(),
+      totalOrders: orders.length,
+      filteredOrders: filtered.length,
+      dateRangeApplied: !!(appliedDateFrom && appliedDateTo)
+    });
+    
     setFilteredOrders(filtered);
     calculateFinancialData(filtered);
-  }, [searchTerm, orders, dateFrom, dateTo]);
+  }, [searchTerm, orders, appliedDateFrom, appliedDateTo]);
 
   // Handle period selection
   const handlePeriodChange = (period) => {
     setSelectedPeriod(period);
     const now = new Date();
     
+    let newDateFrom, newDateTo;
+    
     switch (period) {
       case 'current-month':
-        setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
-        setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+        newDateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+        newDateTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         break;
       case 'last-month':
-        setDateFrom(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-        setDateTo(new Date(now.getFullYear(), now.getMonth(), 0));
+        newDateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        newDateTo = new Date(now.getFullYear(), now.getMonth(), 0);
         break;
       case 'current-quarter':
         const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-        setDateFrom(quarterStart);
-        setDateTo(new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 0));
+        newDateFrom = quarterStart;
+        newDateTo = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 0);
         break;
       case 'current-year':
-        setDateFrom(new Date(now.getFullYear(), 0, 1));
-        setDateTo(new Date(now.getFullYear(), 11, 31));
+        newDateFrom = new Date(now.getFullYear(), 0, 1);
+        newDateTo = new Date(now.getFullYear(), 11, 31);
         break;
       case 'all-time':
-        setDateFrom(null);
-        setDateTo(null);
+        newDateFrom = null;
+        newDateTo = null;
         break;
       default:
-        break;
+        return;
     }
+    
+    // Set the date inputs
+    setDateFrom(newDateFrom);
+    setDateTo(newDateTo);
+    
+    // Apply the filter immediately for period selections
+    setAppliedDateFrom(newDateFrom);
+    setAppliedDateTo(newDateTo);
+    
+    console.log('Period changed and applied:', {
+      period,
+      from: newDateFrom?.toISOString(),
+      to: newDateTo?.toISOString()
+    });
+  };
+
+  // Apply date filter manually
+  const handleApplyDateFilter = () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+    console.log('Applying date filter:', {
+      from: dateFrom?.toISOString(),
+      to: dateTo?.toISOString()
+    });
+  };
+
+  // Clear date filter
+  const handleClearDateFilter = () => {
+    setDateFrom(null);
+    setDateTo(null);
+    setAppliedDateFrom(null);
+    setAppliedDateTo(null);
+    setSelectedPeriod('all-time');
   };
 
   useEffect(() => {
@@ -420,43 +523,88 @@ const PLPage = () => {
             Filters
           </Typography>
         </Box>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              placeholder="Search orders..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                )
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="From Date"
-              type="date"
-              value={dateFrom ? dateFrom.toISOString().split('T')[0] : ''}
-              onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              label="To Date"
-              type="date"
-              value={dateTo ? dateTo.toISOString().split('T')[0] : ''}
-              onChange={(e) => setDateTo(e.target.value ? new Date(e.target.value) : null)}
-              InputLabelProps={{ shrink: true }}
-            />
-          </Grid>
-        </Grid>
+                 <Grid container spacing={2} alignItems="center">
+           <Grid item xs={12} md={3}>
+             <TextField
+               fullWidth
+               placeholder="Search orders..."
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               InputProps={{
+                 startAdornment: (
+                   <InputAdornment position="start">
+                     <SearchIcon />
+                   </InputAdornment>
+                 )
+               }}
+             />
+           </Grid>
+           <Grid item xs={12} md={2}>
+             <TextField
+               fullWidth
+               label="From Date"
+               type="date"
+               value={dateFrom ? dateFrom.toISOString().split('T')[0] : ''}
+               onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
+               InputLabelProps={{ shrink: true }}
+             />
+           </Grid>
+           <Grid item xs={12} md={2}>
+             <TextField
+               fullWidth
+               label="To Date"
+               type="date"
+               value={dateTo ? dateTo.toISOString().split('T')[0] : ''}
+               onChange={(e) => setDateTo(e.target.value ? new Date(e.target.value) : null)}
+               InputLabelProps={{ shrink: true }}
+             />
+           </Grid>
+           <Grid item xs={12} md={3}>
+             <Box sx={{ display: 'flex', gap: 1 }}>
+               <Button
+                 variant="contained"
+                 onClick={handleApplyDateFilter}
+                 disabled={!dateFrom || !dateTo}
+                 sx={{
+                   backgroundColor: '#4caf50',
+                   '&:hover': { backgroundColor: '#45a049' },
+                   '&:disabled': { backgroundColor: '#cccccc' }
+                 }}
+               >
+                 Apply Filter
+               </Button>
+               <Button
+                 variant="outlined"
+                 onClick={handleClearDateFilter}
+                 sx={{
+                   borderColor: '#f44336',
+                   color: '#f44336',
+                   '&:hover': {
+                     borderColor: '#d32f2f',
+                     backgroundColor: 'rgba(244, 67, 54, 0.1)'
+                   }
+                 }}
+               >
+                 Clear
+               </Button>
+             </Box>
+           </Grid>
+           <Grid item xs={12} md={2}>
+             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+               <Typography variant="body2" color="text.secondary">
+                 Applied:
+               </Typography>
+               <Chip
+                 label={appliedDateFrom && appliedDateTo ? 
+                   `${appliedDateFrom.toLocaleDateString()} - ${appliedDateTo.toLocaleDateString()}` : 
+                   'No filter'
+                 }
+                 size="small"
+                 color={appliedDateFrom && appliedDateTo ? 'success' : 'default'}
+               />
+             </Box>
+           </Grid>
+         </Grid>
       </Paper>
 
       {/* Main Content Tabs */}
@@ -657,6 +805,59 @@ const PLPage = () => {
                       value={financialData.totalOrders > 0 ? 
                         (financialData.paymentAnalysis.unpaid / financialData.totalOrders) * 100 : 0}
                       sx={{ backgroundColor: '#e0e0e0', '& .MuiLinearProgress-bar': { backgroundColor: '#f44336' } }}
+                    />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#274290', fontWeight: 'bold' }}>
+                    <BarChartIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    Allocation Status
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2">Allocated Orders</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                        {financialData.allocationAnalysis.allocationSummary.totalAllocated} orders
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={financialData.totalOrders > 0 ? 
+                        (financialData.allocationAnalysis.allocationSummary.totalAllocated / financialData.totalOrders) * 100 : 0}
+                      sx={{ backgroundColor: '#e0e0e0', '& .MuiLinearProgress-bar': { backgroundColor: '#4caf50' } }}
+                    />
+                  </Box>
+                  <Box sx={{ mb: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2">Unallocated Orders</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
+                        {financialData.allocationAnalysis.allocationSummary.totalUnallocated} orders
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={financialData.totalOrders > 0 ? 
+                        (financialData.allocationAnalysis.allocationSummary.totalUnallocated / financialData.totalOrders) * 100 : 0}
+                      sx={{ backgroundColor: '#e0e0e0', '& .MuiLinearProgress-bar': { backgroundColor: '#ff9800' } }}
+                    />
+                  </Box>
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body2">Cross-Month Allocations</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#2196f3' }}>
+                        {financialData.allocationAnalysis.allocationSummary.crossMonthCount} orders
+                      </Typography>
+                    </Box>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={financialData.allocationAnalysis.allocationSummary.totalAllocated > 0 ? 
+                        (financialData.allocationAnalysis.allocationSummary.crossMonthCount / financialData.allocationAnalysis.allocationSummary.totalAllocated) * 100 : 0}
+                      sx={{ backgroundColor: '#e0e0e0', '& .MuiLinearProgress-bar': { backgroundColor: '#2196f3' } }}
                     />
                   </Box>
                 </CardContent>

@@ -35,8 +35,8 @@ const HomePage = () => {
     if (isPaused) return;
 
     const interval = setInterval(() => {
-      setActiveReviewCard((prevCard) => (prevCard + 1) % 5);
-    }, 3000); // Change card every 3 seconds
+      setActiveReviewCard((prevCard) => (prevCard + 1) % 7);
+    }, 4000); // Change card every 4 seconds
 
     return () => clearInterval(interval);
   }, [isPaused]);
@@ -1115,7 +1115,7 @@ const HomePage = () => {
           </Container>
         </Box>
 
-        
+       
 
        
     </Box>

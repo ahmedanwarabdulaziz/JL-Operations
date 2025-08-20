@@ -37,7 +37,8 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Checkbox
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -65,8 +66,8 @@ import {
 } from '@mui/icons-material';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { useGmailAuth } from '../shared/contexts/GmailAuthContext';
-import { sendEmailWithConfig, sendDepositEmailWithConfig, ensureGmailAuthorized } from '../shared/services/emailService';
-import { useTreatments } from '../shared/hooks/useTreatments';
+import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../shared/services/emailService';
+
 import useMaterialCompanies from '../shared/hooks/useMaterialCompanies';
 import { usePlatforms } from '../shared/hooks/usePlatforms';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
@@ -130,9 +131,77 @@ const WorkshopPage = () => {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
   const [showAllocationTable, setShowAllocationTable] = useState(false);
+  
+  // Email completion state variables
+  const [includeReviewRequest, setIncludeReviewRequest] = useState(true);
+  const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
+
+  // Enhanced confirmation dialog with email options
+  const [enhancedConfirmDialog, setEnhancedConfirmDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    hasEmail: false,
+    defaultIncludeReview: true,
+    resolve: null
+  });
+
+  const showEnhancedConfirm = (title, message, hasEmail, defaultIncludeReview) => {
+    return new Promise((resolve) => {
+      setEnhancedConfirmDialog({
+        open: true,
+        title,
+        message,
+        hasEmail,
+        defaultIncludeReview,
+        resolve
+      });
+    });
+  };
+
+  const handleEnhancedConfirm = (sendEmail, includeReview) => {
+    if (enhancedConfirmDialog.resolve) {
+      enhancedConfirmDialog.resolve({ 
+        confirmed: true, 
+        sendEmail, 
+        includeReviewRequest: includeReview 
+      });
+    }
+    setEnhancedConfirmDialog({
+      open: false,
+      title: '',
+      message: '',
+      hasEmail: false,
+      defaultIncludeReview: true,
+      resolve: null
+    });
+  };
+
+  const handleEnhancedCancel = () => {
+    if (enhancedConfirmDialog.resolve) {
+      enhancedConfirmDialog.resolve({ 
+        confirmed: false, 
+        sendEmail: false, 
+        includeReviewRequest: false 
+      });
+    }
+    setEnhancedConfirmDialog({
+      open: false,
+      title: '',
+      message: '',
+      hasEmail: false,
+      defaultIncludeReview: true,
+      resolve: null
+    });
+  };
+
+  // State for enhanced confirmation dialog checkboxes
+  const [sendEmailChecked, setSendEmailChecked] = useState(true);
+  const [includeReviewChecked, setIncludeReviewChecked] = useState(true);
+  
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
   const { gmailSignedIn, gmailUser, signIn } = useGmailAuth();
-  const { treatments, loading: treatmentsLoading } = useTreatments();
+
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
   const { onFocus: handleAutoSelect } = useAutoSelect();
@@ -479,24 +548,31 @@ const WorkshopPage = () => {
       // Longer delay to ensure dialog is completely hidden before showing confirmation
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Show confirmation dialog with allocation summary
+      // Show enhanced confirmation dialog with email options
       const allocationSummary = monthlyAllocations.map(allocation => 
         `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
       ).join(', ');
 
-      const confirmed = await showConfirm(
-        'Confirm Allocation',
-        `Are you sure you want to apply this allocation?\n\n` +
+      // Check if customer has email
+      const customerEmail = selectedOrderForAllocation.personalInfo?.email;
+      const hasEmail = customerEmail && customerEmail.trim() !== '';
+
+      const confirmed = await showEnhancedConfirm(
+        'Confirm Order Completion & Email',
+        `Are you sure you want to complete this order and apply the allocation?\n\n` +
         `Order: ${selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}\n` +
+        `Customer: ${selectedOrderForAllocation.personalInfo?.customerName || 'N/A'}\n` +
         `Status: ${selectedOrderForAllocation.newStatus?.label || 'Done'}\n` +
         `Date Range: ${startDate ? startDate.toLocaleDateString() : 'Not set'} - ${endDate ? endDate.toLocaleDateString() : 'Not set'}\n` +
         `Allocations: ${allocationSummary}\n` +
         `Total Revenue: ${formatCurrency(totalRevenue)}\n` +
         `Total Cost: ${formatCurrency(totalCost)}\n` +
-        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`
+        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`,
+        hasEmail,
+        includeReviewRequest
       );
 
-      if (!confirmed) {
+      if (!confirmed.confirmed) {
         // Reopen allocation dialog if user cancels
         setAllocationDialogHidden(false);
         setAllocationDialogOpen(true);
@@ -505,6 +581,71 @@ const WorkshopPage = () => {
       
       const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
+      
+      // Send completion email if customer has email and user confirmed
+      console.log('🔍 Admin Workshop Debug - Email sending conditions:', {
+        hasCustomerEmail: !!customerEmail,
+        customerEmail: customerEmail,
+        confirmedSendEmail: confirmed.sendEmail,
+        confirmedIncludeReview: confirmed.includeReviewRequest
+      });
+      
+      if (customerEmail && confirmed.sendEmail) {
+        try {
+          setSendingCompletionEmail(true);
+          
+          // Prepare order data for email
+          const orderDataForEmail = {
+            personalInfo: selectedOrderForAllocation.personalInfo,
+            orderDetails: selectedOrderForAllocation.orderDetails,
+            furnitureData: {
+              groups: selectedOrderForAllocation.furnitureData?.groups || []
+            },
+            paymentData: selectedOrderForAllocation.paymentData
+          };
+
+          console.log('🔍 Admin Workshop Debug - Order data prepared for email:', {
+            hasPersonalInfo: !!orderDataForEmail.personalInfo,
+            hasOrderDetails: !!orderDataForEmail.orderDetails,
+            hasFurnitureData: !!orderDataForEmail.furnitureData,
+            furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
+          });
+
+          // Progress callback for email sending
+          const onEmailProgress = (message) => {
+            console.log('🔍 Admin Workshop Debug - Email progress:', message);
+            showSuccess(`📧 ${message}`);
+          };
+
+          console.log('🔍 Admin Workshop Debug - Calling sendCompletionEmailWithGmail...');
+          
+          // Send the completion email
+          const emailResult = await sendCompletionEmailWithGmail(
+            orderDataForEmail, 
+            customerEmail, 
+            confirmed.includeReviewRequest, 
+            onEmailProgress
+          );
+          
+          console.log('🔍 Admin Workshop Debug - Email result:', emailResult);
+          
+          if (emailResult.success) {
+            showSuccess('✅ Completion email sent successfully!');
+          } else {
+            showError(`❌ Failed to send completion email: ${emailResult.message}`);
+          }
+        } catch (error) {
+          console.error('🔍 Admin Workshop Debug - Error sending completion email:', error);
+          showError(`Failed to send completion email: ${error.message}`);
+        } finally {
+          setSendingCompletionEmail(false);
+        }
+      } else {
+        console.log('🔍 Admin Workshop Debug - Email not sent because:', {
+          noCustomerEmail: !customerEmail,
+          userDidNotConfirm: !confirmed.sendEmail
+        });
+      }
       
       showSuccess('Order completed and allocated successfully');
       setAllocationDialogOpen(false);
@@ -572,6 +713,8 @@ const WorkshopPage = () => {
       showError('Failed to update payment');
     }
   };
+
+
 
   // Update invoice status with validation (enhanced from Finance page)
   const updateInvoiceStatus = async (orderId, newStatus) => {
@@ -2327,8 +2470,8 @@ const WorkshopPage = () => {
                               </Tooltip>
                             </Box>
                             
-                            {/* Row 1: Material Company - Material Code - Treatment */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                            {/* Row 1: Material Company - Material Code */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
@@ -2380,49 +2523,6 @@ const WorkshopPage = () => {
                                 size="small"
                                 fullWidth
                               />
-                              <FormControl fullWidth size="small">
-                                <InputLabel sx={{ 
-                                  backgroundColor: '#2a2a2a',
-                                  color: '#ffffff',
-                                  px: 1,
-                                  '&.Mui-focused': {
-                                    backgroundColor: '#2a2a2a',
-                                    color: '#ffffff'
-                                  }
-                                }}>Treatment</InputLabel>
-                                <Select
-                                  value={currentGroup.treatment || ''}
-                                  onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
-                                  label="Treatment"
-                                  sx={{
-                                    '& .MuiOutlinedInput-root': {
-                                      borderColor: '#2a2a2a',
-                                      backgroundColor: '#2a2a2a',
-                                      color: '#ffffff',
-                                      '&:hover': {
-                                        borderColor: '#3a3a3a',
-                                        backgroundColor: '#3a3a3a'
-                                      },
-                                      '&.Mui-focused': {
-                                        borderColor: '#2a2a2a',
-                                        backgroundColor: '#2a2a2a'
-                                      }
-                                    },
-                                    '& .MuiSelect-icon': {
-                                      color: '#ffffff'
-                                    }
-                                  }}
-                                >
-                                  <MenuItem value="">
-                                    <em>Select Treatment</em>
-                                  </MenuItem>
-                                  {treatments.map((treatment) => (
-                                    <MenuItem key={treatment.id} value={treatment.treatmentKind}>
-                                      {treatment.treatmentKind}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
                             </Box>
 
                             {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -2995,8 +3095,8 @@ const WorkshopPage = () => {
                       </Typography>
                     </Box>
                     
-                    {/* Row 1: Material Company - Material Code - Treatment */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                    {/* Row 1: Material Company - Material Code */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel 
                           sx={{ 
@@ -3046,37 +3146,6 @@ const WorkshopPage = () => {
                         size="small"
                         fullWidth
                       />
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Treatment</InputLabel>
-                        <Select
-                          value={group.treatment || ''}
-                          onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
-                          label="Treatment"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderColor: '#1976d2',
-                              backgroundColor: '#f3f8ff',
-                              '&:hover': {
-                                borderColor: '#1565c0',
-                                backgroundColor: '#e3f2fd'
-                              },
-                              '&.Mui-focused': {
-                                borderColor: '#1976d2',
-                                backgroundColor: '#e3f2fd'
-                              }
-                            }
-                          }}
-                        >
-                          <MenuItem value="">
-                            <em>Select Treatment</em>
-                          </MenuItem>
-                          {treatments.map((treatment) => (
-                            <MenuItem key={treatment.id} value={treatment.treatmentKind}>
-                              {treatment.treatmentKind}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
                     </Box>
 
                     {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -3956,6 +4025,164 @@ const WorkshopPage = () => {
                 return `${Math.abs(100 - calculateTotals(monthlyAllocations).totalPercentage).toFixed(1)}% Remaining`;
               }
             })()}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Enhanced Confirmation Dialog */}
+      <Dialog 
+        open={enhancedConfirmDialog.open} 
+        onClose={handleEnhancedCancel}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #b98f33',
+            borderRadius: '10px',
+            color: '#ffffff'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          color: '#b98f33', 
+          borderBottom: '1px solid #b98f33',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <span style={{ fontSize: '24px' }}>✨</span>
+          {enhancedConfirmDialog.title}
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              whiteSpace: 'pre-line', 
+              lineHeight: 1.6,
+              mb: 2,
+              color: '#ffffff'
+            }}
+          >
+            {enhancedConfirmDialog.message}
+          </Typography>
+
+          {enhancedConfirmDialog.hasEmail ? (
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#2a2a2a', 
+              borderRadius: 1, 
+              borderLeft: '4px solid #b98f33',
+              mb: 2
+            }}>
+              <Typography variant="h6" sx={{ color: '#b98f33', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                📧 Email Notification
+              </Typography>
+              
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={sendEmailChecked}
+                    onChange={(e) => setSendEmailChecked(e.target.checked)}
+                    sx={{
+                      color: '#b98f33',
+                      '&.Mui-checked': {
+                        color: '#b98f33',
+                      },
+                    }}
+                  />
+                }
+                label="Send completion email to customer"
+                sx={{ 
+                  color: '#ffffff',
+                  mb: 1,
+                  '& .MuiFormControlLabel-label': {
+                    fontWeight: 500
+                  }
+                }}
+              />
+              
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeReviewChecked}
+                    onChange={(e) => setIncludeReviewChecked(e.target.checked)}
+                    sx={{
+                      color: '#b98f33',
+                      '&.Mui-checked': {
+                        color: '#b98f33',
+                      },
+                    }}
+                  />
+                }
+                label="Include Google review request"
+                sx={{ 
+                  color: '#ffffff',
+                  '& .MuiFormControlLabel-label': {
+                    fontWeight: 500
+                  }
+                }}
+              />
+              
+              <Typography variant="body2" sx={{ 
+                mt: 1, 
+                color: '#cccccc', 
+                fontStyle: 'italic',
+                fontSize: '13px'
+              }}>
+                The email will include a warm thank you message, treatment care instructions, and a review request.
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#2a2a2a', 
+              borderRadius: 1, 
+              borderLeft: '4px solid #f27921',
+              mb: 2
+            }}>
+              <Typography variant="h6" sx={{ color: '#f27921', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                ⚠️ No Email Available
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                Customer email not found. Order will be completed without email notification.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleEnhancedCancel}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => handleEnhancedConfirm(sendEmailChecked, includeReviewChecked)}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              fontWeight: 'bold',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              },
+            }}
+          >
+            Complete Order
           </Button>
         </DialogActions>
       </Dialog>

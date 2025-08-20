@@ -97,6 +97,12 @@ const PLPage = () => {
   const [viewMode, setViewMode] = useState('summary'); // summary, detailed, trends
   const [cashFlowMode, setCashFlowMode] = useState(false); // false = accrual, true = cash
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  
+  // Date filter state
+  const [dateFrom, setDateFrom] = useState(null);
+  const [dateTo, setDateTo] = useState(null);
+  const [appliedDateFrom, setAppliedDateFrom] = useState(null);
+  const [appliedDateTo, setAppliedDateTo] = useState(null);
 
   const { showSuccess, showError } = useNotification();
 
@@ -206,6 +212,19 @@ const PLPage = () => {
     return calculateYTD(plData[selectedPeriod], selectedYear);
   };
 
+  // Date filter functions
+  const handleApplyDateFilter = () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+  };
+
+  const handleClearDateFilter = () => {
+    setDateFrom(null);
+    setDateTo(null);
+    setAppliedDateFrom(null);
+    setAppliedDateTo(null);
+  };
+
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -283,6 +302,130 @@ const PLPage = () => {
           </Button>
         </Box>
       </Box>
+
+      {/* Date Range Filter */}
+      <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
+        <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
+          Date Range Filter
+        </Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={3}>
+            <TextField
+              label="From Date"
+              type="date"
+              value={dateFrom ? dateFrom.toISOString().split('T')[0] : ''}
+              onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField
+              label="To Date"
+              type="date"
+              value={dateTo ? dateTo.toISOString().split('T')[0] : ''}
+              onChange={(e) => setDateTo(e.target.value ? new Date(e.target.value) : null)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Button
+              variant="contained"
+              onClick={handleApplyDateFilter}
+              disabled={!dateFrom || !dateTo}
+              fullWidth
+              sx={{
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': {
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                },
+                '&:disabled': {
+                  backgroundColor: '#666666',
+                  color: '#999999',
+                  border: '2px solid #666666',
+                  boxShadow: 'none'
+                }
+              }}
+            >
+              Apply Filter
+            </Button>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Button
+              variant="outlined"
+              onClick={handleClearDateFilter}
+              fullWidth
+              sx={{
+                color: '#b98f33',
+                borderColor: '#b98f33',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                }
+              }}
+            >
+              Clear
+            </Button>
+          </Grid>
+          <Grid item xs={12} sm={2}>
+            <Chip
+              label={appliedDateFrom && appliedDateTo ?
+                `${appliedDateFrom.toLocaleDateString()} - ${appliedDateTo.toLocaleDateString()}` :
+                'No filter applied'}
+              color={appliedDateFrom && appliedDateTo ? 'success' : 'default'}
+              sx={{
+                backgroundColor: appliedDateFrom && appliedDateTo ? '#4caf50' : '#666666',
+                color: '#ffffff'
+              }}
+            />
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Cross-Month Orders Alert */}
       {crossMonthOrders.length > 0 && (

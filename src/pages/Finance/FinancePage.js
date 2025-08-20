@@ -100,6 +100,16 @@ const FinancePage = () => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
   });
+  
+  // Applied date filter state
+  const [appliedDateFrom, setAppliedDateFrom] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [appliedDateTo, setAppliedDateTo] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  });
   const [financialSummary, setFinancialSummary] = useState({
     totalRevenue: 0,
     totalCost: 0,
@@ -216,17 +226,32 @@ const FinancePage = () => {
     let filtered = orders;
     
     // Apply date range filter
-    if (dateFrom && dateTo) {
+    if (appliedDateFrom && appliedDateTo) {
       filtered = filtered.filter(order => {
-        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-        const fromDate = new Date(dateFrom);
-        const toDate = new Date(dateTo);
+        const fromDate = new Date(appliedDateFrom);
+        const toDate = new Date(appliedDateTo);
         
         // Set time to start/end of day for accurate comparison
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(23, 59, 59, 999);
         
-        return orderDate >= fromDate && orderDate <= toDate;
+        // For allocated orders, check if any allocation month falls within the date range
+        if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
+          // Check if any allocation month falls within the selected date range
+          const hasAllocationInRange = order.allocation.allocations.some(allocation => {
+            const allocationDate = new Date(allocation.year, allocation.month - 1, 1); // Month is 0-indexed
+            return allocationDate >= fromDate && allocationDate <= toDate;
+          });
+          
+          return hasAllocationInRange;
+        } else {
+          // For unallocated orders, use startDate if available, otherwise use createdAt
+          const orderDate = order.orderDetails?.startDate ? 
+            (order.orderDetails.startDate?.toDate ? order.orderDetails.startDate.toDate() : new Date(order.orderDetails.startDate)) :
+            (order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt));
+          
+          return orderDate >= fromDate && orderDate <= toDate;
+        }
       });
     }
     
@@ -247,7 +272,32 @@ const FinancePage = () => {
     
     setFilteredOrders(filtered);
     calculateFinancialSummary(filtered);
-  }, [searchTerm, statusFilter, orders, dateFrom, dateTo]);
+  }, [searchTerm, statusFilter, orders, appliedDateFrom, appliedDateTo]);
+
+  // Apply date filter functions
+  const handleApplyDateFilter = () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+  };
+
+  const handleClearDateFilter = () => {
+    setDateFrom(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    setDateTo(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    });
+    setAppliedDateFrom(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    setAppliedDateTo(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    });
+  };
 
   // Update invoice status
   const updateInvoiceStatus = async (orderId, newStatus) => {
@@ -962,6 +1012,55 @@ const FinancePage = () => {
                 }
               }}
             />
+          </Grid>
+
+          {/* Apply Filter Button */}
+          <Grid item xs={12} sm={6} lg={1}>
+            <Button
+              variant="contained"
+              onClick={handleApplyDateFilter}
+              disabled={!dateFrom || !dateTo}
+              fullWidth
+              sx={{
+                backgroundColor: '#b98f33',
+                color: '#000000',
+                border: '2px solid #8b6b1f',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                '&:hover': {
+                  backgroundColor: '#d4af5a',
+                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
+                  transform: 'translateY(-1px)'
+                },
+                '&:disabled': {
+                  backgroundColor: '#666666',
+                  color: '#999999',
+                  border: '2px solid #666666',
+                  boxShadow: 'none'
+                }
+              }}
+            >
+              Apply Filter
+            </Button>
+          </Grid>
+
+          {/* Clear Filter Button */}
+          <Grid item xs={12} sm={6} lg={1}>
+            <Button
+              variant="outlined"
+              onClick={handleClearDateFilter}
+              fullWidth
+              sx={{
+                color: '#b98f33',
+                borderColor: '#b98f33',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                }
+              }}
+            >
+              Clear
+            </Button>
           </Grid>
 
           {/* Status Filter */}

@@ -13,7 +13,7 @@ export const generateOrderEmailTemplate = (orderData) => {
   
   // Business constants (you can move these to a config file)
   const YOUR_BUSINESS_NAME = 'JL Upholstery';
-  const YOUR_PAYMENT_EMAIL = 'jl.upholstery@gmail.com';
+  const YOUR_PAYMENT_EMAIL = 'jl@jlupholstery.com';
   const YOUR_BUSINESS_EMAIL_SIGNATURE = 'JL Upholstery Team';
 
   const formatCurrency = (amount) => {
@@ -74,12 +74,25 @@ export const generateOrderEmailTemplate = (orderData) => {
         foamHtmlOutput += `.`;
       }
 
+      let paintingHtmlOutput = '';
+      if ((item.paintingLabour && parseFloat(item.paintingLabour) > 0) || (item.paintingNote && String(item.paintingNote).trim() !== "")) {
+        paintingHtmlOutput = `For the painting service`;
+        if (item.paintingLabour && parseFloat(item.paintingLabour) > 0) {
+          paintingHtmlOutput += `, the labour cost will be <strong>$${formatCurrency(item.paintingLabour)}</strong> (+Tax)`;
+        }
+        if (item.paintingNote && String(item.paintingNote).trim() !== "") {
+          paintingHtmlOutput += `, ${String(item.paintingNote).trim()}`;
+        }
+        paintingHtmlOutput += `.`;
+      }
+
       return `
         <div class="furniture-item">
           <h4>For your ${item.furnitureType || ('Item ' + (index + 1))}</h4>
           ${labourText ? `<p>${labourText}</p>` : ''}
           ${materialOutput ? `<p>${materialOutput}</p>` : ''}
           ${foamHtmlOutput ? `<p>${foamHtmlOutput}</p>` : ''}
+          ${paintingHtmlOutput ? `<p>${paintingHtmlOutput}</p>` : ''}
           ${item.customerNote && String(item.customerNote).trim() !== "" ? 
             `<p><strong>Note for this item:</strong> ${item.customerNote}</p>` : ''}
         </div>

@@ -68,7 +68,9 @@ const underConstructionItems = [
   { text: 'Leads Management', path: '/admin/leads', icon: <GroupIcon /> },
   { text: 'Email Settings', path: '/admin/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/admin/test', icon: <EmailIcon /> },
+  { text: 'Completion Email Test', path: '/admin/email-test', icon: <EmailIcon /> },
   { text: 'Data Management', path: '/admin/data-management', icon: <SettingsIcon /> },
+  { text: 'Testing Financial', path: '/admin/testing-financial', icon: <TrendingUpIcon /> },
 ];
 
 const Sidebar = ({ onToggle, onPin }) => {

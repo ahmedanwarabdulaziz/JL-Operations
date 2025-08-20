@@ -11,6 +11,7 @@ import MainLayout from './components/Layout/MainLayout';
 import LoginPage from './components/Auth/LoginPage';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import TestPage from './pages/Test/TestPage';
+import EmailTestPage from './pages/Test/EmailTestPage';
 import CustomersPage from './pages/Customers/CustomersPage';
 import OrdersPage from './pages/Orders/OrdersPage';
 import NewOrderPage from './pages/Orders/NewOrderPage';
@@ -31,6 +32,7 @@ import LeadFormPage from './pages/LeadFormPage/LeadFormPage';
 import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
+import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 
 // Website imports
 import WebsiteLayout from './website/layouts/WebsiteLayout';
@@ -121,6 +123,7 @@ const AppContent = () => {
           <Route path="/admin" element={<DashboardPage />} />
           <Route path="/test" element={<Navigate to="/admin/test" replace />} />
           <Route path="/admin/test" element={<TestPage />} />
+          <Route path="/admin/email-test" element={<EmailTestPage />} />
           <Route path="/customers" element={<Navigate to="/admin/customers" replace />} />
           <Route path="/admin/customers" element={<CustomersPage />} />
           <Route path="/orders" element={<Navigate to="/admin/orders" replace />} />
@@ -155,6 +158,7 @@ const AppContent = () => {
           <Route path="/admin/end-cancelled" element={<EndCancelledPage />} />
           <Route path="/leads" element={<Navigate to="/admin/leads" replace />} />
           <Route path="/admin/leads" element={<LeadsManagement />} />
+          <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />
         </Routes>
       </MainLayout>
     );

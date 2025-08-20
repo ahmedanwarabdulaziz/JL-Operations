@@ -1376,7 +1376,6 @@ const InvoicePage = () => {
                   {orders.map((order) => (
                     <React.Fragment key={order.id}>
                       <ListItem
-                        button
                         selected={selectedOrder?.id === order.id}
                         onClick={() => handleSelectOrder(order)}
                         sx={{

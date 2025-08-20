@@ -112,9 +112,20 @@ const Header = () => {
             </Typography>
           </Box>
           <Button 
-            color="inherit" 
             onClick={handleLogout}
-            sx={{ textTransform: 'none' }}
+            sx={{ 
+              textTransform: 'none',
+              color: '#000000',
+              backgroundColor: '#b98f33',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                color: '#000000'
+              },
+              '&:focus': {
+                color: '#000000',
+                backgroundColor: '#b98f33'
+              }
+            }}
           >
             Logout
           </Button>

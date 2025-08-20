@@ -87,7 +87,23 @@ const Header = () => {
                 startIcon={isAuthorizing ? <CircularProgress size={16} /> : <GoogleIcon />}
                 onClick={handleGmailSignIn}
                 disabled={isAuthorizing}
-                sx={{ textTransform: 'none' }}
+                sx={{ 
+                  textTransform: 'none',
+                  color: '#000000 !important',
+                  borderColor: '#000000 !important',
+                  '& .MuiButton-startIcon': {
+                    color: '#000000 !important'
+                  },
+                  '&:hover': {
+                    borderColor: '#333333 !important',
+                    backgroundColor: 'rgba(0, 0, 0, 0.04) !important',
+                    color: '#000000 !important'
+                  },
+                  '&:focus': {
+                    color: '#000000 !important',
+                    borderColor: '#000000 !important'
+                  }
+                }}
               >
                 {isAuthorizing ? 'Authorizing...' : 'Authorize Gmail'}
               </Button>
@@ -111,13 +127,37 @@ const Header = () => {
               {user.displayName || user.email}
             </Typography>
           </Box>
-          <Button 
-            color="inherit" 
+          <Box
+            component="button"
             onClick={handleLogout}
-            sx={{ textTransform: 'none' }}
+            sx={{
+              background: '#000000',
+              border: '2px solid #000000',
+              cursor: 'pointer',
+              padding: '8px 16px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: '#ffffff',
+              textTransform: 'none',
+              fontFamily: 'Roboto, Arial, sans-serif',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+              '&:hover': {
+                backgroundColor: '#333333',
+                borderColor: '#333333',
+                color: '#ffffff',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+              },
+              '&:focus': {
+                outline: '2px solid #ffffff',
+                outlineOffset: '2px',
+                color: '#ffffff'
+              }
+            }}
           >
             Logout
-          </Button>
+          </Box>
         </Box>
       </Toolbar>
     </AppBar>

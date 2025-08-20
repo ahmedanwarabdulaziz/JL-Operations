@@ -164,52 +164,42 @@ const LoginPage = ({ onLoginSuccess }) => {
                      <Button
              variant="contained"
              size="large"
-             startIcon={loading ? <CircularProgress size={20} sx={{ color: '#000000' }} /> : <GoogleIcon sx={{ color: '#000000' }} />}
+             startIcon={loading ? <CircularProgress size={20} sx={{ color: '#ffffff' }} /> : <GoogleIcon sx={{ color: '#ffffff' }} />}
              onClick={handleGoogleSignIn}
              disabled={loading}
                           sx={{
                 width: '100%',
                 py: 2,
-                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                color: '#000000 !important',
-                border: '3px solid #4CAF50',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 6px 12px rgba(0,0,0,0.3)',
+                backgroundColor: '#000000',
+                color: '#ffffff !important',
+                border: '2px solid #000000',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
                 position: 'relative',
                 '&:hover': {
-                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                  border: '3px solid #45a049',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 8px 16px rgba(0,0,0,0.4)',
-                  color: '#000000 !important'
+                  backgroundColor: '#333333',
+                  border: '2px solid #333333',
+                  boxShadow: '0 6px 12px rgba(0,0,0,0.3)',
+                  color: '#ffffff !important'
                 },
                 '&:focus': {
-                  color: '#000000 !important'
+                  color: '#ffffff !important',
+                  backgroundColor: '#000000'
                 },
                 '&:disabled': {
-                  background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                  border: '3px solid #666666',
-                  color: '#666666 !important',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                  backgroundColor: '#666666',
+                  border: '2px solid #666666',
+                  color: '#cccccc !important',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                 },
                 fontWeight: 'bold',
                 fontSize: '1.1rem',
                 textTransform: 'none',
                 borderRadius: 2,
                 '& .MuiButton-startIcon': {
-                  color: '#000000'
+                  color: '#ffffff'
                 },
                 '& .MuiButton-startIcon .MuiSvgIcon-root': {
-                  color: '#000000'
-                },
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '50%',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                  borderRadius: '6px 6px 0 0',
-                  pointerEvents: 'none'
+                  color: '#ffffff'
                 }
               }}
             >

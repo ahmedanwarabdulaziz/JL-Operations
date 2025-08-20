@@ -37,7 +37,8 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Checkbox
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -61,12 +62,16 @@ import {
   ExpandLess as ExpandLessIcon,
   Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  BarChart as BarChartIcon,
+  RestartAlt as RestartAltIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { useGmailAuth } from '../../contexts/GmailAuthContext';
-import { sendEmailWithConfig, sendDepositEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';
-import { useTreatments } from '../../hooks/useTreatments';
+import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
+
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
@@ -100,6 +105,18 @@ const WorkshopPage = () => {
     paymentNotes: ''
   });
   
+  // Extra Expense Modal State
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({
+    description: '',
+    price: '',
+    unit: '',
+    tax: '',
+    taxType: 'fixed', // 'fixed' or 'percent'
+    total: '',
+  });
+  const [expenseList, setExpenseList] = useState([]);
+  
   // State for collapsible sections
   const [personalInfoExpanded, setPersonalInfoExpanded] = useState(false);
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false);
@@ -130,13 +147,92 @@ const WorkshopPage = () => {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalCost, setTotalCost] = useState(0);
   const [showAllocationTable, setShowAllocationTable] = useState(false);
+  
+  // Standalone allocation state variables
+  const [standaloneAllocationDialogOpen, setStandaloneAllocationDialogOpen] = useState(false);
+  const [standaloneAllocationDialogHidden, setStandaloneAllocationDialogHidden] = useState(false);
+  const [selectedOrderForStandaloneAllocation, setSelectedOrderForStandaloneAllocation] = useState(null);
+  const [standaloneStartDate, setStandaloneStartDate] = useState(null);
+  const [standaloneEndDate, setStandaloneEndDate] = useState(null);
+  const [standaloneMonthlyAllocations, setStandaloneMonthlyAllocations] = useState([]);
+  const [standaloneTotalRevenue, setStandaloneTotalRevenue] = useState(0);
+  const [standaloneTotalCost, setStandaloneTotalCost] = useState(0);
+  const [standaloneShowAllocationTable, setStandaloneShowAllocationTable] = useState(false);
+  
+  // Email completion state variables
+  const [includeReviewRequest, setIncludeReviewRequest] = useState(true);
+  const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
+  
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
   const { gmailSignedIn, gmailUser, signIn } = useGmailAuth();
-  const { treatments, loading: treatmentsLoading } = useTreatments();
+
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
   const { onFocus: handleAutoSelect } = useAutoSelect();
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+
+  // Enhanced confirmation dialog with email options
+  const [enhancedConfirmDialog, setEnhancedConfirmDialog] = useState({
+    open: false,
+    title: '',
+    message: '',
+    hasEmail: false,
+    defaultIncludeReview: true,
+    resolve: null
+  });
+
+  const showEnhancedConfirm = (title, message, hasEmail, defaultIncludeReview) => {
+    return new Promise((resolve) => {
+      setEnhancedConfirmDialog({
+        open: true,
+        title,
+        message,
+        hasEmail,
+        defaultIncludeReview,
+        resolve
+      });
+    });
+  };
+
+  const handleEnhancedConfirm = (sendEmail, includeReview) => {
+    if (enhancedConfirmDialog.resolve) {
+      enhancedConfirmDialog.resolve({ 
+        confirmed: true, 
+        sendEmail, 
+        includeReviewRequest: includeReview 
+      });
+    }
+    setEnhancedConfirmDialog({
+      open: false,
+      title: '',
+      message: '',
+      hasEmail: false,
+      defaultIncludeReview: true,
+      resolve: null
+    });
+  };
+
+  const handleEnhancedCancel = () => {
+    if (enhancedConfirmDialog.resolve) {
+      enhancedConfirmDialog.resolve({ 
+        confirmed: false, 
+        sendEmail: false, 
+        includeReviewRequest: false 
+      });
+    }
+    setEnhancedConfirmDialog({
+      open: false,
+      title: '',
+      message: '',
+      hasEmail: false,
+      defaultIncludeReview: true,
+      resolve: null
+    });
+  };
+
+  // State for enhanced confirmation dialog checkboxes
+  const [sendEmailChecked, setSendEmailChecked] = useState(true);
+  const [includeReviewChecked, setIncludeReviewChecked] = useState(true);
 
   // Fetch invoice statuses
   const fetchInvoiceStatuses = async () => {
@@ -274,9 +370,27 @@ const WorkshopPage = () => {
   // Update allocation percentage
   const updateAllocationPercentage = (index, percentage) => {
     const newAllocations = [...monthlyAllocations];
-    const newPercentage = parseFloat(percentage) || 0;
+    let newPercentage = parseFloat(percentage) || 0;
+    
+    // Constrain percentage to valid range (0-100)
+    newPercentage = Math.max(0, Math.min(100, newPercentage));
+    
+    // Calculate current total excluding the current index
+    const currentTotal = newAllocations.reduce((sum, allocation, i) => {
+      if (i !== index) {
+        return sum + (allocation.percentage || 0);
+      }
+      return sum;
+    }, 0);
+    
+    // Check if new percentage would exceed 100%
+    if (currentTotal + newPercentage > 100) {
+      // Cap the percentage to what's remaining
+      newPercentage = Math.max(0, 100 - currentTotal);
+      console.log(`Percentage capped to ${newPercentage.toFixed(1)}% to prevent exceeding 100%`);
+    }
+    
     newAllocations[index].percentage = newPercentage;
-    newAllocations[index].lastUpdated = new Date();
     setMonthlyAllocations(newAllocations);
     
     // Calculate and show totals
@@ -285,7 +399,7 @@ const WorkshopPage = () => {
     
     // Show warning if total is not 100%
     if (Math.abs(remainingPercentage) > 0.01) {
-      console.log(`Allocation updated. Total: ${totals.totalPercentage.toFixed(1)}%, Remaining: ${remainingPercentage.toFixed(1)}%`);
+      // Allocation updated
     }
   };
 
@@ -367,6 +481,321 @@ const WorkshopPage = () => {
     }
   };
 
+  // Standalone allocation functions
+  const calculateStandaloneTotals = (allocations) => {
+    const totalPercentage = allocations.reduce((sum, item) => sum + item.percentage, 0);
+    const calculatedRevenue = allocations.reduce((sum, item) => sum + (standaloneTotalRevenue * item.percentage / 100), 0);
+    const calculatedCost = allocations.reduce((sum, item) => sum + (standaloneTotalCost * item.percentage / 100), 0);
+    const calculatedProfit = calculatedRevenue - calculatedCost;
+    
+    return { totalPercentage, totalRevenue: calculatedRevenue, totalCost: calculatedCost, totalProfit: calculatedProfit };
+  };
+
+  const getStandaloneAllocationStatus = () => {
+    const totals = calculateStandaloneTotals(standaloneMonthlyAllocations);
+    const remainingPercentage = 100 - totals.totalPercentage;
+    
+    if (Math.abs(remainingPercentage) <= 0.01) {
+      return { status: 'valid', message: 'Allocation is complete and ready to apply', color: '#4caf50' };
+    } else if (totals.totalPercentage > 100) {
+      return { status: 'over', message: `Total exceeds 100% by ${Math.abs(remainingPercentage).toFixed(1)}%`, color: '#f44336' };
+    } else {
+      return { status: 'under', message: `${Math.abs(remainingPercentage).toFixed(1)}% remaining to reach 100%`, color: '#ff9800' };
+    }
+  };
+
+  const handleStandaloneAllocationDialog = (order) => {
+    setSelectedOrderForStandaloneAllocation(order);
+    setStandaloneAllocationDialogOpen(true);
+    setStandaloneShowAllocationTable(false);
+    
+    // Set default dates with proper validation
+    let start, end;
+    
+    if (order.orderDetails?.startDate) {
+      if (order.orderDetails.startDate.toDate) {
+        start = order.orderDetails.startDate.toDate();
+      } else {
+        start = new Date(order.orderDetails.startDate);
+      }
+    }
+    
+    if (order.orderDetails?.endDate) {
+      if (order.orderDetails.endDate.toDate) {
+        end = order.orderDetails.endDate.toDate();
+      } else {
+        end = new Date(order.orderDetails.endDate);
+      }
+    }
+    
+    // Only set dates if they are valid
+    if (start && !isNaN(start.getTime())) {
+      setStandaloneStartDate(start);
+    } else {
+      setStandaloneStartDate(new Date()); // Default to today
+    }
+    
+    if (end && !isNaN(end.getTime())) {
+      setStandaloneEndDate(end);
+    } else {
+      setStandaloneEndDate(new Date()); // Default to today
+    }
+
+    // Check if order already has allocation data
+    if (order.allocation && order.allocation.allocations) {
+      // Use existing allocation data - only extract needed properties to avoid Timestamp objects
+      setStandaloneMonthlyAllocations(order.allocation.allocations.map(allocation => ({
+        month: allocation.month,
+        year: allocation.year,
+        label: new Date(allocation.year, allocation.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: allocation.percentage
+        // Explicitly exclude calculatedAt, appliedAt, and other Timestamp properties
+      })));
+      setStandaloneShowAllocationTable(true);
+    } else {
+      // Generate initial allocations
+      const initialAllocations = generateMonthlyAllocations(order);
+      setStandaloneMonthlyAllocations(initialAllocations);
+    }
+
+    const profitData = calculateOrderProfit(order);
+    const revenue = profitData.revenue;
+    const cost = profitData.cost;
+    
+    setStandaloneTotalRevenue(revenue);
+    setStandaloneTotalCost(cost);
+  };
+
+  const updateStandaloneAllocationPercentage = (index, percentage) => {
+    const newAllocations = [...standaloneMonthlyAllocations];
+    let newPercentage = parseFloat(percentage) || 0;
+    
+    // Constrain percentage to valid range (0-100)
+    newPercentage = Math.max(0, Math.min(100, newPercentage));
+    
+    // Calculate current total excluding the current index
+    const currentTotal = newAllocations.reduce((sum, allocation, i) => {
+      if (i !== index) {
+        return sum + (allocation.percentage || 0);
+      }
+      return sum;
+    }, 0);
+    
+    // Check if new percentage would exceed 100%
+    if (currentTotal + newPercentage > 100) {
+      // Cap the percentage to what's remaining
+      newPercentage = Math.max(0, 100 - currentTotal);
+      console.log(`Percentage capped to ${newPercentage.toFixed(1)}% to prevent exceeding 100%`);
+    }
+    
+    newAllocations[index].percentage = newPercentage;
+    setStandaloneMonthlyAllocations(newAllocations);
+    
+    // Calculate and show totals
+    const totals = calculateStandaloneTotals(newAllocations);
+    const remainingPercentage = 100 - totals.totalPercentage;
+    
+    // Show warning if total is not 100%
+    if (Math.abs(remainingPercentage) > 0.01) {
+      // Standalone allocation updated
+    }
+  };
+
+  const handleStandaloneSaveDates = async () => {
+    if (!standaloneStartDate || !standaloneEndDate || isNaN(standaloneStartDate.getTime()) || isNaN(standaloneEndDate.getTime())) {
+      showError('Please enter valid start and end dates');
+      return;
+    }
+
+    if (standaloneStartDate > standaloneEndDate) {
+      showError('Start date cannot be after end date');
+      return;
+    }
+
+    if (!selectedOrderForStandaloneAllocation) {
+      showError('No order selected for allocation');
+      return;
+    }
+
+    // Generate new allocations based on date range
+    const newAllocations = generateMonthsBetweenDates(standaloneStartDate, standaloneEndDate);
+    
+    if (newAllocations.length === 0) {
+      showError('No valid months found between the selected dates');
+      return;
+    }
+
+    try {
+      // Update order dates in database
+      const orderRef = doc(db, 'orders', selectedOrderForStandaloneAllocation.id);
+      await updateDoc(orderRef, {
+        'orderDetails.startDate': standaloneStartDate,
+        'orderDetails.endDate': standaloneEndDate,
+        'orderDetails.lastUpdated': new Date()
+      });
+
+      // Update local state
+      setSelectedOrderForStandaloneAllocation(prev => ({
+        ...prev,
+        orderDetails: {
+          ...prev.orderDetails,
+          startDate: standaloneStartDate,
+          endDate: standaloneEndDate,
+          lastUpdated: new Date()
+        }
+      }));
+
+      setStandaloneMonthlyAllocations(newAllocations);
+      setStandaloneShowAllocationTable(true);
+      showSuccess('Dates saved! Table updated with relevant months.');
+    } catch (error) {
+      console.error('Error saving dates:', error);
+      showError('Failed to save dates to database');
+    }
+  };
+
+  const resetStandaloneAllocationToDefault = () => {
+    if (!selectedOrderForStandaloneAllocation) return;
+    
+    const initialAllocations = generateMonthlyAllocations(selectedOrderForStandaloneAllocation);
+    setStandaloneMonthlyAllocations(initialAllocations);
+    setStandaloneShowAllocationTable(false);
+    showSuccess('Allocation reset to default values');
+  };
+
+  const applyStandaloneAllocation = async () => {
+    try {
+      if (!selectedOrderForStandaloneAllocation) return;
+      
+      // Validate total percentage equals 100%
+      const totals = calculateStandaloneTotals(standaloneMonthlyAllocations);
+      if (Math.abs(totals.totalPercentage - 100) > 0.01) {
+        showError('Total percentage must equal 100%');
+        return;
+      }
+
+      // Calculate the actual allocation date range from the allocations
+      const allocationMonths = standaloneMonthlyAllocations.map(allocation => ({
+        year: allocation.year,
+        month: allocation.month
+      })).sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      });
+
+      // Use the dates that the user actually entered in the allocation dialog
+      const actualStartDate = standaloneStartDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
+      const actualEndDate = standaloneEndDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
+
+      // Using user-entered dates for allocation
+
+      // Prepare allocation data with detailed information
+      const allocationData = {
+        method: 'manual',
+        allocations: standaloneMonthlyAllocations.map(allocation => {
+          const revenue = (standaloneTotalRevenue * allocation.percentage / 100);
+          const cost = (standaloneTotalCost * allocation.percentage / 100);
+          const profit = revenue - cost;
+          
+          return {
+            month: allocation.month,
+            year: allocation.year,
+            percentage: allocation.percentage,
+            revenue: revenue,
+            cost: cost,
+            profit: profit,
+            monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
+            calculatedAt: new Date()
+          };
+        }),
+        appliedAt: new Date(),
+        originalRevenue: standaloneTotalRevenue,
+        originalCost: standaloneTotalCost,
+        originalProfit: standaloneTotalRevenue - standaloneTotalCost,
+        dateRange: {
+          startDate: actualStartDate,
+          endDate: actualEndDate
+        },
+        recalculatedAt: new Date()
+      };
+
+      // Prepare update data (only allocation, no status change)
+      const updateData = {
+        allocation: allocationData,
+        startDate: actualStartDate,
+        endDate: actualEndDate
+      };
+
+      // Force update the order dates to match the actual allocation range
+      updateData.orderDetails = {
+        ...selectedOrderForStandaloneAllocation.orderDetails,
+        startDate: actualStartDate,
+        endDate: actualEndDate,
+        lastUpdated: new Date()
+      };
+
+      // Force hide allocation dialog and show confirmation
+      setStandaloneAllocationDialogHidden(true);
+      setStandaloneAllocationDialogOpen(false); // Also close it completely
+      
+      // Longer delay to ensure dialog is completely hidden before showing confirmation
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Show confirmation dialog with allocation summary
+      const allocationSummary = standaloneMonthlyAllocations.map(allocation => 
+        `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
+      ).join(', ');
+
+      const confirmed = await showConfirm(
+        'Confirm Allocation',
+        `Are you sure you want to apply this allocation?\n\n` +
+        `Order: ${selectedOrderForStandaloneAllocation.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation.id}\n` +
+        `Date Range: ${actualStartDate.toLocaleDateString()} - ${actualEndDate.toLocaleDateString()}\n` +
+        `Allocations: ${allocationSummary}\n` +
+        `Total Revenue: ${formatCurrency(standaloneTotalRevenue)}\n` +
+        `Total Cost: ${formatCurrency(standaloneTotalCost)}\n` +
+        `Total Profit: ${formatCurrency(standaloneTotalRevenue - standaloneTotalCost)}`
+      );
+
+      if (!confirmed) {
+        // Reopen allocation dialog if user cancels
+        setStandaloneAllocationDialogHidden(false);
+        setStandaloneAllocationDialogOpen(true);
+        return; // User cancelled
+      }
+      
+      const orderRef = doc(db, 'orders', selectedOrderForStandaloneAllocation.id);
+      await updateDoc(orderRef, updateData);
+      
+      // Update local state
+      const updatedOrder = {
+        ...selectedOrderForStandaloneAllocation,
+        ...updateData
+      };
+      
+      setOrders(orders.map(order => 
+        order.id === selectedOrderForStandaloneAllocation.id ? updatedOrder : order
+      ));
+      setFilteredOrders(filteredOrders.map(order => 
+        order.id === selectedOrderForStandaloneAllocation.id ? updatedOrder : order
+      ));
+      
+      // Update selected order if it's the same
+      if (selectedOrder?.id === selectedOrderForStandaloneAllocation.id) {
+        setSelectedOrder(updatedOrder);
+      }
+      
+      showSuccess('Allocation applied successfully');
+      setStandaloneAllocationDialogOpen(false);
+      setStandaloneAllocationDialogHidden(false);
+      setSelectedOrderForStandaloneAllocation(null);
+    } catch (error) {
+      console.error('Error applying standalone allocation:', error);
+      showError('Failed to apply allocation');
+      setStandaloneAllocationDialogHidden(false);
+    }
+  };
+
   const handleAllocationDialog = (order, newStatus) => {
     setSelectedOrderForAllocation({ ...order, newStatus });
     setAllocationDialogOpen(true);
@@ -426,6 +855,21 @@ const WorkshopPage = () => {
         return;
       }
 
+      // Calculate the actual allocation date range from the allocations
+      const allocationMonths = monthlyAllocations.map(allocation => ({
+        year: allocation.year,
+        month: allocation.month
+      })).sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+      });
+
+      // Use the dates that the user actually entered in the allocation dialog
+      const actualStartDate = startDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
+      const actualEndDate = endDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
+
+      // Using user-entered dates for allocation
+
       // Prepare allocation data with detailed information
       const allocationData = {
         method: 'manual',
@@ -450,8 +894,8 @@ const WorkshopPage = () => {
         originalCost: totalCost,
         originalProfit: totalRevenue - totalCost,
         dateRange: {
-          startDate: startDate,
-          endDate: endDate
+          startDate: actualStartDate,
+          endDate: actualEndDate
         },
         recalculatedAt: new Date()
       };
@@ -459,18 +903,18 @@ const WorkshopPage = () => {
       // Prepare update data
       const updateData = {
         invoiceStatus: selectedOrderForAllocation.newStatus?.value || 'done',
-        allocation: allocationData
+        allocation: allocationData,
+        startDate: actualStartDate,
+        endDate: actualEndDate
       };
 
-      // Always update dates if they exist (even if they haven't changed)
-      if (startDate && endDate) {
-        updateData.orderDetails = {
-          ...selectedOrderForAllocation.orderDetails,
-          startDate: startDate,
-          endDate: endDate,
-          lastUpdated: new Date()
-        };
-      }
+      // Force update the order dates to match the actual allocation range
+      updateData.orderDetails = {
+        ...selectedOrderForAllocation.orderDetails,
+        startDate: actualStartDate,
+        endDate: actualEndDate,
+        lastUpdated: new Date()
+      };
 
       // Force hide allocation dialog and show confirmation
       setAllocationDialogHidden(true);
@@ -479,21 +923,28 @@ const WorkshopPage = () => {
       // Longer delay to ensure dialog is completely hidden before showing confirmation
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Show confirmation dialog with allocation summary
+      // Show enhanced confirmation dialog with email options
       const allocationSummary = monthlyAllocations.map(allocation => 
         `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
       ).join(', ');
 
-      const confirmed = await showConfirm(
-        'Confirm Allocation',
-        `Are you sure you want to apply this allocation?\n\n` +
+      // Check if customer has email
+      const customerEmail = selectedOrderForAllocation.personalInfo?.email;
+      const hasEmail = customerEmail && customerEmail.trim() !== '';
+
+      const confirmed = await showEnhancedConfirm(
+        'Confirm Order Completion & Email',
+        `Are you sure you want to complete this order and apply the allocation?\n\n` +
         `Order: ${selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}\n` +
+        `Customer: ${selectedOrderForAllocation.personalInfo?.customerName || 'N/A'}\n` +
         `Status: ${selectedOrderForAllocation.newStatus?.label || 'Done'}\n` +
-        `Date Range: ${startDate ? startDate.toLocaleDateString() : 'Not set'} - ${endDate ? endDate.toLocaleDateString() : 'Not set'}\n` +
+        `Date Range: ${actualStartDate.toLocaleDateString()} - ${actualEndDate.toLocaleDateString()}\n` +
         `Allocations: ${allocationSummary}\n` +
         `Total Revenue: ${formatCurrency(totalRevenue)}\n` +
         `Total Cost: ${formatCurrency(totalCost)}\n` +
-        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`
+        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`,
+        hasEmail,
+        includeReviewRequest
       );
 
       if (!confirmed) {
@@ -505,6 +956,71 @@ const WorkshopPage = () => {
       
       const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
+      
+      // Send completion email if customer has email and user confirmed
+      console.log('🔍 Workshop Debug - Email sending conditions:', {
+        hasCustomerEmail: !!customerEmail,
+        customerEmail: customerEmail,
+        confirmedSendEmail: confirmed.sendEmail,
+        confirmedIncludeReview: confirmed.includeReviewRequest
+      });
+      
+      if (customerEmail && confirmed.sendEmail) {
+        try {
+          setSendingCompletionEmail(true);
+          
+          // Prepare order data for email
+          const orderDataForEmail = {
+            personalInfo: selectedOrderForAllocation.personalInfo,
+            orderDetails: selectedOrderForAllocation.orderDetails,
+            furnitureData: {
+              groups: selectedOrderForAllocation.furnitureData?.groups || []
+            },
+            paymentData: selectedOrderForAllocation.paymentData
+          };
+
+          console.log('🔍 Workshop Debug - Order data prepared for email:', {
+            hasPersonalInfo: !!orderDataForEmail.personalInfo,
+            hasOrderDetails: !!orderDataForEmail.orderDetails,
+            hasFurnitureData: !!orderDataForEmail.furnitureData,
+            furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
+          });
+
+          // Progress callback for email sending
+          const onEmailProgress = (message) => {
+            console.log('🔍 Workshop Debug - Email progress:', message);
+            showSuccess(`📧 ${message}`);
+          };
+
+          console.log('🔍 Workshop Debug - Calling sendCompletionEmailWithGmail...');
+          
+          // Send the completion email
+          const emailResult = await sendCompletionEmailWithGmail(
+            orderDataForEmail, 
+            customerEmail, 
+            confirmed.includeReviewRequest, 
+            onEmailProgress
+          );
+          
+          console.log('🔍 Workshop Debug - Email result:', emailResult);
+          
+          if (emailResult.success) {
+            showSuccess('✅ Completion email sent successfully!');
+          } else {
+            showError(`❌ Failed to send completion email: ${emailResult.message}`);
+          }
+        } catch (error) {
+          console.error('🔍 Workshop Debug - Error sending completion email:', error);
+          showError(`Failed to send completion email: ${error.message}`);
+        } finally {
+          setSendingCompletionEmail(false);
+        }
+      } else {
+        console.log('🔍 Workshop Debug - Email not sent because:', {
+          noCustomerEmail: !customerEmail,
+          userDidNotConfirm: !confirmed.sendEmail
+        });
+      }
       
       showSuccess('Order completed and allocated successfully');
       setAllocationDialogOpen(false);
@@ -608,7 +1124,7 @@ const WorkshopPage = () => {
           }
           
           // Show allocation dialog for all "End Done" orders
-          console.log('Showing allocation dialog for completed order:', order.id);
+          // Showing allocation dialog for completed order
           handleAllocationDialog(order, newStatusObj);
           setStatusDialogOpen(false);
           return;
@@ -1454,6 +1970,91 @@ const WorkshopPage = () => {
     }
   };
 
+  // Extra Expense Modal Functions
+  const handleOpenExpenseModal = () => {
+    setExpenseModalOpen(true);
+    setExpenseForm({ description: '', price: '', unit: '', tax: '', taxType: 'fixed', total: '' });
+    setExpenseList([]);
+  };
+
+  const handleCloseExpenseModal = () => setExpenseModalOpen(false);
+
+  const handleExpenseInputChange = (e) => {
+    const { name, value } = e.target;
+    let newForm = { ...expenseForm, [name]: value };
+    // Auto-calc tax and total
+    const price = parseFloat(newForm.price) || 0;
+    const unit = isNaN(Number(newForm.unit)) ? 1 : parseFloat(newForm.unit) || 1;
+    let tax = 0;
+    if (newForm.taxType === 'percent') {
+      const percent = parseFloat(newForm.tax) || 0;
+      tax = price * unit * percent / 100;
+      newForm.taxValue = tax.toFixed(2);
+    } else {
+      tax = parseFloat(newForm.tax) || 0;
+      newForm.taxValue = tax.toFixed(2);
+    }
+    newForm.total = (price * unit + tax).toFixed(2);
+    setExpenseForm(newForm);
+  };
+
+  const handleTaxTypeChange = (e) => {
+    const taxType = e.target.value;
+    let newForm = { ...expenseForm, taxType };
+    // Recalculate tax and total
+    const price = parseFloat(newForm.price) || 0;
+    const unit = isNaN(Number(newForm.unit)) ? 1 : parseFloat(newForm.unit) || 1;
+    let tax = 0;
+    if (taxType === 'percent') {
+      const percent = parseFloat(newForm.tax) || 0;
+      tax = price * unit * percent / 100;
+      newForm.taxValue = tax.toFixed(2);
+    } else {
+      tax = parseFloat(newForm.tax) || 0;
+      newForm.taxValue = tax.toFixed(2);
+    }
+    newForm.total = (price * unit + tax).toFixed(2);
+    setExpenseForm(newForm);
+  };
+
+  const handleAddExpenseToList = () => {
+    if (!expenseForm.description || !expenseForm.price || !expenseForm.unit) return;
+    setExpenseList([
+      ...expenseList,
+      {
+        description: expenseForm.description,
+        price: parseFloat(expenseForm.price) || 0,
+        unit: expenseForm.unit,
+        tax: parseFloat(expenseForm.taxValue) || 0,
+        taxType: expenseForm.taxType,
+        total: parseFloat(expenseForm.total) || 0,
+      },
+    ]);
+    setExpenseForm({ description: '', price: '', unit: '', tax: '', taxType: 'fixed', total: '' });
+  };
+
+  const handleDeleteExpense = (idx) => {
+    setExpenseList(expenseList.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveAllExpenses = async () => {
+    if (!selectedOrder) return;
+    try {
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      // Merge with existing extraExpenses if any
+      const prev = selectedOrder.extraExpenses || [];
+      const newExpenses = [...prev, ...expenseList];
+      await updateDoc(orderRef, { extraExpenses: newExpenses });
+      showSuccess('Extra expenses saved!');
+      // Update local state so UI refreshes
+      setSelectedOrder({ ...selectedOrder, extraExpenses: newExpenses });
+      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, extraExpenses: newExpenses } : o));
+    } catch (err) {
+      showError('Failed to save extra expenses');
+    }
+    setExpenseModalOpen(false);
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -1611,11 +2212,18 @@ const WorkshopPage = () => {
 
                           {/* Status and Date */}
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Chip
-                              label={getStatusText(order)}
-                              color={getStatusColor(order)}
-                              size="small"
-                            />
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Chip
+                                label={getStatusText(order)}
+                                color={getStatusColor(order)}
+                                size="small"
+                              />
+                              {order.allocation && order.allocation.allocations && (
+                                <Tooltip title="Has allocation data">
+                                  <BarChartIcon sx={{ fontSize: 16, color: '#4CAF50' }} />
+                                </Tooltip>
+                              )}
+                            </Box>
                             <Typography variant="caption" color="text.secondary">
                               {formatDate(order.createdAt)}
                             </Typography>
@@ -1652,7 +2260,7 @@ const WorkshopPage = () => {
                 </Box>
               </Box>
               
-              {/* Second Row - Email Button and Status Button */}
+              {/* Second Row - Email Button, Status Button, and Add Extra Expense Button */}
               <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 2 }}>
                 <Button
                   variant="contained"
@@ -1732,6 +2340,78 @@ const WorkshopPage = () => {
                   }}
                 >
                   {getStatusInfo(selectedOrder.invoiceStatus).label}
+                </Button>
+
+                {/* Add Extra Expense Button */}
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  onClick={handleOpenExpenseModal}
+                  sx={{
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #f27921',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #e06810',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                    },
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
+                  }}
+                >
+                  Add Extra Expense
+                </Button>
+
+                {/* Allocation Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  startIcon={<BarChartIcon />}
+                  onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: 2,
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #274290',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #1e3a7a',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
+                      transform: 'translateY(-1px)'
+                    },
+                    transition: 'all 0.3s ease',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
+                  }}
+                >
+                  {selectedOrder.allocation && selectedOrder.allocation.allocations ? 'Edit Allocation' : 'Allocate'}
                 </Button>
               </Box>
             </Box>
@@ -1914,7 +2594,7 @@ const WorkshopPage = () => {
                         📅 Start Date
                       </Typography>
                       <Typography variant="body1" sx={{ mb: 2 }}>
-                        {selectedOrder.orderDetails?.startDate || 'N/A'}
+                        {selectedOrder.orderDetails?.startDate ? formatDate(selectedOrder.orderDetails.startDate) : 'N/A'}
                       </Typography>
                     </Box>
 
@@ -2327,8 +3007,8 @@ const WorkshopPage = () => {
                               </Tooltip>
                             </Box>
                             
-                            {/* Row 1: Material Company - Material Code - Treatment */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                            {/* Row 1: Material Company - Material Code */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
@@ -2380,49 +3060,6 @@ const WorkshopPage = () => {
                                 size="small"
                                 fullWidth
                               />
-                              <FormControl fullWidth size="small">
-                                <InputLabel sx={{ 
-                                  backgroundColor: '#2a2a2a',
-                                  color: '#ffffff',
-                                  px: 1,
-                                  '&.Mui-focused': {
-                                    backgroundColor: '#2a2a2a',
-                                    color: '#ffffff'
-                                  }
-                                }}>Treatment</InputLabel>
-                                <Select
-                                  value={currentGroup.treatment || ''}
-                                  onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
-                                  label="Treatment"
-                                  sx={{
-                                    '& .MuiOutlinedInput-root': {
-                                      borderColor: '#2a2a2a',
-                                      backgroundColor: '#2a2a2a',
-                                      color: '#ffffff',
-                                      '&:hover': {
-                                        borderColor: '#3a3a3a',
-                                        backgroundColor: '#3a3a3a'
-                                      },
-                                      '&.Mui-focused': {
-                                        borderColor: '#2a2a2a',
-                                        backgroundColor: '#2a2a2a'
-                                      }
-                                    },
-                                    '& .MuiSelect-icon': {
-                                      color: '#ffffff'
-                                    }
-                                  }}
-                                >
-                                  <MenuItem value="">
-                                    <em>Select Treatment</em>
-                                  </MenuItem>
-                                  {treatments.map((treatment) => (
-                                    <MenuItem key={treatment.id} value={treatment.treatmentKind}>
-                                      {treatment.treatmentKind}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
                             </Box>
 
                             {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -2995,8 +3632,8 @@ const WorkshopPage = () => {
                       </Typography>
                     </Box>
                     
-                    {/* Row 1: Material Company - Material Code - Treatment */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                    {/* Row 1: Material Company - Material Code */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel 
                           sx={{ 
@@ -3046,37 +3683,6 @@ const WorkshopPage = () => {
                         size="small"
                         fullWidth
                       />
-                      <FormControl fullWidth size="small">
-                        <InputLabel>Treatment</InputLabel>
-                        <Select
-                          value={group.treatment || ''}
-                          onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
-                          label="Treatment"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderColor: '#1976d2',
-                              backgroundColor: '#f3f8ff',
-                              '&:hover': {
-                                borderColor: '#1565c0',
-                                backgroundColor: '#e3f2fd'
-                              },
-                              '&.Mui-focused': {
-                                borderColor: '#1976d2',
-                                backgroundColor: '#e3f2fd'
-                              }
-                            }
-                          }}
-                        >
-                          <MenuItem value="">
-                            <em>Select Treatment</em>
-                          </MenuItem>
-                          {treatments.map((treatment) => (
-                            <MenuItem key={treatment.id} value={treatment.treatmentKind}>
-                              {treatment.treatmentKind}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
                     </Box>
 
                     {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -3447,7 +4053,7 @@ const WorkshopPage = () => {
                             ${payment.amount.toFixed(2)}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {new Date(payment.date).toLocaleDateString()}
+                            {formatDate(payment.date)}
                           </Typography>
                         </Box>
                         {payment.notes && (
@@ -4131,6 +4737,924 @@ const WorkshopPage = () => {
                 return `${Math.abs(100 - calculateTotals(monthlyAllocations).totalPercentage).toFixed(1)}% Remaining`;
               }
             })()}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Standalone Allocation Dialog */}
+      <Dialog 
+        open={standaloneAllocationDialogOpen && !standaloneAllocationDialogHidden} 
+        onClose={() => setStandaloneAllocationDialogOpen(false)} 
+        maxWidth="lg" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 1000
+          },
+          '& .MuiBackdrop-root': {
+            zIndex: 999
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <BarChartIcon />
+          Financial Allocation
+        </DialogTitle>
+        
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
+          {/* Order Summary */}
+          {selectedOrderForStandaloneAllocation && (
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33' }}>
+              <Typography variant="h6" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>Order Summary</Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Order #:</strong> {selectedOrderForStandaloneAllocation.orderDetails?.billInvoice}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Customer:</strong> {selectedOrderForStandaloneAllocation.personalInfo?.customerName}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> ${standaloneTotalRevenue.toFixed(2)}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Cost:</strong> ${standaloneTotalCost.toFixed(2)}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong style={{ color: '#b98f33' }}>Total Profit:</strong> ${(standaloneTotalRevenue - standaloneTotalCost).toFixed(2)}
+              </Typography>
+              {selectedOrderForStandaloneAllocation.allocation && selectedOrderForStandaloneAllocation.allocation.allocations && (
+                <Typography variant="body2" sx={{ color: '#4CAF50', fontStyle: 'italic', mt: 1 }}>
+                  ⚠️ This order already has allocation data. You can edit it or reset to defaults.
+                </Typography>
+              )}
+            </Box>
+          )}
+
+          {/* Editable Dates */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Order Dates</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={5}>
+                <TextField
+                  label="Start Date"
+                  type="date"
+                  value={standaloneStartDate && standaloneStartDate instanceof Date && !isNaN(standaloneStartDate) ? standaloneStartDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    if (!isNaN(date.getTime())) {
+                      setStandaloneStartDate(date);
+                    }
+                  }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: '#333333',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={5}>
+                <TextField
+                  label="End Date"
+                  type="date"
+                  value={standaloneEndDate && standaloneEndDate instanceof Date && !isNaN(standaloneEndDate) ? standaloneEndDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    if (!isNaN(date.getTime())) {
+                      setStandaloneEndDate(date);
+                    }
+                  }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: '#333333',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={2}>
+                <Button
+                  variant="contained"
+                  onClick={handleStandaloneSaveDates}
+                  fullWidth
+                  sx={{ 
+                    height: '56px',
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #4CAF50',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #45a049',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                    },
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
+                  }}
+                >
+                  Save & Confirm
+                </Button>
+              </Grid>
+            </Grid>
+            <Typography variant="body2" sx={{ mt: 1, color: '#b98f33', fontStyle: 'italic' }}>
+              Click "Save & Confirm" to update the allocation table with months between your selected dates
+            </Typography>
+          </Box>
+
+          {/* Reset to Default Button */}
+          <Box sx={{ mb: 3 }}>
+            <Button
+              variant="outlined"
+              startIcon={<RestartAltIcon />}
+              onClick={resetStandaloneAllocationToDefault}
+              sx={{
+                borderColor: '#b98f33',
+                color: '#b98f33',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                },
+              }}
+            >
+              Reset to Default
+            </Button>
+          </Box>
+
+          {/* Financial Allocation Table */}
+          {standaloneShowAllocationTable && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Monthly Financial Allocation</Typography>
+              <Typography variant="body2" sx={{ mb: 2, color: '#b98f33' }}>
+                Distribute the order's revenue and costs across the months between your selected dates. Total percentage must equal 100%.
+              </Typography>
+            
+            <TableContainer component={Paper} sx={{ maxHeight: 400, backgroundColor: '#2a2a2a' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: '#b98f33' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Month</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Percentage (%)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Revenue ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Cost ($)</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>Profit ($)</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {standaloneMonthlyAllocations.map((allocation, index) => {
+                    const revenue = (standaloneTotalRevenue * allocation.percentage / 100);
+                    const cost = (standaloneTotalCost * allocation.percentage / 100);
+                    const profit = revenue - cost;
+                    
+                    return (
+                      <TableRow key={index} sx={{ backgroundColor: '#3a3a3a', '&:hover': { backgroundColor: '#4a4a4a' } }}>
+                        <TableCell sx={{ color: '#ffffff' }}>{allocation.label}</TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={allocation.percentage}
+                            onChange={(e) => updateStandaloneAllocationPercentage(index, e.target.value)}
+                            size="small"
+                            sx={{ 
+                              width: 80,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': {
+                                  borderColor: '#333333',
+                                },
+                                '&:hover fieldset': {
+                                  borderColor: '#b98f33',
+                                },
+                                '&.Mui-focused fieldset': {
+                                  borderColor: '#b98f33',
+                                },
+                              },
+                              '& .MuiInputLabel-root': {
+                                color: '#b98f33',
+                              },
+                              '& .MuiInputBase-input': {
+                                color: '#ffffff',
+                              },
+                            }}
+                            inputProps={{ 
+                              min: 0, 
+                              max: 100, 
+                              step: 0.1 
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                          ${revenue.toFixed(2)}
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#f27921' }}>
+                          ${cost.toFixed(2)}
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: profit >= 0 ? '#4CAF50' : '#f27921' }}>
+                          ${profit.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {/* Totals Row */}
+                  <TableRow sx={{ backgroundColor: '#b98f33' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>TOTAL</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      {calculateStandaloneTotals(standaloneMonthlyAllocations).totalPercentage.toFixed(1)}%
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      ${calculateStandaloneTotals(standaloneMonthlyAllocations).totalRevenue.toFixed(2)}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      ${calculateStandaloneTotals(standaloneMonthlyAllocations).totalCost.toFixed(2)}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      ${calculateStandaloneTotals(standaloneMonthlyAllocations).totalProfit.toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+            
+            {/* Allocation Status */}
+            {standaloneShowAllocationTable && (
+              <Box sx={{ mt: 2 }}>
+                {(() => {
+                  const status = getStandaloneAllocationStatus();
+                  return (
+                    <Alert 
+                      severity={status.status === 'valid' ? 'success' : status.status === 'over' ? 'error' : 'warning'} 
+                      sx={{ 
+                        '& .MuiAlert-message': { 
+                          color: status.color,
+                          fontWeight: 'bold'
+                        }
+                      }}
+                    >
+                      {status.message}
+                    </Alert>
+                  );
+                })()}
+              </Box>
+            )}
+
+            {/* Allocation Summary */}
+            {standaloneShowAllocationTable && getStandaloneAllocationStatus().status === 'valid' && (
+              <Box sx={{ mt: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33' }}>
+                <Typography variant="h6" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>Allocation Summary</Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Order:</strong> {selectedOrderForStandaloneAllocation?.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation?.id}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {standaloneStartDate ? standaloneStartDate.toLocaleDateString() : 'Not set'} - {standaloneEndDate ? standaloneEndDate.toLocaleDateString() : 'Not set'}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> {formatCurrency(standaloneTotalRevenue)}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Cost:</strong> {formatCurrency(standaloneTotalCost)}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Total Profit:</strong> {formatCurrency(standaloneTotalRevenue - standaloneTotalCost)}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
+                  <strong style={{ color: '#b98f33' }}>Allocation Breakdown:</strong>
+                </Typography>
+                <Box sx={{ ml: 2 }}>
+                  {standaloneMonthlyAllocations.map((allocation, index) => (
+                    <Typography key={index} variant="body2" sx={{ fontSize: '0.875rem', color: '#ffffff' }}>
+                      • {allocation.label}: {allocation.percentage.toFixed(1)}% ({formatCurrency(standaloneTotalRevenue * allocation.percentage / 100)})
+                    </Typography>
+                  ))}
+                </Box>
+                <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem', color: '#b98f33', fontStyle: 'italic' }}>
+                  Last recalculated: {new Date().toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
+          <Button 
+            onClick={() => setStandaloneAllocationDialogOpen(false)}
+            variant="outlined"
+            size="small"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={applyStandaloneAllocation}
+            variant="contained"
+            disabled={Math.abs(calculateStandaloneTotals(standaloneMonthlyAllocations).totalPercentage - 100) > 0.01}
+            size="small"
+            sx={{ 
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #f27921',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #e06810',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            {(() => {
+              const status = getStandaloneAllocationStatus();
+              if (status.status === 'valid') {
+                return 'Apply Allocation';
+              } else if (status.status === 'over') {
+                return 'Total Exceeds 100% - Cannot Apply';
+              } else {
+                return `${Math.abs(100 - calculateStandaloneTotals(standaloneMonthlyAllocations).totalPercentage).toFixed(1)}% Remaining`;
+              }
+            })()}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Extra Expense Modal */}
+      <Dialog open={expenseModalOpen} onClose={handleCloseExpenseModal} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
+          Add Extra Expense
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Bill No"
+              value={selectedOrder?.orderDetails?.billInvoice || ''}
+              InputProps={{ readOnly: true }}
+              fullWidth
+              sx={{ 
+                backgroundColor: '#2a2a2a',
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            />
+            <TextField
+              label="Expense Description"
+              name="description"
+              value={expenseForm.description}
+              onChange={handleExpenseInputChange}
+              fullWidth
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Price"
+                name="price"
+                value={expenseForm.price}
+                onChange={handleExpenseInputChange}
+                type="number"
+                fullWidth
+                required
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+              />
+              <TextField
+                label="Unit"
+                name="unit"
+                value={expenseForm.unit}
+                onChange={handleExpenseInputChange}
+                fullWidth
+                required
+                placeholder="e.g. 1, hour, piece"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <TextField
+                label={expenseForm.taxType === 'percent' ? 'Tax (%)' : 'Tax (Fixed)'}
+                name="tax"
+                value={expenseForm.tax}
+                onChange={handleExpenseInputChange}
+                type="number"
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end" sx={{ p: 0, m: 0 }}>
+                      <Select
+                        value={expenseForm.taxType}
+                        onChange={handleTaxTypeChange}
+                        variant="standard"
+                        disableUnderline
+                        sx={{ 
+                          minWidth: 48, 
+                          maxWidth: 60, 
+                          background: 'transparent', 
+                          ml: 0.5, 
+                          '& .MuiSelect-select': { 
+                            p: 0, 
+                            pr: 1, 
+                            fontWeight: 'bold', 
+                            color: '#b98f33' 
+                          } 
+                        }}
+                        MenuProps={{
+                          PaperProps: {
+                            sx: { 
+                              minWidth: 80,
+                              backgroundColor: '#2a2a2a',
+                              '& .MuiMenuItem-root': {
+                                color: '#ffffff',
+                                '&:hover': {
+                                  backgroundColor: '#3a3a3a',
+                                },
+                              },
+                            }
+                          }
+                        }}
+                      >
+                        <MenuItem value="fixed">$</MenuItem>
+                        <MenuItem value="percent">%</MenuItem>
+                      </Select>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                label="Tax Value"
+                name="taxValue"
+                value={expenseForm.taxValue || ''}
+                InputProps={{ readOnly: true, style: { color: '#b98f33', fontWeight: 'bold' } }}
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                }}
+              />
+              <TextField
+                label="Total"
+                name="total"
+                value={expenseForm.total}
+                onChange={handleExpenseInputChange}
+                type="number"
+                fullWidth
+                InputProps={{ style: { fontWeight: 'bold', color: '#b98f33' } }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Tooltip title="Add to list">
+                <span>
+                  <IconButton
+                    sx={{
+                      color: '#b98f33',
+                      '&:hover': {
+                        backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                      },
+                    }}
+                    onClick={handleAddExpenseToList}
+                    disabled={!(expenseForm.description && expenseForm.price && expenseForm.unit)}
+                  >
+                    <AddIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+            {/* List of added expenses */}
+            {expenseList.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>
+                  Added Expenses
+                </Typography>
+                {expenseList.map((exp, idx) => (
+                  <Box key={idx} sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    mb: 1, 
+                    backgroundColor: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)',
+                    border: '1px solid #333333',
+                    p: 1, 
+                    borderRadius: 1,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}>
+                    <Typography sx={{ flex: 2, color: '#ffffff' }}>{exp.description}</Typography>
+                    <Typography sx={{ flex: 1, color: '#b98f33' }}>{exp.price}</Typography>
+                    <Typography sx={{ flex: 1, color: '#ffffff' }}>{exp.unit}</Typography>
+                    <Typography sx={{ flex: 1, color: '#b98f33' }}>{exp.taxType === 'percent' ? `${((exp.tax / (exp.price * (isNaN(Number(exp.unit)) ? 1 : parseFloat(exp.unit) || 1))) * 100).toFixed(2)}%` : exp.tax}</Typography>
+                    <Typography sx={{ flex: 1, fontWeight: 'bold', color: '#b98f33' }}>{exp.total}</Typography>
+                    <IconButton 
+                      sx={{
+                        color: '#ff6b6b',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        },
+                      }}
+                      onClick={() => handleDeleteExpense(idx)} 
+                      size="small"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={handleCloseExpenseModal}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#000000',
+              borderWidth: '2px',
+              fontWeight: 'bold',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                borderWidth: '2px',
+                color: '#000000',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveAllExpenses} 
+            disabled={expenseList.length === 0} 
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #f27921',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #e06810',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            Save All
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Enhanced Confirmation Dialog */}
+      <Dialog 
+        open={enhancedConfirmDialog.open} 
+        onClose={handleEnhancedCancel}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #b98f33',
+            borderRadius: '10px',
+            color: '#ffffff'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          color: '#b98f33', 
+          borderBottom: '1px solid #b98f33',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <span style={{ fontSize: '24px' }}>✨</span>
+          {enhancedConfirmDialog.title}
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              whiteSpace: 'pre-line', 
+              lineHeight: 1.6,
+              mb: 2,
+              color: '#ffffff'
+            }}
+          >
+            {enhancedConfirmDialog.message}
+          </Typography>
+
+          {enhancedConfirmDialog.hasEmail ? (
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#2a2a2a', 
+              borderRadius: 1, 
+              borderLeft: '4px solid #b98f33',
+              mb: 2
+            }}>
+              <Typography variant="h6" sx={{ color: '#b98f33', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                📧 Email Notification
+              </Typography>
+              
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={sendEmailChecked}
+                    onChange={(e) => setSendEmailChecked(e.target.checked)}
+                    sx={{
+                      color: '#b98f33',
+                      '&.Mui-checked': {
+                        color: '#b98f33',
+                      },
+                    }}
+                  />
+                }
+                label="Send completion email to customer"
+                sx={{ 
+                  color: '#ffffff',
+                  mb: 1,
+                  '& .MuiFormControlLabel-label': {
+                    fontWeight: 500
+                  }
+                }}
+              />
+              
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={includeReviewChecked}
+                    onChange={(e) => setIncludeReviewChecked(e.target.checked)}
+                    sx={{
+                      color: '#b98f33',
+                      '&.Mui-checked': {
+                        color: '#b98f33',
+                      },
+                    }}
+                  />
+                }
+                label="Include Google review request"
+                sx={{ 
+                  color: '#ffffff',
+                  '& .MuiFormControlLabel-label': {
+                    fontWeight: 500
+                  }
+                }}
+              />
+              
+              <Typography variant="body2" sx={{ 
+                mt: 1, 
+                color: '#cccccc', 
+                fontStyle: 'italic',
+                fontSize: '13px'
+              }}>
+                The email will include a warm thank you message, treatment care instructions, and a review request.
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#2a2a2a', 
+              borderRadius: 1, 
+              borderLeft: '4px solid #f27921',
+              mb: 2
+            }}>
+              <Typography variant="h6" sx={{ color: '#f27921', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                ⚠️ No Email Available
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                Customer email not found. Order will be completed without email notification.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleEnhancedCancel}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => handleEnhancedConfirm(sendEmailChecked, includeReviewChecked)}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              fontWeight: 'bold',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              },
+            }}
+          >
+            Complete Order
           </Button>
         </DialogActions>
       </Dialog>
