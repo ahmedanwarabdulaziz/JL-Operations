@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import useMaterialCompanies from '../../../hooks/useMaterialCompanies';
+import { buttonStyles } from '../../../styles/buttonStyles';
 
 const Step3Furniture = ({ 
   furnitureGroups, 
@@ -581,17 +582,10 @@ const Step3Furniture = ({
       {/* Add Furniture Group Button */}
       <Box sx={{ mb: 3 }}>
         <Button
-          variant="outlined"
+          variant="contained"
           startIcon={<AddIcon />}
           onClick={addFurnitureGroup}
-          sx={{
-            borderColor: '#e0e0e0',
-            color: '#666',
-            '&:hover': {
-              borderColor: '#bdbdbd',
-              backgroundColor: '#f5f5f5'
-            }
-          }}
+          sx={buttonStyles.primaryButton}
         >
           Add Furniture Group
         </Button>

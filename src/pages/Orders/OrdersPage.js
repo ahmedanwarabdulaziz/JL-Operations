@@ -47,6 +47,7 @@ import { db } from '../../firebase/config';
 import Step5Review from './steps/Step5Review';
 import FastOrderModal from '../../components/FastOrder/FastOrderModal';
 import { calculateOrderTotal, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -384,31 +385,11 @@ const OrdersPage = () => {
             startIcon={<FlashOnIcon />}
             onClick={() => setFastOrderModalOpen(true)}
             sx={{
+              ...buttonStyles.primaryButton,
               minWidth: 150,
               px: 3,
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #f27921',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #e06810',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              },
               flexShrink: 0,
-              fontWeight: 'bold',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                borderRadius: '4px 4px 0 0',
-                pointerEvents: 'none'
-              }
+              fontWeight: 'bold'
             }}
           >
             Fast Order
@@ -418,31 +399,11 @@ const OrdersPage = () => {
             startIcon={<AddIcon />}
             onClick={() => navigate('/admin/orders/new')}
             sx={{
+              ...buttonStyles.primaryButton,
               minWidth: 150,
               px: 3,
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #4CAF50',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #45a049',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              },
               flexShrink: 0,
-              fontWeight: 'bold',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                borderRadius: '4px 4px 0 0',
-                pointerEvents: 'none'
-              }
+              fontWeight: 'bold'
             }}
           >
             Add Order
@@ -520,14 +481,14 @@ const OrdersPage = () => {
         <Table>
           <TableHead sx={{ backgroundColor: '#274290' }}>
             <TableRow>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Invoice</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Deposit Required</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Paid</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }} align="center">Actions</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Invoice</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Customer</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Total Invoice</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Deposit Required</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Total Paid</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Status</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Date</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
             <TableBody>
@@ -539,10 +500,18 @@ const OrdersPage = () => {
                     </Typography>
                     {!searchTerm && (
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         startIcon={<AddIcon />}
                         onClick={() => navigate('/admin/orders/new')}
-                        sx={{ mt: 2 }}
+                        sx={{
+                          ...buttonStyles.primaryButton,
+                          mt: 2,
+                          minWidth: 180,
+                          px: 4,
+                          py: 1.5,
+                          fontSize: '1.1rem',
+                          fontWeight: 'bold'
+                        }}
                       >
                         Create First Order
                       </Button>
@@ -552,8 +521,21 @@ const OrdersPage = () => {
               ) : (
                 filteredOrders.map((order) => (
                   <TableRow key={order.id} hover sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ReceiptIcon sx={{ mr: 1, color: '#b98f33', fontSize: 24 }} />
+                        <Typography variant="h5" sx={{ 
+                          fontWeight: 'bold', 
+                          color: '#b98f33',
+                          fontSize: '1.5rem',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        }}>
+                          {order.orderDetails?.billInvoice || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                           <PersonIcon />
                         </Avatar>
@@ -570,30 +552,22 @@ const OrdersPage = () => {
                         </Box>
                       </Box>
                     </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <ReceiptIcon sx={{ mr: 1, color: 'primary.main' }} />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                          {order.orderDetails?.billInvoice || 'N/A'}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                         ${calculateOrderTotal(order).toFixed(2)}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                         ${order.paymentData?.deposit || 0}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'success.main' }}>
                         ${order.paymentData?.amountPaid || 0}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       {order.orderDetails?.financialStatus ? (
                         <Chip
                           label={order.orderDetails.financialStatus}
@@ -613,16 +587,16 @@ const OrdersPage = () => {
                         />
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />
                         <Typography variant="body2">
                           {formatDate(order.createdAt)}
                         </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1 }}>
+                    <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
@@ -712,7 +686,7 @@ const OrdersPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          <Button onClick={() => setViewDialogOpen(false)} sx={buttonStyles.cancelButton}>Close</Button>
         </DialogActions>
       </Dialog>
 
@@ -734,13 +708,13 @@ const OrdersPage = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDeleteDialogOpen(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
           <Button
             variant="contained"
-            color="error"
             onClick={handleDeleteOrder}
             disabled={deleting}
             startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            sx={buttonStyles.dangerButton}
           >
             {deleting ? 'Deleting...' : 'Delete'}
           </Button>

@@ -12,7 +12,62 @@ import {
   useMediaQuery
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { buttonStyles } from '../../styles/buttonStyles';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
+
+// Typewriter Animation Component
+const TypewriterText = ({ text, speed = 100, delay = 1000, className = '', sx = {} }) => {
+  const [displayText, setDisplayText] = useState('');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsTyping(true);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [delay]);
+
+  useEffect(() => {
+    if (!isTyping) return;
+
+    if (currentIndex < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentIndex, isTyping, text, speed]);
+
+  return (
+    <Typography 
+      className={className}
+      sx={{
+        position: 'relative',
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          right: '-4px',
+          top: '0',
+          height: '100%',
+          width: '2px',
+          backgroundColor: '#b98f33',
+          animation: isTyping && currentIndex < text.length ? 'blink 1s infinite' : 'none',
+          '@keyframes blink': {
+            '0%, 50%': { opacity: 1 },
+            '51%, 100%': { opacity: 0 }
+          }
+        },
+        ...sx
+      }}
+    >
+      {displayText}
+    </Typography>
+  );
+};
 
 const HomePage = () => {
   const theme = useTheme();
@@ -20,6 +75,17 @@ const HomePage = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [activeReviewCard, setActiveReviewCard] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [heroAnimations, setHeroAnimations] = useState({
+    titleVisible: false,
+    subtitleVisible: false,
+    descriptionVisible: false,
+    buttonsVisible: false
+  });
+  const [whyUsAnimations, setWhyUsAnimations] = useState({
+    titleVisible: false,
+    cardsVisible: [false, false, false]
+  });
+  const [whyUsTriggered, setWhyUsTriggered] = useState(false);
 
   // Auto-scroll effect for partners carousel
   useEffect(() => {
@@ -40,6 +106,52 @@ const HomePage = () => {
 
     return () => clearInterval(interval);
   }, [isPaused]);
+
+  // Hero section animations
+  useEffect(() => {
+    const timer1 = setTimeout(() => setHeroAnimations(prev => ({ ...prev, titleVisible: true })), 300);
+    const timer2 = setTimeout(() => setHeroAnimations(prev => ({ ...prev, subtitleVisible: true })), 800);
+    const timer3 = setTimeout(() => setHeroAnimations(prev => ({ ...prev, descriptionVisible: true })), 1300);
+    const timer4 = setTimeout(() => setHeroAnimations(prev => ({ ...prev, buttonsVisible: true })), 1800);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+  }, []);
+
+  // Why Us section scroll animations
+  useEffect(() => {
+    // Don't add listener if already triggered
+    if (whyUsTriggered) return;
+
+    const handleScroll = () => {
+      const whyUsSection = document.getElementById('why-us-section');
+      if (whyUsSection) {
+        const rect = whyUsSection.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        
+        // Trigger when section is 30% visible
+        if (rect.top < windowHeight * 0.7) {
+          setWhyUsTriggered(true); // Prevent re-triggering
+          setWhyUsAnimations(prev => ({ ...prev, titleVisible: true }));
+          
+          // Stagger the cards animation
+          setTimeout(() => setWhyUsAnimations(prev => ({ ...prev, cardsVisible: [true, false, false] })), 300);
+          setTimeout(() => setWhyUsAnimations(prev => ({ ...prev, cardsVisible: [true, true, false] })), 600);
+          setTimeout(() => setWhyUsAnimations(prev => ({ ...prev, cardsVisible: [true, true, true] })), 900);
+          
+          // Remove the scroll listener immediately after triggering
+          window.removeEventListener('scroll', handleScroll);
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [whyUsTriggered]);
 
   // Handle card click
   const handleCardClick = (index) => {
@@ -77,7 +189,7 @@ const HomePage = () => {
       {/* Hero Section */}
       <Box
         sx={{
-          backgroundImage: 'url(/assets/images/x001.png)',
+          backgroundImage: 'url(/assets/images/x001.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
@@ -99,9 +211,8 @@ const HomePage = () => {
           }
         }}
       >
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2 }}>
-          <Grid container spacing={4} alignItems="center">
-            <Grid item xs={12} md={8}>
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100%' }}>
+          <Box sx={{ textAlign: 'center', width: '100%' }}>
               <Typography
                 variant={isMobile ? 'h3' : 'h2'}
                 component="h1"
@@ -114,7 +225,11 @@ const HomePage = () => {
                    textShadow: '2px 2px 4px rgba(0,0,0,0.7)',
                    color: '#ffffff',
                    letterSpacing: '-0.02em',
-                   fontSize: { xs: '2.5rem', md: '3.5rem' }
+                   fontSize: { xs: '2.5rem', md: '3.5rem' },
+                   textAlign: 'center',
+                   opacity: heroAnimations.titleVisible ? 1 : 0,
+                   transform: heroAnimations.titleVisible ? 'translateY(0)' : 'translateY(30px)',
+                   transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
                  }}
                >
                  Bringing Furniture Value
@@ -125,13 +240,25 @@ const HomePage = () => {
                  sx={{
                    fontFamily: '"Inter", "Roboto", sans-serif',
                    mb: 3,
-                   opacity: 0.95,
+                   opacity: heroAnimations.subtitleVisible ? 0.95 : 0,
                    lineHeight: 1.4,
                    textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
                    fontWeight: 400,
                    color: '#ffffff',
                    fontSize: { xs: '1.25rem', md: '1.5rem' },
-                   letterSpacing: '0.01em'
+                   letterSpacing: '0.01em',
+                   textAlign: 'center',
+                   transform: heroAnimations.subtitleVisible ? 'translateY(0)' : 'translateY(20px)',
+                   transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+                   animation: heroAnimations.subtitleVisible ? 'subtitleFloat 4s ease-in-out infinite' : 'none',
+                   '@keyframes subtitleFloat': {
+                     '0%, 100%': {
+                       transform: 'translateY(0)'
+                     },
+                     '50%': {
+                       transform: 'translateY(-5px)'
+                     }
+                   }
                  }}
                >
                  We believe everyone has the right to a well-furnished life
@@ -141,68 +268,79 @@ const HomePage = () => {
                 paragraph
                 sx={{
                   mb: 4,
-                  opacity: 0.9,
+                  opacity: heroAnimations.descriptionVisible ? 0.9 : 0,
                   lineHeight: 1.8,
                   fontSize: '1.1rem',
                   textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
                   maxWidth: '600px',
-                  color: '#ffffff'
+                  color: '#ffffff',
+                  textAlign: 'center',
+                  mx: 'auto',
+                  transform: heroAnimations.descriptionVisible ? 'translateY(0)' : 'translateY(20px)',
+                  transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+                  animation: heroAnimations.descriptionVisible ? 'descriptionFade 5s ease-in-out infinite' : 'none',
+                  '@keyframes descriptionFade': {
+                    '0%, 100%': {
+                      opacity: 0.9
+                    },
+                    '50%': {
+                      opacity: 1
+                    }
+                  }
                 }}
               >
                 At JL Upholstery, we believe everyone has the right to a well-furnished life. Our team of 20+ fabric experts and skilled upholsterers specializes in custom re-upholstery, combining creativity, passion, and expertise with your vision to give the furniture you love a second chance at life.
               </Typography>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 2, 
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                opacity: heroAnimations.buttonsVisible ? 1 : 0,
+                transform: heroAnimations.buttonsVisible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+                animation: heroAnimations.buttonsVisible ? 'buttonsPulse 6s ease-in-out infinite' : 'none',
+                '@keyframes buttonsPulse': {
+                  '0%, 100%': {
+                    transform: 'translateY(0) scale(1)'
+                  },
+                  '50%': {
+                    transform: 'translateY(-3px) scale(1.02)'
+                  }
+                }
+              }}>
                 <Button
                   component={RouterLink}
                   to="/services"
                   variant="contained"
                   size="large"
-                  sx={{
-                    backgroundColor: '#b98f33',
-                    color: '#ffffff',
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 4,
-                    py: 1.5,
-                    border: '2px solid #8b6b1f',
-                    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                    '&:hover': {
-                      backgroundColor: '#d4af5a',
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 6px 12px rgba(0,0,0,0.3)'
-                    }
-                  }}
+                  sx={buttonStyles.luxuryButton}
                 >
                   Explore Services
                 </Button>
                 <Button
                   component={RouterLink}
                   to="/contact"
-                  variant="outlined"
+                  variant="contained"
                   size="large"
                   sx={{
-                    borderColor: '#ffffff',
+                    ...buttonStyles.luxuryButton,
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 25%, transparent 50%, rgba(255,255,255,0.05) 75%, rgba(255,255,255,0.1) 100%)',
                     color: '#ffffff',
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 4,
-                    py: 1.5,
-                    border: '2px solid',
+                    border: '3px solid #ffffff',
                     '&:hover': {
-                      borderColor: '#b98f33',
-                      backgroundColor: '#b98f33',
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                      ...buttonStyles.luxuryButton['&:hover'],
+                      background: 'linear-gradient(135deg, rgba(255,215,0,0.2) 0%, rgba(255,140,0,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,140,0,0.1) 75%, rgba(255,215,0,0.2) 100%)',
+                      border: '3px solid #FFD700',
                     }
                   }}
                 >
                   Contact Us
                 </Button>
               </Box>
-            </Grid>
-          </Grid>
+            </Box>
         </Container>
-             </Box>
+      </Box>
  
                {/* Quote Section */}
         <Box sx={{ 
@@ -229,20 +367,28 @@ const HomePage = () => {
                   "
                 </Typography>
                 
-                <Typography variant="h1" component="h2" sx={{ 
-                  fontFamily: '"Playfair Display", "Times New Roman", serif',
-                  fontWeight: 700, 
-                  color: '#333333',
-                  fontSize: { xs: '2.5rem', md: '3.5rem', lg: '4.5rem' },
-                  letterSpacing: '-0.02em',
-                  lineHeight: 1.1,
-                  mb: 2,
-                  px: { xs: 8, md: 12 },
-                  position: 'relative',
-                  zIndex: 2
-                }}>
-                  We believe everyone has the right to a well-furnished life
-                </Typography>
+                <TypewriterText
+                  text="We believe everyone has the right to a well-furnished life"
+                  speed={80}
+                  delay={500}
+                  className="typewriter-quote"
+                  sx={{ 
+                    fontFamily: '"Playfair Display", "Times New Roman", serif',
+                    fontWeight: 700, 
+                    color: '#333333',
+                    fontSize: { xs: '2.5rem', md: '3.5rem', lg: '4.5rem' },
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.1,
+                    mb: 2,
+                    px: { xs: 8, md: 12 },
+                    position: 'relative',
+                    zIndex: 2,
+                    minHeight: { xs: '3rem', md: '4rem', lg: '5rem' },
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                />
                 
                 {/* Right Quote Icon */}
                 <Typography sx={{
@@ -454,10 +600,13 @@ const HomePage = () => {
                  </Box>
  
                  {/* Why Us Section */}
-         <Box sx={{ 
-           backgroundColor: '#ffffff',
-           py: { xs: 8, md: 12 }
-         }}>
+         <Box 
+           id="why-us-section"
+           sx={{ 
+             backgroundColor: '#ffffff',
+             py: { xs: 8, md: 12 }
+           }}
+         >
            <Container maxWidth="lg">
                            <Box sx={{ textAlign: 'center', mb: 8, position: 'relative' }}>
                 {/* Decorative Line Above */}
@@ -493,6 +642,24 @@ const HomePage = () => {
                   position: 'relative',
                   mb: 3,
                   textTransform: 'uppercase',
+                  opacity: whyUsAnimations.titleVisible ? 1 : 0,
+                  transform: whyUsAnimations.titleVisible ? 'translateY(0) scale(1)' : 'translateY(50px) scale(0.8)',
+                  transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  animation: whyUsAnimations.titleVisible ? 'titleBounce 1.2s ease-out' : 'none',
+                  '@keyframes titleBounce': {
+                    '0%': {
+                      transform: 'translateY(50px) scale(0.8)',
+                      opacity: 0
+                    },
+                    '50%': {
+                      transform: 'translateY(-10px) scale(1.05)',
+                      opacity: 1
+                    },
+                    '100%': {
+                      transform: 'translateY(0) scale(1)',
+                      opacity: 1
+                    }
+                  },
                   '&::before': {
                     content: '""',
                     position: 'absolute',
@@ -502,7 +669,18 @@ const HomePage = () => {
                     height: '60px',
                     background: 'linear-gradient(135deg, rgba(185, 143, 51, 0.1) 0%, rgba(185, 143, 51, 0.05) 100%)',
                     borderRadius: '50%',
-                    zIndex: -1
+                    zIndex: -1,
+                    animation: whyUsAnimations.titleVisible ? 'pulseGlow 2s ease-in-out infinite' : 'none',
+                    '@keyframes pulseGlow': {
+                      '0%, 100%': {
+                        transform: 'scale(1)',
+                        opacity: 0.3
+                      },
+                      '50%': {
+                        transform: 'scale(1.2)',
+                        opacity: 0.6
+                      }
+                    }
                   },
                   '&::after': {
                     content: '""',
@@ -513,7 +691,8 @@ const HomePage = () => {
                     height: '60px',
                     background: 'linear-gradient(135deg, rgba(185, 143, 51, 0.1) 0%, rgba(185, 143, 51, 0.05) 100%)',
                     borderRadius: '50%',
-                    zIndex: -1
+                    zIndex: -1,
+                    animation: whyUsAnimations.titleVisible ? 'pulseGlow 2s ease-in-out infinite 0.5s' : 'none'
                   }
                 }}>
                   Why Us
@@ -566,20 +745,39 @@ const HomePage = () => {
                 <Box sx={{ 
                   flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(33.333% - 16px)' },
                   minWidth: { md: '300px' },
-                  maxWidth: { md: '400px' }
+                  maxWidth: { md: '400px' },
+                  opacity: whyUsAnimations.cardsVisible[0] ? 1 : 0,
+                  transform: whyUsAnimations.cardsVisible[0] ? 'translateY(0) scale(1) rotateY(0deg)' : 'translateY(100px) scale(0.5) rotateY(-90deg)',
+                  transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  animation: whyUsAnimations.cardsVisible[0] ? 'cardEntrance 1s ease-out' : 'none',
+                  '@keyframes cardEntrance': {
+                    '0%': {
+                      transform: 'translateY(100px) scale(0.5) rotateY(-90deg)',
+                      opacity: 0
+                    },
+                    '50%': {
+                      transform: 'translateY(-20px) scale(1.1) rotateY(-45deg)',
+                      opacity: 0.8
+                    },
+                    '100%': {
+                      transform: 'translateY(0) scale(1) rotateY(0deg)',
+                      opacity: 1
+                    }
+                  }
                 }}>
                   <Card sx={{ 
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    transition: 'all 0.3s ease-in-out',
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     overflow: 'hidden',
                     backgroundColor: '#f8f8f8',
                     border: '2px solid #e0e0e0',
                     borderRadius: '20px',
+                    transform: 'perspective(1000px)',
                     '&:hover': {
-                      transform: 'translateY(-8px)',
-                      boxShadow: '0 15px 30px rgba(185, 143, 51, 0.2)',
+                      transform: 'translateY(-12px) scale(1.02) perspective(1000px) rotateX(5deg)',
+                      boxShadow: '0 25px 50px rgba(185, 143, 51, 0.3), 0 0 30px rgba(185, 143, 51, 0.2)',
                       border: '2px solid #b98f33',
                       backgroundColor: '#ffffff'
                     }
@@ -634,20 +832,25 @@ const HomePage = () => {
                <Box sx={{ 
                  flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(33.333% - 16px)' },
                  minWidth: { md: '300px' },
-                 maxWidth: { md: '400px' }
+                 maxWidth: { md: '400px' },
+                 opacity: whyUsAnimations.cardsVisible[1] ? 1 : 0,
+                 transform: whyUsAnimations.cardsVisible[1] ? 'translateY(0) scale(1) rotateY(0deg)' : 'translateY(100px) scale(0.5) rotateY(-90deg)',
+                 transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                 animation: whyUsAnimations.cardsVisible[1] ? 'cardEntrance 1s ease-out' : 'none'
                }}>
                  <Card sx={{ 
                    height: '100%',
                    display: 'flex',
                    flexDirection: 'column',
-                   transition: 'all 0.3s ease-in-out',
+                   transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                    overflow: 'hidden',
                    backgroundColor: '#f8f8f8',
                    border: '2px solid #e0e0e0',
                    borderRadius: '20px',
+                   transform: 'perspective(1000px)',
                    '&:hover': {
-                     transform: 'translateY(-8px)',
-                     boxShadow: '0 15px 30px rgba(185, 143, 51, 0.2)',
+                     transform: 'translateY(-12px) scale(1.02) perspective(1000px) rotateX(5deg)',
+                     boxShadow: '0 25px 50px rgba(185, 143, 51, 0.3), 0 0 30px rgba(185, 143, 51, 0.2)',
                      border: '2px solid #b98f33',
                      backgroundColor: '#ffffff'
                    }
@@ -702,20 +905,25 @@ const HomePage = () => {
               <Box sx={{ 
                 flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(33.333% - 16px)' },
                 minWidth: { md: '300px' },
-                maxWidth: { md: '400px' }
+                maxWidth: { md: '400px' },
+                opacity: whyUsAnimations.cardsVisible[2] ? 1 : 0,
+                transform: whyUsAnimations.cardsVisible[2] ? 'translateY(0) scale(1) rotateY(0deg)' : 'translateY(100px) scale(0.5) rotateY(-90deg)',
+                transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                animation: whyUsAnimations.cardsVisible[2] ? 'cardEntrance 1s ease-out' : 'none'
               }}>
                 <Card sx={{ 
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  transition: 'all 0.3s ease-in-out',
+                  transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                   overflow: 'hidden',
                   backgroundColor: '#f8f8f8',
                   border: '2px solid #e0e0e0',
                   borderRadius: '20px',
+                  transform: 'perspective(1000px)',
                   '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 15px 30px rgba(185, 143, 51, 0.2)',
+                    transform: 'translateY(-12px) scale(1.02) perspective(1000px) rotateX(5deg)',
+                    boxShadow: '0 25px 50px rgba(185, 143, 51, 0.3), 0 0 30px rgba(185, 143, 51, 0.2)',
                     border: '2px solid #b98f33',
                     backgroundColor: '#ffffff'
                   }
@@ -723,7 +931,7 @@ const HomePage = () => {
                                    {/* Image */}
                   <Box sx={{ 
                     height: 200,
-                    backgroundImage: 'url(/assets/images/x009.png)',
+                    backgroundImage: 'url(/assets/images/x009.jpg)',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     position: 'relative',

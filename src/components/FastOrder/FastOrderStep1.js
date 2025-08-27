@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Person as PersonIcon, Warning as WarningIcon } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 const FastOrderStep1 = ({ 
   data, 
@@ -303,17 +304,10 @@ const FastOrderStep1 = ({
       {customers.length > 0 && (
         <Box sx={{ mt: 3 }}>
           <Button
-            variant="outlined"
+            variant="contained"
             onClick={handleCustomerSearch}
             startIcon={<PersonIcon />}
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Search Existing Customers
           </Button>
@@ -376,17 +370,10 @@ const FastOrderStep1 = ({
                     }
                   />
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     size="small"
                     onClick={() => handleUseExistingCustomer(customer)}
-                    sx={{
-                      borderColor: '#b98f33',
-                      color: '#b98f33',
-                      '&:hover': {
-                        borderColor: '#d4af5a',
-                        backgroundColor: 'rgba(185, 143, 51, 0.1)'
-                      }
-                    }}
+                    sx={buttonStyles.primaryButton}
                   >
                     Use This Customer
                   </Button>
@@ -422,15 +409,7 @@ const FastOrderStep1 = ({
           </Button>
           <Button 
             onClick={() => setDuplicateDialogOpen(false)}
-            variant="outlined"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)'
-              }
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>

@@ -9,6 +9,7 @@ import {
   DialogActions,
   Button
 } from '@mui/material';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 const NotificationContext = createContext();
 
@@ -137,10 +138,10 @@ export const NotificationProvider = ({ children }) => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleConfirmClose} color="primary">
+          <Button onClick={handleConfirmClose} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} color="error" variant="contained" autoFocus>
+          <Button onClick={handleConfirm} sx={buttonStyles.primaryButton} autoFocus>
             Confirm
           </Button>
         </DialogActions>

@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import FastOrderStep1 from './FastOrderStep1';
 import FastOrderStep2 from './FastOrderStep2';
+import { buttonStyles } from '../shared/styles/buttonStyles';
 
 const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
   const [activeStep, setActiveStep] = useState(0);
@@ -528,15 +529,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
         <Button 
           onClick={handleClose} 
           disabled={isSubmitting}
-          variant="outlined"
-          sx={{ 
-            borderColor: '#b98f33',
-            color: '#b98f33',
-            '&:hover': {
-              borderColor: '#d4af5a',
-              backgroundColor: 'rgba(185, 143, 51, 0.1)'
-            }
-          }}
+          sx={buttonStyles.cancelButton}
         >
           Cancel
         </Button>
@@ -713,21 +706,14 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
                       </Box>
                     }
                   />
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleUseExistingCustomer(customer)}
-                    sx={{
-                      borderColor: '#b98f33',
-                      color: '#b98f33',
-                      '&:hover': {
-                        borderColor: '#d4af5a',
-                        backgroundColor: 'rgba(185, 143, 51, 0.1)'
-                      }
-                    }}
-                  >
-                    Use This Customer
-                  </Button>
+                                     <Button
+                     variant="contained"
+                     size="small"
+                     onClick={() => handleUseExistingCustomer(customer)}
+                     sx={buttonStyles.primaryButton}
+                   >
+                     Use This Customer
+                   </Button>
                 </ListItem>
                 {index < duplicateCustomers.length - 1 && <Divider />}
               </React.Fragment>
@@ -765,15 +751,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
           </Button>
           <Button 
             onClick={() => setDuplicateDialogOpen(false)}
-            variant="outlined"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)'
-              }
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>

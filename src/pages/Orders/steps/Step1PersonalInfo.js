@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Person as PersonIcon, Warning as WarningIcon } from '@mui/icons-material';
 import { useNotification } from '../../../components/Common/NotificationSystem';
+import { buttonStyles } from '../../../styles/buttonStyles';
 
 const Step1PersonalInfo = ({ 
   personalInfo, 
@@ -400,15 +401,7 @@ const Step1PersonalInfo = ({
           }}>
             Create New Customer
           </Button>
-          <Button onClick={() => setDuplicateDialogOpen(false)}
-          sx={{
-            borderColor: '#e0e0e0',
-            color: '#666',
-            '&:hover': {
-              borderColor: '#bdbdbd',
-              backgroundColor: '#f5f5f5'
-            }
-          }}>
+          <Button onClick={() => setDuplicateDialogOpen(false)} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
         </DialogActions>

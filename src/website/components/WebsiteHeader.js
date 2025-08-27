@@ -38,7 +38,7 @@ const WebsiteHeader = () => {
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
         <img 
           src="/assets/images/logo-001.png" 
-          alt="JL Operations Logo" 
+          alt="JL Upholstery Logo" 
           style={{ 
             height: '40px', 
             width: 'auto',
@@ -47,7 +47,7 @@ const WebsiteHeader = () => {
           }}
         />
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          JL Operations
+          JL Upholstery
         </Typography>
       </Box>
              <List>
@@ -76,7 +76,7 @@ const WebsiteHeader = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <img 
                 src="/assets/images/logo-001.png" 
-                alt="JL Operations Logo" 
+                alt="JL Upholstery Logo" 
                 style={{ 
                   height: '50px', 
                   width: 'auto',
@@ -98,7 +98,7 @@ const WebsiteHeader = () => {
                    }
                  }}
               >
-                JL Operations
+                JL Upholstery
               </Typography>
             </Box>
 

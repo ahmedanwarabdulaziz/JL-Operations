@@ -66,7 +66,8 @@ import {
   Add as AddIcon,
   Delete as DeleteIcon,
   BarChart as BarChartIcon,
-  RestartAlt as RestartAltIcon
+  RestartAlt as RestartAltIcon,
+  Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { useGmailAuth } from '../../contexts/GmailAuthContext';
@@ -80,8 +81,11 @@ import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculat
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
 import { useAutoSelect } from '../../hooks/useAutoSelect';
+import { useNavigate } from 'react-router-dom';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 const WorkshopPage = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -924,7 +928,13 @@ const WorkshopPage = () => {
       await new Promise(resolve => setTimeout(resolve, 200));
       
       // Show enhanced confirmation dialog with email options
-      const allocationSummary = monthlyAllocations.map(allocation => 
+      // Filter allocations to only show those within the actual date range
+      const filteredAllocations = monthlyAllocations.filter(allocation => {
+        const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+        return allocationDate >= actualStartDate && allocationDate <= actualEndDate;
+      });
+      
+      const allocationSummary = filteredAllocations.map(allocation => 
         `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
       ).join(', ');
 
@@ -2117,6 +2127,27 @@ const WorkshopPage = () => {
             {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} in queue
           </Typography>
           
+          {/* Material Request Button */}
+          <Button
+            variant="contained"
+            fullWidth
+            startIcon={<InventoryIcon />}
+            onClick={() => navigate('/admin/material-request')}
+            sx={{
+              mb: 2,
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '2px solid #f27921',
+              fontWeight: 'bold',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '2px solid #e06810'
+              }
+            }}
+          >
+            Material Request Management
+          </Button>
+          
           {/* Search */}
           <TextField
             fullWidth
@@ -2260,8 +2291,9 @@ const WorkshopPage = () => {
                 </Box>
               </Box>
               
-              {/* Second Row - Email Button, Status Button, and Add Extra Expense Button */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 2 }}>
+              {/* Top Buttons - Arranged in a single row */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 3 }}>
+                {/* Send Order Email Button */}
                 <Button
                   variant="contained"
                   size="medium"
@@ -2269,39 +2301,13 @@ const WorkshopPage = () => {
                   onClick={handleSendEmail}
                   disabled={sendingEmail || !selectedOrder?.personalInfo?.email}
                   sx={{
-                    px: 3,
-                    py: 1.5,
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    borderRadius: 2,
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
-                    border: '3px solid #4CAF50',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                    position: 'relative',
+                    border: '2px solid #f27921',
+                    fontWeight: 'bold',
                     '&:hover': {
                       background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '3px solid #45a049',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
-                      transform: 'translateY(-1px)'
-                    },
-                    '&:disabled': {
-                      background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                      border: '3px solid #666666',
-                      color: '#666666',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
-                    },
-                    transition: 'all 0.3s ease',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '50%',
-                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                      borderRadius: '6px 6px 0 0',
-                      pointerEvents: 'none'
+                      border: '2px solid #e06810'
                     }
                   }}
                 >
@@ -2310,7 +2316,7 @@ const WorkshopPage = () => {
                 
                 {/* Status Button */}
                 <Button
-                  variant="outlined"
+                  variant="contained"
                   size="medium"
                   startIcon={<AssignmentIcon />}
                   onClick={() => {
@@ -2318,24 +2324,13 @@ const WorkshopPage = () => {
                     setStatusDialogOpen(true);
                   }}
                   sx={{
-                    px: 3,
-                    py: 1.5,
-                    fontSize: '1rem',
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '2px solid #f27921',
                     fontWeight: 'bold',
-                    borderRadius: 2,
-                    borderWidth: 2,
                     '&:hover': {
-                      borderWidth: 2,
-                      transform: 'translateY(-1px)'
-                    },
-                    transition: 'all 0.3s ease',
-                    backgroundColor: getStatusInfo(selectedOrder.invoiceStatus).color,
-                    color: 'white',
-                    borderColor: getStatusInfo(selectedOrder.invoiceStatus).color,
-                    '&:hover': {
-                      backgroundColor: getStatusInfo(selectedOrder.invoiceStatus).color,
-                      borderColor: getStatusInfo(selectedOrder.invoiceStatus).color,
-                      opacity: 0.8
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '2px solid #e06810'
                     }
                   }}
                 >
@@ -2350,24 +2345,11 @@ const WorkshopPage = () => {
                   sx={{
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
-                    border: '3px solid #f27921',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                    position: 'relative',
+                    border: '2px solid #f27921',
+                    fontWeight: 'bold',
                     '&:hover': {
                       background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '3px solid #e06810',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-                    },
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '50%',
-                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                      borderRadius: '6px 6px 0 0',
-                      pointerEvents: 'none'
+                      border: '2px solid #e06810'
                     }
                   }}
                 >
@@ -2381,33 +2363,13 @@ const WorkshopPage = () => {
                   startIcon={<BarChartIcon />}
                   onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
                   sx={{
-                    px: 3,
-                    py: 1.5,
-                    fontSize: '1rem',
-                    fontWeight: 'bold',
-                    borderRadius: 2,
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
-                    border: '3px solid #274290',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                    position: 'relative',
+                    border: '2px solid #f27921',
+                    fontWeight: 'bold',
                     '&:hover': {
                       background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '3px solid #1e3a7a',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
-                      transform: 'translateY(-1px)'
-                    },
-                    transition: 'all 0.3s ease',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '50%',
-                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                      borderRadius: '6px 6px 0 0',
-                      pointerEvents: 'none'
+                      border: '2px solid #e06810'
                     }
                   }}
                 >
@@ -2798,129 +2760,43 @@ const WorkshopPage = () => {
                       </Grid>
                     </Grid>
 
-                    {/* Right Side: Financial Summary Cards */}
+                    {/* Right Side: Financial Summary Text */}
                     <Grid item xs={12} lg={7}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-end', justifyContent: 'flex-end', width: '100%' }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-end', justifyContent: 'flex-end', width: '100%' }}>
                         {/* Total Invoice Amount */}
-                        <Card sx={{ 
-                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                          color: '#000000',
-                          width: '280px',
-                          border: '2px solid #4CAF50',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                          position: 'relative',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '50%',
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                            borderRadius: '4px 4px 0 0',
-                            pointerEvents: 'none'
-                          }
-                        }}>
-                          <CardContent sx={{ py: 0.5, px: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                Total Invoice Amount
-                              </Typography>
-                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                ${selectedOrder ? calculateInvoiceTotals(selectedOrder).grandTotal.toFixed(2) : '0.00'}
-                              </Typography>
-                            </Box>
-                          </CardContent>
-                        </Card>
+                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '280px' }}>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             Total Invoice Amount:
+                           </Typography>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             ${selectedOrder ? calculateInvoiceTotals(selectedOrder).grandTotal.toFixed(2) : '0.00'}
+                           </Typography>
+                         </Box>
 
                         {/* Amount Paid */}
-                        <Card sx={{ 
-                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                          color: '#000000',
-                          width: '280px',
-                          border: '2px solid #4CAF50',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                          position: 'relative',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '50%',
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                            borderRadius: '4px 4px 0 0',
-                            pointerEvents: 'none'
-                          }
-                        }}>
-                          <CardContent sx={{ py: 0.5, px: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                Total Paid by Customer
-                              </Typography>
-                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                ${selectedOrder.paymentData?.amountPaid || '0.00'}
-                              </Typography>
-                            </Box>
-                          </CardContent>
-                        </Card>
+                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '280px' }}>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             Total Paid by Customer:
+                           </Typography>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             ${selectedOrder.paymentData?.amountPaid || '0.00'}
+                           </Typography>
+                         </Box>
 
-                        {/* Remaining Balance */}
-                        <Card sx={{ 
-                          background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                          color: '#000000',
-                          width: '280px',
-                          border: selectedOrder && (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))) > 0
-                            ? '2px solid #f44336'
-                            : '2px solid #4CAF50',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                          position: 'relative',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '50%',
-                            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                            borderRadius: '4px 4px 0 0',
-                            pointerEvents: 'none'
-                          }
-                        }}>
-                          <CardContent sx={{ py: 0.5, px: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                Outstanding Balance
-                              </Typography>
-                              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
-                              </Typography>
-                            </Box>
-                          </CardContent>
-                        </Card>
+                                                 {/* Outstanding Balance */}
+                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '280px' }}>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             Outstanding Balance:
+                           </Typography>
+                           <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                             ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
+                           </Typography>
+                         </Box>
                       </Box>
                     </Grid>
                   </Grid>
 
-                  {/* Notes Section */}
-                  {selectedOrder.paymentData?.notes && (
-                    <Card variant="outlined" sx={{ border: '2px solid #fff3e0', backgroundColor: '#fafafa' }}>
-                      <CardContent>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921', mb: 2 }}>
-                          📝 Additional Notes
-                        </Typography>
-                        <Typography variant="body1" sx={{ 
-                          fontStyle: 'italic',
-                          backgroundColor: 'white',
-                          p: 2,
-                          borderRadius: 1,
-                          border: '1px solid #e0e0e0'
-                        }}>
-                          {selectedOrder.paymentData.notes}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  )}
+
                   
                   {/* Email Status Indicator - Hidden but functionality preserved */}
                   {/* {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && (
@@ -2938,6 +2814,109 @@ const WorkshopPage = () => {
                       </Alert>
                     </Box>
                   )} */}
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Extra Expenses Card */}
+            <Card sx={{ boxShadow: 4, width: '100%', mb: 4, border: '2px solid #e3f2fd' }}>
+              <CardContent sx={{ p: 0 }}>
+                {/* Header */}
+                <Box sx={{
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
+                  p: 2,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <BarChartIcon sx={{ mr: 1, color: '#000000' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      Extra Expenses
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setExpenseModalOpen(true)}
+                      sx={{
+                        color: '#000000',
+                        borderColor: '#000000',
+                        '&:hover': {
+                          borderColor: '#8b6b1f',
+                          backgroundColor: 'rgba(139, 107, 31, 0.1)'
+                        }
+                      }}
+                    >
+                      Add Expense
+                    </Button>
+                  </Box>
+                </Box>
+
+                             {/* Content */}
+             <Box sx={{ p: 2 }}>
+               {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 ? (
+                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                   {selectedOrder.extraExpenses.map((expense, index) => (
+                     <Card key={index} sx={{ p: 1.5, border: '1px solid #e3f2fd', backgroundColor: '#2a2a2a' }}>
+                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem' }}>
+                           {expense.description}
+                         </Typography>
+                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem' }}>
+                           ${parseFloat(expense.total || 0).toFixed(2)}
+                         </Typography>
+                       </Box>
+                       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                         <Box>
+                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Price</Typography>
+                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                             ${parseFloat(expense.price || 0).toFixed(2)}
+                           </Typography>
+                         </Box>
+                         <Box>
+                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Unit</Typography>
+                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                             {expense.unit || 'N/A'}
+                           </Typography>
+                         </Box>
+                         <Box>
+                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Tax</Typography>
+                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                             {expense.taxType === 'percent' ? `${expense.tax}%` : `$${parseFloat(expense.tax || 0).toFixed(2)}`}
+                           </Typography>
+                         </Box>
+                       </Box>
+                     </Card>
+                   ))}
+                   <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#1a1a1a', borderRadius: 1, border: '1px solid #333333' }}>
+                     <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', textAlign: 'center', fontSize: '0.9rem' }}>
+                       Total Extra Expenses: ${selectedOrder.extraExpenses.reduce((sum, expense) => sum + parseFloat(expense.total || 0), 0).toFixed(2)}
+                     </Typography>
+                   </Box>
+                 </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                      <Typography variant="body1" sx={{ color: '#b98f33', mb: 2 }}>
+                        No extra expenses added yet
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => setExpenseModalOpen(true)}
+                        sx={{
+                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                          color: '#000000',
+                          '&:hover': {
+                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                          }
+                        }}
+                      >
+                        Add First Expense
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
               </CardContent>
             </Card>
@@ -3175,7 +3154,18 @@ const WorkshopPage = () => {
                               <FormControlLabel
                                 control={
                                   <Switch
-                                    checked={currentGroup.foamEnabled || false}
+                                    checked={(() => {
+                                      // Auto-expand if foam has prices
+                                      if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
+                                        return true;
+                                      }
+                                      // Auto-fold if only quantity 1 with no other data
+                                      if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
+                                        return false;
+                                      }
+                                      // Use existing enabled state
+                                      return currentGroup.foamEnabled || false;
+                                    })()}
                                     onChange={(e) => updateFurnitureGroup(index, 'foamEnabled', e.target.checked)}
                                     color="primary"
                                   />
@@ -3185,7 +3175,18 @@ const WorkshopPage = () => {
                                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                       🪣 Enable Foam
                                     </Typography>
-                                    {currentGroup.foamEnabled && (
+                                    {(() => {
+                                      // Auto-expand if foam has prices
+                                      if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
+                                        return true;
+                                      }
+                                      // Auto-fold if only quantity 1 with no other data
+                                      if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
+                                        return false;
+                                      }
+                                      // Use existing enabled state
+                                      return currentGroup.foamEnabled || false;
+                                    })() && (
                                       <Chip 
                                         label="Enabled" 
                                         size="small" 
@@ -3198,7 +3199,18 @@ const WorkshopPage = () => {
                               />
                             </Box>
                             
-                            {currentGroup.foamEnabled && (
+                            {(() => {
+                              // Auto-expand if foam has prices
+                              if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
+                                return true;
+                              }
+                              // Auto-fold if only quantity 1 with no other data
+                              if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
+                                return false;
+                              }
+                              // Use existing enabled state
+                              return currentGroup.foamEnabled || false;
+                            })() && (
                               <>
                                 {/* Row 4: Foam Price - Foam JL Price - Foam Thickness - Foam Note - Foam Quantity */}
                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 2, mb: 2 }}>
@@ -3272,7 +3284,18 @@ const WorkshopPage = () => {
                               <FormControlLabel
                                 control={
                                   <Switch
-                                    checked={currentGroup.paintingEnabled || false}
+                                    checked={(() => {
+                                      // Auto-expand if painting has prices
+                                      if (currentGroup.paintingLabour) {
+                                        return true;
+                                      }
+                                      // Auto-fold if only quantity 1 with no other data
+                                      if (currentGroup.paintingQnty === 1 && !currentGroup.paintingLabour && !currentGroup.paintingNote) {
+                                        return false;
+                                      }
+                                      // Use existing enabled state
+                                      return currentGroup.paintingEnabled || false;
+                                    })()}
                                     onChange={(e) => updateFurnitureGroup(index, 'paintingEnabled', e.target.checked)}
                                     color="primary"
                                   />
@@ -3282,7 +3305,18 @@ const WorkshopPage = () => {
                                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
                                       🎨 Enable Painting
                                     </Typography>
-                                    {currentGroup.paintingEnabled && (
+                                    {(() => {
+                                      // Auto-expand if painting has prices
+                                      if (currentGroup.paintingLabour) {
+                                        return true;
+                                      }
+                                      // Auto-fold if only quantity 1 with no other data
+                                      if (currentGroup.paintingQnty === 1 && !currentGroup.paintingLabour && !currentGroup.paintingNote) {
+                                        return false;
+                                      }
+                                      // Use existing enabled state
+                                      return currentGroup.paintingEnabled || false;
+                                    })() && (
                                       <Chip 
                                         label="Enabled" 
                                         size="small" 
@@ -3295,7 +3329,18 @@ const WorkshopPage = () => {
                               />
                             </Box>
                             
-                            {currentGroup.paintingEnabled && (
+                            {(() => {
+                              // Auto-expand if painting has prices
+                              if (currentGroup.paintingLabour) {
+                                return true;
+                              }
+                              // Auto-fold if only quantity 1 with no other data
+                              if (currentGroup.paintingQnty === 1 && !currentGroup.paintingLabour && !currentGroup.paintingNote) {
+                                return false;
+                              }
+                              // Use existing enabled state
+                              return currentGroup.paintingEnabled || false;
+                            })() && (
                               <>
                                 {/* Row 5: Painting Labour - Painting Note - Painting Quantity */}
                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
@@ -3404,30 +3449,8 @@ const WorkshopPage = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditPersonalDialog(false)}>Cancel</Button>
-          <Button onClick={handleSavePersonal} variant="contained" sx={{
-            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-            color: '#000000',
-            border: '3px solid #4CAF50',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-            position: 'relative',
-            '&:hover': {
-              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-              border: '3px solid #45a049',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-            },
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '50%',
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-              borderRadius: '6px 6px 0 0',
-              pointerEvents: 'none'
-            }
-          }}>Save</Button>
+          <Button onClick={() => setEditPersonalDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
+          <Button onClick={handleSavePersonal} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -3483,30 +3506,8 @@ const WorkshopPage = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditOrderDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveOrder} variant="contained" sx={{
-            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-            color: '#000000',
-            border: '3px solid #4CAF50',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-            position: 'relative',
-            '&:hover': {
-              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-              border: '3px solid #45a049',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-            },
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '50%',
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-              borderRadius: '6px 6px 0 0',
-              pointerEvents: 'none'
-            }
-          }}>Save</Button>
+          <Button onClick={() => setEditOrderDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
+          <Button onClick={handleSaveOrder} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -3605,8 +3606,8 @@ const WorkshopPage = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditPaymentDialog(false)}>Cancel</Button>
-          <Button onClick={handleSavePayment} variant="contained">Save</Button>
+          <Button onClick={() => setEditPaymentDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
+          <Button onClick={handleSavePayment} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -3884,8 +3885,8 @@ const WorkshopPage = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditFurnitureDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveFurnitureGroup} variant="contained">Save</Button>
+          <Button onClick={() => setEditFurnitureDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
+          <Button onClick={handleSaveFurnitureGroup} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
         </DialogActions>
       </Dialog>
 
@@ -4070,19 +4071,14 @@ const WorkshopPage = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={handleClosePaymentDialog} variant="outlined">
+          <Button onClick={handleClosePaymentDialog} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
           <Button 
             onClick={handleAddNewPayment} 
             variant="contained"
             disabled={!paymentForm.paymentAmount || parseFloat(paymentForm.paymentAmount) <= 0}
-            sx={{
-              backgroundColor: '#f27921',
-              '&:hover': {
-                backgroundColor: '#e65100'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Save Payment
           </Button>
@@ -4202,16 +4198,7 @@ const WorkshopPage = () => {
         <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
           <Button 
             onClick={() => setStatusDialogOpen(false)}
-            variant="outlined"
-            size="small"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -4220,23 +4207,7 @@ const WorkshopPage = () => {
             variant="contained"
             disabled={!editingStatus}
             size="small"
-            sx={{
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': {
-                backgroundColor: '#d4af5a',
-                transform: 'translateY(-1px)',
-                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
-              },
-              '&:disabled': {
-                backgroundColor: '#666666',
-                color: '#999999',
-                border: '2px solid #444444',
-              },
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Update Status
           </Button>
@@ -4310,33 +4281,13 @@ const WorkshopPage = () => {
           )}
           
           {validationError.type === 'cancelled' && (
-            <Button 
+                        <Button
               variant="contained"
               onClick={handleSetPaymentToZero}
               fullWidth
               sx={{ 
                 mb: 2,
-                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                color: '#000000',
-                border: '3px solid #f27921',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                position: 'relative',
-                '&:hover': {
-                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                  border: '3px solid #e06810',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-                },
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '50%',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                  borderRadius: '6px 6px 0 0',
-                  pointerEvents: 'none'
-                }
+                ...buttonStyles.primaryButton
               }}
               startIcon={<CancelIcon />}
             >
@@ -4347,15 +4298,7 @@ const WorkshopPage = () => {
         <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
           <Button 
             onClick={() => setValidationDialogOpen(false)}
-            variant="outlined"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -4679,53 +4622,14 @@ const WorkshopPage = () => {
         <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
           <Button 
             onClick={() => setAllocationDialogOpen(false)}
-            variant="outlined"
-            size="small"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
           <Button 
             onClick={applyAllocation}
-            variant="contained"
             disabled={Math.abs(calculateTotals(monthlyAllocations).totalPercentage - 100) > 0.01}
-            size="small"
-            sx={{ 
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #f27921',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #e06810',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              },
-              '&:disabled': {
-                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                border: '3px solid #666666',
-                color: '#666666',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
-              },
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                borderRadius: '6px 6px 0 0',
-                pointerEvents: 'none'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             {(() => {
               const status = getAllocationStatus();
@@ -4913,14 +4817,7 @@ const WorkshopPage = () => {
               variant="outlined"
               startIcon={<RestartAltIcon />}
               onClick={resetStandaloneAllocationToDefault}
-              sx={{
-                borderColor: '#b98f33',
-                color: '#b98f33',
-                '&:hover': {
-                  borderColor: '#d4af5a',
-                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                },
-              }}
+              sx={buttonStyles.cancelButton}
             >
               Reset to Default
             </Button>
@@ -5082,16 +4979,7 @@ const WorkshopPage = () => {
         <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
           <Button 
             onClick={() => setStandaloneAllocationDialogOpen(false)}
-            variant="outlined"
-            size="small"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -5100,35 +4988,7 @@ const WorkshopPage = () => {
             variant="contained"
             disabled={Math.abs(calculateStandaloneTotals(standaloneMonthlyAllocations).totalPercentage - 100) > 0.01}
             size="small"
-            sx={{ 
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #f27921',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #e06810',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              },
-              '&:disabled': {
-                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                border: '3px solid #666666',
-                color: '#666666',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
-              },
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                borderRadius: '6px 6px 0 0',
-                pointerEvents: 'none'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             {(() => {
               const status = getStandaloneAllocationStatus();
@@ -5446,19 +5306,7 @@ const WorkshopPage = () => {
         <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
           <Button 
             onClick={handleCloseExpenseModal}
-            variant="outlined"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#000000',
-              borderWidth: '2px',
-              fontWeight: 'bold',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                borderWidth: '2px',
-                color: '#000000',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -5466,35 +5314,7 @@ const WorkshopPage = () => {
             onClick={handleSaveAllExpenses} 
             disabled={expenseList.length === 0} 
             variant="contained"
-            sx={{
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #f27921',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #e06810',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              },
-              '&:disabled': {
-                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-                border: '3px solid #666666',
-                color: '#666666',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
-              },
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                borderRadius: '6px 6px 0 0',
-                pointerEvents: 'none'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Save All
           </Button>
@@ -5627,32 +5447,13 @@ const WorkshopPage = () => {
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button
             onClick={handleEnhancedCancel}
-            variant="outlined"
-            sx={{
-              borderColor: '#b98f33',
-              color: '#b98f33',
-              '&:hover': {
-                borderColor: '#d4af5a',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)',
-              },
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
           <Button
             onClick={() => handleEnhancedConfirm(sendEmailChecked, includeReviewChecked)}
-            variant="contained"
-            sx={{
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              fontWeight: 'bold',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                transform: 'translateY(-1px)',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-              },
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Complete Order
           </Button>

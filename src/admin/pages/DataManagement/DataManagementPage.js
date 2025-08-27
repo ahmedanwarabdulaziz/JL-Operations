@@ -116,6 +116,12 @@ const DataManagementPage = () => {
       label: 'Invoice Statuses',
       description: 'Invoice status configurations',
       icon: '📊'
+    },
+    {
+      name: 'test',
+      label: 'Test Data',
+      description: 'Testing and development data',
+      icon: '🧪'
     }
   ];
 

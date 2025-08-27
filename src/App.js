@@ -9,7 +9,7 @@ import { FirebaseProvider } from './contexts/FirebaseContext';
 import { GmailAuthProvider } from './contexts/GmailAuthContext';
 import MainLayout from './components/Layout/MainLayout';
 import LoginPage from './components/Auth/LoginPage';
-import DashboardPage from './pages/Dashboard/DashboardPage';
+import DashboardPage from './admin/pages/Dashboard/DashboardPage';
 import TestPage from './pages/Test/TestPage';
 import EmailTestPage from './pages/Test/EmailTestPage';
 import CustomersPage from './pages/Customers/CustomersPage';
@@ -33,6 +33,7 @@ import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
+import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
 
 // Website imports
 import WebsiteLayout from './website/layouts/WebsiteLayout';
@@ -132,6 +133,8 @@ const AppContent = () => {
           <Route path="/admin/orders/new" element={<NewOrderPage />} />
           <Route path="/workshop" element={<Navigate to="/admin/workshop" replace />} />
           <Route path="/admin/workshop" element={<WorkshopPage />} />
+          <Route path="/material-request" element={<Navigate to="/admin/material-request" replace />} />
+          <Route path="/admin/material-request" element={<MaterialRequestPage />} />
           <Route path="/treatment" element={<Navigate to="/admin/treatment" replace />} />
           <Route path="/admin/treatment" element={<TreatmentPage />} />
           <Route path="/material-companies" element={<Navigate to="/admin/material-companies" replace />} />

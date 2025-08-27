@@ -57,6 +57,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData } from '../../utils/orderCalculations';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 // Invoice statuses will be loaded dynamically from database
 
@@ -191,17 +192,94 @@ const FinancePage = () => {
     }
   };
 
-  // Calculate financial summary
+  // Helper function to calculate partial amounts for allocated orders
+  const calculatePartialAmounts = (order, profitData, normalizedPayment) => {
+    let orderRevenue = profitData.revenue;
+    let orderCost = profitData.cost;
+    let orderProfit = profitData.profit;
+    let orderPaidAmount = normalizedPayment.amountPaid;
+    
+    // For allocated orders, calculate partial amounts based on date filter
+    if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
+      const fromDate = new Date(appliedDateFrom);
+      const toDate = new Date(appliedDateTo);
+      
+      // Set time to start/end of day for accurate comparison
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
+      
+      // Calculate total allocation percentage for the filtered date range
+      let totalAllocationPercentage = 0;
+      order.allocation.allocations.forEach(allocation => {
+        const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+        if (allocationDate >= fromDate && allocationDate <= toDate) {
+          totalAllocationPercentage += allocation.percentage || 0;
+        }
+      });
+      
+      // Only apply allocation if there are allocations in the date range
+      if (totalAllocationPercentage > 0) {
+        const allocationMultiplier = totalAllocationPercentage / 100;
+        orderRevenue = profitData.revenue * allocationMultiplier;
+        orderCost = profitData.cost * allocationMultiplier;
+        orderProfit = profitData.profit * allocationMultiplier;
+        orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
+      }
+    }
+    
+    return {
+      revenue: orderRevenue,
+      cost: orderCost,
+      profit: orderProfit,
+      paidAmount: orderPaidAmount,
+      profitPercentage: orderRevenue > 0 ? (orderProfit / orderRevenue) * 100 : 0
+    };
+  };
+
+  // Calculate financial summary with allocation support
   const calculateFinancialSummary = (ordersData) => {
     const summary = ordersData.reduce((acc, order) => {
       const profitData = calculateOrderProfit(order);
       const normalizedPayment = normalizePaymentData(order.paymentData);
       
-      acc.totalRevenue += profitData.revenue;
-      acc.totalCost += profitData.cost;
-      acc.totalProfit += profitData.profit;
-      acc.paidAmount += normalizedPayment.amountPaid;
-      acc.pendingAmount += (profitData.revenue - normalizedPayment.amountPaid);
+      let orderRevenue = profitData.revenue;
+      let orderCost = profitData.cost;
+      let orderProfit = profitData.profit;
+      let orderPaidAmount = normalizedPayment.amountPaid;
+      
+      // For allocated orders, calculate partial amounts based on date filter
+      if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
+        const fromDate = new Date(appliedDateFrom);
+        const toDate = new Date(appliedDateTo);
+        
+        // Set time to start/end of day for accurate comparison
+        fromDate.setHours(0, 0, 0, 0);
+        toDate.setHours(23, 59, 59, 999);
+        
+        // Calculate total allocation percentage for the filtered date range
+        let totalAllocationPercentage = 0;
+        order.allocation.allocations.forEach(allocation => {
+          const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+          if (allocationDate >= fromDate && allocationDate <= toDate) {
+            totalAllocationPercentage += allocation.percentage || 0;
+          }
+        });
+        
+        // Only apply allocation if there are allocations in the date range
+        if (totalAllocationPercentage > 0) {
+          const allocationMultiplier = totalAllocationPercentage / 100;
+          orderRevenue = profitData.revenue * allocationMultiplier;
+          orderCost = profitData.cost * allocationMultiplier;
+          orderProfit = profitData.profit * allocationMultiplier;
+          orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
+        }
+      }
+      
+      acc.totalRevenue += orderRevenue;
+      acc.totalCost += orderCost;
+      acc.totalProfit += orderProfit;
+      acc.paidAmount += orderPaidAmount;
+      acc.pendingAmount += (orderRevenue - orderPaidAmount);
       acc.totalOrders += 1;
       
       return acc;
@@ -235,11 +313,11 @@ const FinancePage = () => {
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(23, 59, 59, 999);
         
-        // For allocated orders, check if any allocation month falls within the date range
+        // For allocated orders, check if any allocation falls within the date range
         if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
           // Check if any allocation month falls within the selected date range
           const hasAllocationInRange = order.allocation.allocations.some(allocation => {
-            const allocationDate = new Date(allocation.year, allocation.month - 1, 1); // Month is 0-indexed
+            const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
             return allocationDate >= fromDate && allocationDate <= toDate;
           });
           
@@ -660,18 +738,7 @@ const FinancePage = () => {
             variant="contained"
             startIcon={<SettingsIcon />}
             onClick={() => navigate('/admin/status-management')}
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                transform: 'translateY(-1px)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Manage Statuses
           </Button>
@@ -679,18 +746,7 @@ const FinancePage = () => {
             variant="contained"
             startIcon={<TrendingUpIcon />}
             onClick={() => navigate('/admin/pl')}
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                transform: 'translateY(-1px)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             P&L Statement
           </Button>
@@ -701,18 +757,7 @@ const FinancePage = () => {
               fetchOrders();
               fetchInvoiceStatuses();
             }}
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                transform: 'translateY(-1px)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Refresh Data
           </Button>
@@ -728,17 +773,7 @@ const FinancePage = () => {
             <Button 
               size="small" 
               onClick={() => navigate('/admin/status-management')}
-              sx={{ 
-                backgroundColor: '#b98f33',
-                color: '#000000',
-                border: '1px solid #8b6b1f',
-                boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                '&:hover': { 
-                  backgroundColor: '#d4af5a',
-                  boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-                }
-              }}
+              sx={buttonStyles.primaryButton}
             >
               Setup Statuses
             </Button>
@@ -1021,24 +1056,7 @@ const FinancePage = () => {
               onClick={handleApplyDateFilter}
               disabled={!dateFrom || !dateTo}
               fullWidth
-              sx={{
-                backgroundColor: '#b98f33',
-                color: '#000000',
-                border: '2px solid #8b6b1f',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                '&:hover': {
-                  backgroundColor: '#d4af5a',
-                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                  transform: 'translateY(-1px)'
-                },
-                '&:disabled': {
-                  backgroundColor: '#666666',
-                  color: '#999999',
-                  border: '2px solid #666666',
-                  boxShadow: 'none'
-                }
-              }}
+              sx={buttonStyles.primaryButton}
             >
               Apply Filter
             </Button>
@@ -1050,14 +1068,7 @@ const FinancePage = () => {
               variant="outlined"
               onClick={handleClearDateFilter}
               fullWidth
-              sx={{
-                color: '#b98f33',
-                borderColor: '#b98f33',
-                '&:hover': {
-                  borderColor: '#d4af5a',
-                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
-                }
-              }}
+              sx={buttonStyles.cancelButton}
             >
               Clear
             </Button>
@@ -1110,57 +1121,9 @@ const FinancePage = () => {
             </FormControl>
           </Grid>
 
-          {/* Quick Date Filters & Results */}
+          {/* Results Count */}
           <Grid item xs={12} lg={1.5}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => {
-                    const now = new Date();
-                    setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
-                    setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-                  }}
-                  sx={{ 
-                    fontSize: '0.75rem',
-                    backgroundColor: '#b98f33',
-                    color: '#000000',
-                    border: '1px solid #8b6b1f',
-                    boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-                    background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                    '&:hover': { 
-                      backgroundColor: '#d4af5a',
-                      boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-                    }
-                  }}
-                >
-                  This Month
-                </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => {
-                    const now = new Date();
-                    setDateFrom(new Date(now.getFullYear(), 0, 1));
-                    setDateTo(new Date(now.getFullYear(), 11, 31));
-                  }}
-                  sx={{ 
-                    fontSize: '0.75rem',
-                    backgroundColor: '#b98f33',
-                    color: '#000000',
-                    border: '1px solid #8b6b1f',
-                    boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-                    background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                    '&:hover': { 
-                      backgroundColor: '#d4af5a',
-                      boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-                    }
-                  }}
-                >
-                  This Year
-                </Button>
-              </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
                 <strong>{filteredOrders.length}</strong> of <strong>{orders.length}</strong> orders
               </Typography>
@@ -1213,18 +1176,7 @@ const FinancePage = () => {
                   setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
                   setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
                 }}
-                sx={{ 
-                  backgroundColor: '#b98f33',
-                  color: '#000000',
-                  border: '1px solid #8b6b1f',
-                  boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-                  background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                  fontSize: '0.75rem',
-                  '&:hover': { 
-                    backgroundColor: '#d4af5a',
-                    boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-                  }
-                }}
+                sx={buttonStyles.primaryButton}
               >
                 Clear All
               </Button>
@@ -1256,7 +1208,8 @@ const FinancePage = () => {
             {filteredOrders.map((order) => {
               const profitData = calculateOrderProfit(order);
               const normalizedPayment = normalizePaymentData(order.paymentData);
-              const balance = profitData.revenue - normalizedPayment.amountPaid;
+              const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
+              const balance = partialAmounts.revenue - partialAmounts.paidAmount;
               const paymentStatus = getPaymentStatus(order);
               const statusInfo = getStatusInfo(order.invoiceStatus);
               
@@ -1284,13 +1237,13 @@ const FinancePage = () => {
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(profitData.revenue)}
+                      {formatCurrency(partialAmounts.revenue)}
                     </Typography>
                   </TableCell>
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(profitData.cost)}
+                      {formatCurrency(partialAmounts.cost)}
                     </Typography>
                   </TableCell>
                   
@@ -1299,10 +1252,10 @@ const FinancePage = () => {
                       variant="subtitle1" 
                       sx={{ 
                         fontWeight: 'bold', 
-                        color: profitData.profit >= 0 ? '#4caf50' : '#f44336' 
+                        color: partialAmounts.profit >= 0 ? '#4caf50' : '#f44336' 
                       }}
                     >
-                      {formatCurrency(profitData.profit)}
+                      {formatCurrency(partialAmounts.profit)}
                     </Typography>
                   </TableCell>
                   
@@ -1312,11 +1265,11 @@ const FinancePage = () => {
                         variant="subtitle2" 
                         sx={{ 
                           fontWeight: 'bold', 
-                          color: profitData.profitPercentage >= 0 ? '#4caf50' : '#f44336',
+                          color: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
                           mr: 1
                         }}
                       >
-                        {profitData.profitPercentage.toFixed(1)}%
+                        {partialAmounts.profitPercentage.toFixed(1)}%
                       </Typography>
                       <Box
                         sx={{
@@ -1329,9 +1282,9 @@ const FinancePage = () => {
                       >
                         <Box
                           sx={{
-                            width: `${Math.min(Math.abs(profitData.profitPercentage), 100)}%`,
+                            width: `${Math.min(Math.abs(partialAmounts.profitPercentage), 100)}%`,
                             height: '100%',
-                            backgroundColor: profitData.profitPercentage >= 0 ? '#4caf50' : '#f44336',
+                            backgroundColor: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
                             transition: 'width 0.3s ease'
                           }}
                         />
@@ -1341,7 +1294,7 @@ const FinancePage = () => {
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(normalizedPayment.amountPaid)}
+                      {formatCurrency(partialAmounts.paidAmount)}
                     </Typography>
                   </TableCell>
                   
@@ -1513,19 +1466,9 @@ const FinancePage = () => {
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button 
             onClick={() => setStatusDialogOpen(false)}
-            variant="contained"
+            variant="outlined"
             size="small"
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '1px solid #8b6b1f',
-              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-              }
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -1534,17 +1477,7 @@ const FinancePage = () => {
             variant="contained"
             disabled={!editingStatus}
             size="small"
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '1px solid #8b6b1f',
-              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Update Status
           </Button>
@@ -1566,16 +1499,7 @@ const FinancePage = () => {
               fullWidth
               sx={{ 
                 mb: 2,
-                backgroundColor: '#b98f33',
-                color: '#000000',
-                border: '2px solid #8b6b1f',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                '&:hover': { 
-                  backgroundColor: '#d4af5a',
-                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                  transform: 'translateY(-1px)'
-                }
+                ...buttonStyles.primaryButton
               }}
               startIcon={<CheckCircleIcon />}
             >
@@ -1590,16 +1514,7 @@ const FinancePage = () => {
               fullWidth
               sx={{ 
                 mb: 2,
-                backgroundColor: '#b98f33',
-                color: '#000000',
-                border: '2px solid #8b6b1f',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-                background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-                '&:hover': { 
-                  backgroundColor: '#d4af5a',
-                  boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                  transform: 'translateY(-1px)'
-                }
+                ...buttonStyles.primaryButton
               }}
               startIcon={<CancelIcon />}
             >
@@ -1840,18 +1755,8 @@ const FinancePage = () => {
         <DialogActions>
           <Button 
             onClick={() => setAllocationDialogOpen(false)}
-            variant="contained"
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '1px solid #8b6b1f',
-              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-              }
-            }}
+            variant="outlined"
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
@@ -1860,18 +1765,7 @@ const FinancePage = () => {
             variant="contained"
             disabled={allocationMethod === 'manual' && 
               manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100}
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 6px 12px rgba(185, 143, 51, 0.4)',
-                transform: 'translateY(-1px)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Complete Order & Apply Allocation
           </Button>

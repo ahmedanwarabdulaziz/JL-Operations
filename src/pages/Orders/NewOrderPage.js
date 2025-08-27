@@ -32,6 +32,7 @@ import Step4PaymentNotes from './steps/Step4PaymentNotes';
 import Step5Review from './steps/Step5Review';
 import Step6Submit from './steps/Step6Submit';
 import { useAutoSelect } from '../../hooks/useAutoSelect';
+import { buttonStyles } from '../../styles/buttonStyles';
 
 const steps = [
   'Personal Info',
@@ -887,13 +888,8 @@ const NewOrderPage = () => {
               variant="outlined"
               onClick={() => navigate('/admin/orders')}
               sx={{ 
-                mr: 1,
-                borderColor: '#e0e0e0',
-                color: '#666',
-                '&:hover': {
-                  borderColor: '#bdbdbd',
-                  backgroundColor: '#f5f5f5'
-                }
+                ...buttonStyles.cancelButton,
+                mr: 1
               }}
             >
               Cancel
@@ -1044,7 +1040,7 @@ const NewOrderPage = () => {
           }}>
             Create New Customer
           </Button>
-          <Button onClick={() => setDuplicateDialogOpen(false)}>
+          <Button onClick={() => setDuplicateDialogOpen(false)} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
         </DialogActions>

@@ -19,6 +19,44 @@ import {
   Payment as PaymentIcon
 } from '@mui/icons-material';
 
+// Utility function to check if a field has a meaningful value
+const hasValue = (value) => {
+  if (value === null || value === undefined || value === '') return false;
+  if (typeof value === 'string' && value.trim() === '') return false;
+  if (typeof value === 'string' && (value === '-' || value === 'N/A' || value === 'Not specified' || value === '0')) return false;
+  if (typeof value === 'number' && value === 0) return false;
+  // Convert string numbers to actual numbers for comparison
+  if (typeof value === 'string' && !isNaN(value) && parseFloat(value) === 0) return false;
+  return true;
+};
+
+// Component to conditionally render a field with its label
+const ReviewField = ({ label, value, sx = {} }) => {
+  const hasValidValue = hasValue(value);
+  
+  if (!hasValidValue) {
+    // Return empty space to preserve layout
+    return <Box sx={{ height: 48, mb: 1 }} />;
+  }
+  
+  return (
+    <Box sx={{ mb: 1 }}>
+      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Typography 
+        variant="body1" 
+        sx={{ 
+          color: '#ffffff',
+          ...sx
+        }}
+      >
+        {typeof value === 'number' && value > 0 ? `$${value}` : value}
+      </Typography>
+    </Box>
+  );
+};
+
+
+
 const SectionHeader = ({ icon, label }) => (
   <Box sx={{
     display: 'flex',
@@ -71,14 +109,10 @@ const Step5Review = ({
                 )}
               </Box>
               <Divider sx={{ mb: 1 }} />
-              <Typography variant="body2" color="text.secondary">Name</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: personalInfo.customerName ? '#ffffff' : '#b98f33' }}>{personalInfo.customerName || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Phone</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: personalInfo.phone ? '#ffffff' : '#b98f33' }}>{personalInfo.phone || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Email</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: personalInfo.email ? '#ffffff' : '#b98f33' }}>{personalInfo.email || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Address</Typography>
-              <Typography variant="body1" sx={{ color: personalInfo.address ? '#ffffff' : '#b98f33' }}>{personalInfo.address || '-'}</Typography>
+              <ReviewField label="Name" value={personalInfo.customerName} />
+              <ReviewField label="Phone" value={personalInfo.phone} />
+              <ReviewField label="Email" value={personalInfo.email} />
+              <ReviewField label="Address" value={personalInfo.address} />
             </Box>
           </CardContent>
         </Card>
@@ -99,16 +133,11 @@ const Step5Review = ({
                 )}
               </Box>
               <Divider sx={{ mb: 1 }} />
-              <Typography variant="body2" color="text.secondary">Description</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: orderDetails.description ? '#ffffff' : '#b98f33' }}>{orderDetails.description || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Bill Invoice</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: orderDetails.billInvoice ? '#ffffff' : '#b98f33' }}>{orderDetails.billInvoice || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Platform</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: orderDetails.platform ? '#ffffff' : '#b98f33' }}>{orderDetails.platform || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Start Date</Typography>
-              <Typography variant="body1" sx={{ mb: 1, color: orderDetails.startDate ? '#ffffff' : '#b98f33' }}>{orderDetails.startDate || '-'}</Typography>
-              <Typography variant="body2" color="text.secondary">Timeline</Typography>
-              <Typography variant="body1" sx={{ color: orderDetails.timeline ? '#ffffff' : '#b98f33' }}>{orderDetails.timeline || '-'}</Typography>
+              <ReviewField label="Description" value={orderDetails.description} />
+              <ReviewField label="Bill Invoice" value={orderDetails.billInvoice} />
+              <ReviewField label="Platform" value={orderDetails.platform} />
+              <ReviewField label="Start Date" value={orderDetails.startDate} />
+              <ReviewField label="Timeline" value={orderDetails.timeline} />
             </Box>
           </CardContent>
         </Card>
@@ -166,50 +195,106 @@ const Step5Review = ({
                   <Box sx={{ p: 3 }}>
                     {/* Material Row - all fields in one row */}
                     <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap' }}>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Company:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: (group.materialCompany && group.materialCompany !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 80, textAlign: 'left' }}>{group.materialCompany || '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Code:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: (group.materialCode && group.materialCode !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.materialCode || '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Quantity:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: ((group.materialQnty && group.materialQnty !== '-') || (group.materialQuantity && group.materialQuantity !== '-')) ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.materialQnty || group.materialQuantity || '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Price:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 700, color: group.materialPrice ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.materialPrice ? `$${group.materialPrice}` : '-'}</Typography>
+                      {hasValue(group.materialCompany) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Company:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 80, textAlign: 'left' }}>{group.materialCompany}</Typography>
+                        </>
+                      )}
+                      {hasValue(group.materialCode) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Code:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.materialCode}</Typography>
+                        </>
+                      )}
+                      {hasValue(group.materialQnty || group.materialQuantity) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Quantity:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.materialQnty || group.materialQuantity}</Typography>
+                        </>
+                      )}
+                      {hasValue(group.materialPrice) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Material Price:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.materialPrice}</Typography>
+                        </>
+                      )}
                     </Box>
                     {/* Labour Row - all fields in one row */}
                     <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Price:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 700, color: group.labourPrice ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.labourPrice ? `$${group.labourPrice}` : '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Note:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: (group.labourNote && group.labourNote !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.labourNote || '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: ((group.labourQnty && group.labourQnty !== '-') || (group.qntyLabour && group.qntyLabour !== '-')) ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour || '-'}</Typography>
+                      {hasValue(group.labourPrice) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Price:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.labourPrice}</Typography>
+                        </>
+                      )}
+                      {hasValue(group.labourNote) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Note:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.labourNote}</Typography>
+                        </>
+                      )}
+                      {hasValue(group.labourQnty || group.qntyLabour) && (
+                        <>
+                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour}</Typography>
+                        </>
+                      )}
                     </Box>
                     {/* Foam Row - all fields in one row, only if foam price has value */}
-                    {group.foamPrice && (
+                    {hasValue(group.foamPrice) && parseFloat(group.foamPrice) > 0 && (
                       <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Price:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.foamPrice}</Typography>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Thickness:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: (group.foamThickness && group.foamThickness !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamThickness || '-'}</Typography>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Note:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: (group.foamNote && group.foamNote !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.foamNote || '-'}</Typography>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Quantity:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: ((group.foamQnty && group.foamQnty !== '-') || (group.qntyFoam && group.qntyFoam !== '-')) ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam || '-'}</Typography>
+                        {hasValue(group.foamPrice) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Price:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.foamPrice}</Typography>
+                          </>
+                        )}
+                        {hasValue(group.foamThickness) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Thickness:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamThickness}</Typography>
+                          </>
+                        )}
+                        {hasValue(group.foamNote) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Note:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.foamNote}</Typography>
+                          </>
+                        )}
+                        {hasValue(group.foamQnty || group.qntyFoam) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Quantity:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam}</Typography>
+                          </>
+                        )}
                       </Box>
                     )}
                     {/* Painting Row - all fields in one row, only if painting labour has value */}
-                    {group.paintingLabour && (
+                    {hasValue(group.paintingLabour) && parseFloat(group.paintingLabour) > 0 && (
                       <Box sx={{ display: 'flex', alignItems: 'center', py: 1, borderBottom: '1px solid #f0f0f0', gap: 3, flexWrap: 'wrap', mt: 2 }}>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Labour:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.paintingLabour}</Typography>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Note:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: (group.paintingNote && group.paintingNote !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.paintingNote || '-'}</Typography>
-                        <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Quantity:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: (group.paintingQnty && group.paintingQnty !== '-') ? '#ffffff' : '#b98f33', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.paintingQnty || '-'}</Typography>
+                        {hasValue(group.paintingLabour) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Labour:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 700, color: '#ffffff', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.paintingLabour}</Typography>
+                          </>
+                        )}
+                        {hasValue(group.paintingNote) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Note:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.paintingNote}</Typography>
+                          </>
+                        )}
+                        {hasValue(group.paintingQnty) && (
+                          <>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Quantity:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.paintingQnty}</Typography>
+                          </>
+                        )}
                       </Box>
                     )}
                     {/* Customer Note - only if has value */}
-                    {group.customerNote && (
+                    {hasValue(group.customerNote) && (
                       <Box sx={{ mt: 3, pt: 2, borderTop: '2px solid #e3f2fd', width: '100%' }}>
                         <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, mb: 1, textAlign: 'left', fontSize: 13 }}>Customer Note</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: 'italic', color: '#ffffff', mt: 0.5, textAlign: 'left', fontSize: 15 }}>{group.customerNote}</Typography>
@@ -241,7 +326,7 @@ const Step5Review = ({
               <Typography variant="body2" color="text.secondary">Required Deposit Amount</Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.deposit}</Typography>
             </Box>
-            {paymentDetails.amountPaid > 0 && (
+            {hasValue(paymentDetails.amountPaid) && parseFloat(paymentDetails.amountPaid) > 0 && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">Amount Paid by Customer</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: paymentDetails.amountPaid >= paymentDetails.deposit ? '#4caf50' : '#ff9800' }}>
@@ -249,13 +334,13 @@ const Step5Review = ({
                 </Typography>
               </Box>
             )}
-            {paymentDetails.pickupDeliveryEnabled && (
+            {paymentDetails.pickupDeliveryEnabled && hasValue(paymentDetails.pickupDeliveryCost) && (
               <Box>
                 <Typography variant="body2" color="text.secondary">Pickup & Delivery Cost</Typography>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.pickupDeliveryCost}</Typography>
               </Box>
             )}
-            {paymentDetails.notes && (
+            {hasValue(paymentDetails.notes) && (
               <Box>
                 <Typography variant="body2" color="text.secondary">Additional Notes</Typography>
                 <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#ffffff' }}>{paymentDetails.notes}</Typography>

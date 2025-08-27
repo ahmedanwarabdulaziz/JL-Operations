@@ -67,9 +67,29 @@ const OrdersPage = () => {
   // Sort orders by bill number (highest to lowest)
   const sortOrdersByBillNumber = (ordersList) => {
     return ordersList.sort((a, b) => {
-      const billA = parseInt(a.orderDetails?.billInvoice || '0', 10);
-      const billB = parseInt(b.orderDetails?.billInvoice || '0', 10);
-      return billB - billA; // Descending order (highest first)
+      // Handle different data types and formats
+      let billA = a.orderDetails?.billInvoice;
+      let billB = b.orderDetails?.billInvoice;
+      
+      // Convert to numbers, handling various formats
+      if (typeof billA === 'string') {
+        billA = parseInt(billA.replace(/\D/g, ''), 10) || 0;
+      } else if (typeof billA === 'number') {
+        billA = billA;
+      } else {
+        billA = 0;
+      }
+      
+      if (typeof billB === 'string') {
+        billB = parseInt(billB.replace(/\D/g, ''), 10) || 0;
+      } else if (typeof billB === 'number') {
+        billB = billB;
+      } else {
+        billB = 0;
+      }
+      
+      // Sort in descending order (highest first)
+      return billB - billA;
     });
   };
 
@@ -101,7 +121,7 @@ const OrdersPage = () => {
       );
       
       const ordersCollection = collection(db, 'orders');
-      const ordersQuery = query(ordersCollection, orderBy('orderDetails.billInvoice', 'desc'));
+      const ordersQuery = query(ordersCollection);
       const ordersDataPromise = getDocs(ordersQuery);
       
       const ordersSnapshot = await Promise.race([ordersDataPromise, timeoutPromise]);
@@ -132,6 +152,20 @@ const OrdersPage = () => {
       // Sort by bill number (highest to lowest)
       const sortedOrders = sortOrdersByBillNumber(activeOrders);
       console.log('Sorted active orders:', sortedOrders);
+      console.log('First few orders with bill numbers:', sortedOrders.slice(0, 5).map(order => ({
+        id: order.id,
+        billInvoice: order.orderDetails?.billInvoice,
+        customerName: order.personalInfo?.customerName,
+        parsedBillNumber: parseInt((order.orderDetails?.billInvoice || '0').replace(/\D/g, ''), 10) || 0
+      })));
+      
+      // Debug: Show all orders with their bill numbers for verification
+      console.log('All orders with bill numbers (sorted):', sortedOrders.map(order => ({
+        id: order.id,
+        billInvoice: order.orderDetails?.billInvoice,
+        customerName: order.personalInfo?.customerName,
+        parsedBillNumber: parseInt((order.orderDetails?.billInvoice || '0').replace(/\D/g, ''), 10) || 0
+      })));
       
       setOrders(sortedOrders);
       setFilteredOrders(sortedOrders);
@@ -452,7 +486,7 @@ const OrdersPage = () => {
 
       {/* Search and Stats */}
       <Grid container spacing={3} sx={{ mb: 3, flexShrink: 0 }}>
-        <Grid xs={12} md={8}>
+        <Grid item xs={12} md={8}>
           <TextField
             fullWidth
             placeholder="Search by bill number, name, email, phone, address, or any field..."
@@ -483,7 +517,7 @@ const OrdersPage = () => {
             }}
           />
         </Grid>
-        <Grid xs={12} md={4}>
+        <Grid item xs={12} md={4}>
           <Card sx={{ 
             background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
             color: '#000000',
@@ -520,8 +554,8 @@ const OrdersPage = () => {
         <Table>
           <TableHead sx={{ backgroundColor: '#274290' }}>
             <TableRow>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Invoice</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Deposit Required</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Total Paid</TableCell>
@@ -554,6 +588,19 @@ const OrdersPage = () => {
                   <TableRow key={order.id} hover sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ReceiptIcon sx={{ mr: 1, color: 'primary.main', fontSize: 24 }} />
+                        <Typography variant="h5" sx={{ 
+                          fontWeight: 'bold', 
+                          color: '#274290',
+                          fontSize: '1.5rem',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                        }}>
+                          {order.orderDetails?.billInvoice || 'N/A'}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                           <PersonIcon />
                         </Avatar>
@@ -568,14 +615,6 @@ const OrdersPage = () => {
                             {order.personalInfo?.phone || 'No phone'}
                           </Typography>
                         </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <ReceiptIcon sx={{ mr: 1, color: 'primary.main' }} />
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                          {order.orderDetails?.billInvoice || 'N/A'}
-                        </Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
