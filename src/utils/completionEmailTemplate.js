@@ -2,7 +2,9 @@
 // This template is used when an order is completed and marked as "Done"
 
 export const generateCompletionEmailTemplate = async (orderData, includeReviewRequest = true) => {
-  const customerName = orderData.personalInfo?.customerName || 'Valued Customer';
+  // Extract first name from customer name
+  const fullCustomerName = orderData.personalInfo?.customerName || 'Valued Customer';
+  const customerName = fullCustomerName.split(' ')[0]; // Get first name only
   const orderNumber = orderData.orderDetails?.billInvoice || 'N/A';
   const customerEmail = orderData.personalInfo?.email || '';
   const currentYear = new Date().getFullYear();
@@ -11,14 +13,14 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
   console.log('🔍 Completion Email Debug - Furniture Data:', orderData.furnitureData);
   console.log('🔍 Completion Email Debug - Furniture Groups:', orderData.furnitureData?.groups);
   
-  // Extract unique treatments from furniture groups
+  // Extract treatments from furniture groups based on selected treatment dropdown
   const furnitureTreatments = []; // Array to store furniture treatment objects
   
   if (orderData.furnitureData?.groups) {
     console.log('🔍 Completion Email Debug - Processing furniture groups...');
     orderData.furnitureData.groups.forEach((group, index) => {
       console.log(`🔍 Completion Email Debug - Group ${index}:`, group);
-      console.log(`🔍 Completion Email Debug - Group ${index} materialCompany:`, group.materialCompany);
+      console.log(`🔍 Completion Email Debug - Group ${index} treatment:`, group.treatment);
       console.log(`🔍 Completion Email Debug - Group ${index} furnitureType:`, group.furnitureType);
       console.log(`🔍 Completion Email Debug - Group ${index} all fields:`, Object.keys(group));
       
@@ -27,20 +29,20 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
         console.log(`🔍 Completion Email Debug - Group ${index} ${field}:`, group[field]);
       });
       
-      // Check if material company exists
-      const materialCompany = group.materialCompany;
+      // Check if treatment was selected
+      const selectedTreatment = group.treatment;
       const furnitureType = group.furnitureType || `Furniture Item ${index + 1}`;
       
-      console.log(`🔍 Completion Email Debug - Group ${index} - Material Company: ${materialCompany}, Furniture Type: ${furnitureType}`);
+      console.log(`🔍 Completion Email Debug - Group ${index} - Selected Treatment: ${selectedTreatment}, Furniture Type: ${furnitureType}`);
       
-      if (materialCompany && materialCompany.trim() !== '') {
+      if (selectedTreatment && selectedTreatment.trim() !== '') {
         furnitureTreatments.push({
-          materialCompany: materialCompany,
+          treatmentKind: selectedTreatment,
           furnitureType: furnitureType
         });
-        console.log(`🔍 Completion Email Debug - Added furniture with material company: ${materialCompany} for ${furnitureType}`);
+        console.log(`🔍 Completion Email Debug - Added furniture with treatment: ${selectedTreatment} for ${furnitureType}`);
       } else {
-        console.log(`🔍 Completion Email Debug - No material company found in group ${index}`);
+        console.log(`🔍 Completion Email Debug - No treatment selected in group ${index}`);
       }
     });
   } else {
@@ -49,39 +51,39 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
   
   console.log('🔍 Completion Email Debug - Final furniture treatments array:', furnitureTreatments);
 
-  // Get treatment links from database based on material companies
-  const treatmentLinks = await getTreatmentLinksByMaterialCompany(furnitureTreatments);
+  // Get treatment links from database based on treatment kinds
+  const treatmentLinks = await getTreatmentLinksByTreatmentKind(furnitureTreatments);
   console.log('🔍 Completion Email Debug - Treatment links result:', treatmentLinks);
+  
+  console.log('🔍 Completion Email Debug - Valid treatment links found:', Object.keys(treatmentLinks).length);
 
   // Group furniture by treatment to merge duplicates
   const groupedTreatments = {};
   
   furnitureTreatments.forEach(furnitureTreatment => {
-    const treatmentLink = treatmentLinks[furnitureTreatment.materialCompany];
-    const treatmentKey = treatmentLink ? treatmentLink.treatmentKind : 'no-treatment';
+    const treatmentLink = treatmentLinks[furnitureTreatment.treatmentKind];
     
-    if (!groupedTreatments[treatmentKey]) {
-      groupedTreatments[treatmentKey] = {
-        treatmentKind: treatmentLink ? treatmentLink.treatmentKind : 'Care Instructions',
-        url: treatmentLink ? treatmentLink.url : null,
-        materialCompanies: new Set(), // Use Set to avoid duplicates
-        furnitureTypes: []
-      };
+    // Only process if we have a valid treatment link
+    if (treatmentLink && treatmentLink.url) {
+      const treatmentKey = furnitureTreatment.treatmentKind;
+      
+      if (!groupedTreatments[treatmentKey]) {
+        groupedTreatments[treatmentKey] = {
+          treatmentKind: furnitureTreatment.treatmentKind,
+          url: treatmentLink.url,
+          furnitureTypes: []
+        };
+      }
+      
+      // Add furniture type
+      groupedTreatments[treatmentKey].furnitureTypes.push(furnitureTreatment.furnitureType);
     }
-    
-    // Add material company if not already present (using Set for automatic deduplication)
-    groupedTreatments[treatmentKey].materialCompanies.add(furnitureTreatment.materialCompany);
-    
-    // Add furniture type
-    groupedTreatments[treatmentKey].furnitureTypes.push(furnitureTreatment.furnitureType);
   });
   
-  // Convert Sets back to arrays for easier template processing
-  Object.keys(groupedTreatments).forEach(treatmentKey => {
-    groupedTreatments[treatmentKey].materialCompanies = Array.from(groupedTreatments[treatmentKey].materialCompanies);
-  });
+  // No conversion needed since we're not using materialCompanies anymore
   
   console.log('🔍 Completion Email Debug - Grouped treatments:', groupedTreatments);
+  console.log('🔍 Completion Email Debug - Number of valid treatments to display:', Object.keys(groupedTreatments).length);
 
   // Google Review Link (you can customize this)
   const googleReviewLink = "https://g.page/r/CeufI7yS3kV5EAE/review";
@@ -97,8 +99,9 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
             body { margin:0; padding:0; -webkit-font-smoothing:antialiased; width:100%!important; background-color:#f4f4f4; font-family:Arial,'Helvetica Neue',Helvetica,sans-serif; font-size:16px; line-height:1.6; color:#333; }
             .email-wrapper { width:100%; background-color:#f4f4f4; padding:20px 0; }
             .email-container { width:90%; max-width:680px; margin:0 auto; background-color:#fff; border-radius:8px; overflow:hidden; border:1px solid #ddd; }
-            .email-header { background-color:#1A1A1A; color:#DAA520; padding:25px; text-align:center; }
+            .email-header { background-color:#1A1A1A; color:#DAA520; padding:25px; text-align:center; position:relative; }
             .email-header h1 { margin:0; font-size:24px; font-weight:bold; }
+            .order-number-banner { position:absolute; bottom:10px; right:20px; font-size:12px; color:#DAA520; font-weight:normal; }
             .email-body { padding:25px 30px; }
             .greeting { font-size:17px; margin-bottom:20px; }
             .completion-summary-header { display:table; width:100%; margin-bottom:20px; padding-bottom:10px; border-bottom:1px solid #eee; }
@@ -125,14 +128,14 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
     <body>
         <div class="email-wrapper">
             <div class="email-container">
-                <div class="email-header"><h1>Order Completion - Thank You!</h1></div>
+                <div class="email-header">
+                    <h1>Order Completion - Thank You!</h1>
+                    <div class="order-number-banner">Order #${orderNumber}</div>
+                </div>
                 <div class="email-body">
                     <p class="greeting">Dear ${customerName},</p>
-                    <p>We are delighted to inform you that your order has been <strong>successfully completed</strong>! It has been our pleasure to work on your furniture and bring your vision to life.</p>
                     
                     <div class="completion-summary-header">
-                        <span class="completion-summary-title">Order Summary</span>
-                        <span class="order-number">Order #${orderNumber}</span>
                     </div>
 
                     <p>Your order has been completed with the highest standards of quality and craftsmanship. We hope you are completely satisfied with the results. Your furniture has been carefully crafted and treated to ensure it will provide you with years of comfort and beauty.</p>
@@ -143,16 +146,19 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
                         <p style="margin-bottom: 15px; font-size: 14px; color: #444;">To help you maintain the beauty and longevity of your furniture, please follow the care instructions below for each treated piece:</p>
                         
                         ${Object.entries(groupedTreatments).map(([treatmentKey, treatmentData]) => {
-                            const treatmentLink = treatmentData.url;
-                            const materialCompanies = treatmentData.materialCompanies.join(', ');
-                            const furnitureTypes = treatmentData.furnitureTypes.join(', ');
-                            
-                            console.log(`🔍 Email Template Debug - Processing treatment: ${materialCompanies}, Link: ${treatmentLink}, Treatment Kind: ${treatmentData.treatmentKind}`);
+                            console.log(`🔍 Email Template Debug - Processing treatment: ${treatmentData.treatmentKind}, Link: ${treatmentData.url}`);
                             
                             // Create a more natural description for furniture types
-                            const furnitureDescription = treatmentData.furnitureTypes.length === 1 
-                                ? treatmentData.furnitureTypes[0].toLowerCase()
-                                : treatmentData.furnitureTypes.slice(0, -1).join(', ').toLowerCase() + ' and ' + treatmentData.furnitureTypes[treatmentData.furnitureTypes.length - 1].toLowerCase();
+                            let furnitureDescription;
+                            if (treatmentData.furnitureTypes.length === 1) {
+                                furnitureDescription = treatmentData.furnitureTypes[0].toLowerCase();
+                            } else if (treatmentData.furnitureTypes.length === 2) {
+                                furnitureDescription = treatmentData.furnitureTypes[0].toLowerCase() + ' and ' + treatmentData.furnitureTypes[1].toLowerCase();
+                            } else {
+                                const allButLast = treatmentData.furnitureTypes.slice(0, -1).map(type => type.toLowerCase());
+                                const last = treatmentData.furnitureTypes[treatmentData.furnitureTypes.length - 1].toLowerCase();
+                                furnitureDescription = allButLast.join(', ') + ', and ' + last;
+                            }
                             
                             return `
                                 <div class="treatment-item">
@@ -160,28 +166,12 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
                                     <p style="margin-bottom: 12px; font-size: 14px; color: #444;">
                                         For your ${furnitureDescription}, please follow the care and treatment instructions in the link below to maintain its beauty and durability.
                                     </p>
-                                    ${treatmentLink ? 
-                                        `<a href="${treatmentLink}" target="_blank" class="treatment-link">View Care Instructions for ${treatmentData.treatmentKind} →</a>` :
-                                        `<span style="color: #999999; font-style: italic;">Care instructions link not available</span>`
-                                    }
+                                    <a href="${treatmentData.url}" target="_blank" class="treatment-link">View Care Instructions for ${treatmentData.treatmentKind} →</a>
                                 </div>
                             `;
                         }).join('')}
                     </div>
-                    ` : `
-                    <div style="margin: 25px 0;">
-                        <h3 style="color: #DAA520; margin-bottom: 15px; font-size: 18px;">Care Instructions for Your Treated Furniture</h3>
-                        <p style="margin-bottom: 15px; font-size: 14px; color: #444;">No furniture treatments were found in this order.</p>
-                        <div class="treatment-item">
-                            <h4>Debug Information</h4>
-                            <p style="margin-bottom: 12px; font-size: 14px; color: #444;">
-                                <strong>Furniture Treatments Found:</strong> ${Object.keys(groupedTreatments).length}<br>
-                                <strong>Treatment Links Found:</strong> ${Object.keys(treatmentLinks).length}<br>
-                                <strong>Furniture Groups:</strong> ${orderData.furnitureData?.groups?.length || 0}
-                            </p>
-                        </div>
-                    </div>
-                    `}
+                    ` : ''}
 
                     ${includeReviewRequest ? `
                     <div class="review-section">
@@ -215,14 +205,14 @@ export const generateCompletionEmailTemplate = async (orderData, includeReviewRe
   return htmlContent;
 };
 
-// Function to get treatment links from the database based on material companies
-export const getTreatmentLinksByMaterialCompany = async (furnitureTreatments) => {
+// Function to get treatment links from the database based on treatment kinds
+export const getTreatmentLinksByTreatmentKind = async (furnitureTreatments) => {
   try {
-    // Extract unique material companies
-    const materialCompaniesArray = furnitureTreatments.map(t => t.materialCompany);
+    // Extract unique treatment kinds
+    const treatmentKindsArray = furnitureTreatments.map(t => t.treatmentKind);
     
     // If no treatments, return empty object immediately
-    if (materialCompaniesArray.length === 0) {
+    if (treatmentKindsArray.length === 0) {
       console.log('🔍 Treatment Debug - No treatments found, skipping database query');
       return {};
     }
@@ -230,51 +220,32 @@ export const getTreatmentLinksByMaterialCompany = async (furnitureTreatments) =>
     const { collection, getDocs, query, where } = await import('firebase/firestore');
     const { db } = await import('../firebase/config');
     
-    console.log('🔍 Treatment Debug - Fetching treatment links for material companies:', materialCompaniesArray);
+    console.log('🔍 Treatment Debug - Fetching treatment links for treatment kinds:', treatmentKindsArray);
     
-    // Query treatments collection - we need to check if any of our material companies are in the materialCompanies array
+    // Query treatments collection to find treatments that match our treatment kinds
     const treatmentsRef = collection(db, 'treatments');
     const treatmentsSnapshot = await getDocs(treatmentsRef);
     
     const treatmentLinks = {};
     
-    // First, build a map of material companies to their treatments
-    const materialToTreatmentMap = {};
-    
     treatmentsSnapshot.docs.forEach(doc => {
       const treatment = doc.data();
       console.log('🔍 Treatment Debug - Found treatment document:', treatment);
       
-      // Check if this treatment has a URL link and if any of our material companies are in its materialCompanies array
-      if (treatment.urlPageLink && treatment.materialCompanies && Array.isArray(treatment.materialCompanies)) {
-        // Map each material company to this treatment
-        treatment.materialCompanies.forEach(materialCompany => {
-          if (materialCompaniesArray.includes(materialCompany)) {
-            materialToTreatmentMap[materialCompany] = {
-              url: treatment.urlPageLink,
-              treatmentKind: treatment.treatmentKind
-            };
-            console.log(`🔍 Treatment Debug - Mapped material company ${materialCompany} to treatment ${treatment.treatmentKind}`);
-          }
-        });
-      }
-    });
-    
-    // Now assign treatment links to each furniture treatment
-    furnitureTreatments.forEach(furnitureTreatment => {
-      const treatment = materialToTreatmentMap[furnitureTreatment.materialCompany];
-      if (treatment) {
-        treatmentLinks[furnitureTreatment.materialCompany] = treatment;
-        console.log(`🔍 Treatment Debug - Assigned ${treatment.treatmentKind} to ${furnitureTreatment.furnitureType} (${furnitureTreatment.materialCompany})`);
-      } else {
-        console.log(`🔍 Treatment Debug - No treatment found for ${furnitureTreatment.materialCompany}`);
+      // Check if this treatment matches any of our treatment kinds and has a URL link
+      if (treatment.urlPageLink && treatment.treatmentKind && treatmentKindsArray.includes(treatment.treatmentKind)) {
+        treatmentLinks[treatment.treatmentKind] = {
+          url: treatment.urlPageLink,
+          treatmentKind: treatment.treatmentKind
+        };
+        console.log(`🔍 Treatment Debug - Found treatment link for ${treatment.treatmentKind}: ${treatment.urlPageLink}`);
       }
     });
     
     console.log('🔍 Treatment Debug - Final treatment links:', treatmentLinks);
     return treatmentLinks;
   } catch (error) {
-    console.error('Error fetching treatment links by material company:', error);
+    console.error('Error fetching treatment links by treatment kind:', error);
     return {};
   }
 };

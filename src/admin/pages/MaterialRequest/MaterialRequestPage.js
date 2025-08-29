@@ -10,7 +10,12 @@ import {
   InputAdornment,
   Chip,
   CircularProgress,
-  Paper
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -36,18 +41,31 @@ const MaterialRequestPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [updating, setUpdating] = useState(false);
   const [materialNotes, setMaterialNotes] = useState({});
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [selectedMaterialForNote, setSelectedMaterialForNote] = useState(null);
+  const [currentNoteText, setCurrentNoteText] = useState('');
 
   const { showSuccess, showError } = useNotification();
 
   // Extract materials from orders (excluding completed/canceled orders)
   const extractMaterialsFromOrders = useCallback((ordersList) => {
     const materials = [];
+    let skippedCount = 0;
+    
+    console.log('Total orders to process:', ordersList.length);
     
           ordersList.forEach(order => {
-        // Skip only "Done" orders - show all other statuses
-        const orderStatus = order.orderStatus || order.status;
-        if (orderStatus === 'Done' || orderStatus === 'done') {
-          console.log('Skipping order with Done status:', orderStatus, 'Order ID:', order.id);
+        // Skip "Done" and "Cancelled" orders - show all other statuses
+        const orderStatus = order.orderStatus || order.status || order.invoiceStatus;
+        console.log('Checking order status:', orderStatus, 'Order ID:', order.id, 'Invoice:', order.orderDetails?.billInvoice);
+        
+        if (orderStatus === 'Done' || orderStatus === 'done' || 
+            orderStatus === 'Cancelled' || orderStatus === 'cancelled' ||
+            orderStatus === 'Canceled' || orderStatus === 'canceled' ||
+            orderStatus === 'Completed' || orderStatus === 'completed' ||
+            orderStatus === 'Finished' || orderStatus === 'finished') {
+          console.log('Skipping order with Done/Cancelled/Completed status:', orderStatus, 'Order ID:', order.id);
+          skippedCount++;
           return;
         }
 
@@ -56,7 +74,7 @@ const MaterialRequestPage = () => {
       furnitureGroups.forEach(group => {
         if (group.materialCode && group.materialCompany) {
           // Get quantity from the correct field
-          const quantity = group.materialQntyJL || 
+          const quantity = group.materialJLQnty || 
                           group.materialQnty || 
                           group.qntyJL || 
                           group.qnty || 
@@ -72,6 +90,7 @@ const MaterialRequestPage = () => {
             materialCode: group.materialCode,
             materialName: group.materialName || group.materialCode,
             quantity: quantity,
+            materialQntyJL: group.materialJLQnty || 0,
             materialStatus: group.materialStatus || null,
             materialNote: group.materialNote || '',
             orderDate: order.createdAt,
@@ -223,6 +242,29 @@ const MaterialRequestPage = () => {
     }));
   };
 
+  // Open note dialog
+  const openNoteDialog = (material) => {
+    setSelectedMaterialForNote(material);
+    setCurrentNoteText(materialNotes[material.id] || material.materialNote || '');
+    setNoteDialogOpen(true);
+  };
+
+  // Close note dialog
+  const closeNoteDialog = () => {
+    setNoteDialogOpen(false);
+    setSelectedMaterialForNote(null);
+    setCurrentNoteText('');
+  };
+
+  // Save note
+  const saveNote = () => {
+    if (selectedMaterialForNote) {
+      handleNoteChange(selectedMaterialForNote.id, currentNoteText);
+      closeNoteDialog();
+      showSuccess('Note saved successfully');
+    }
+  };
+
   useEffect(() => {
     fetchMaterials();
   }, [fetchMaterials]);
@@ -281,11 +323,8 @@ const MaterialRequestPage = () => {
     }}>
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: '2px solid #e0e0e0' }}>
-        <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mb: 2 }}>
           Material Request Management
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Track and manage material orders from active customer orders
         </Typography>
         
         {/* Search and Refresh */}
@@ -315,67 +354,17 @@ const MaterialRequestPage = () => {
             onClick={fetchMaterials}
             disabled={updating}
             sx={{
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
+              background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+              color: '#ffffff',
               fontWeight: 'bold',
               '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                background: 'linear-gradient(135deg, #e67e22 0%, #f27921 100%)'
               }
             }}
           >
             Refresh
           </Button>
         </Box>
-      </Box>
-
-      {/* Stats */}
-      <Box sx={{ p: 2, borderBottom: '2px solid #e0e0e0' }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
-              },
-              transition: 'all 0.3s ease'
-            }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                  {materialsRequired.length}
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#000000', fontWeight: 'bold' }}>
-                  Materials Required
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ 
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '2px solid #8b6b1f',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
-              },
-              transition: 'all 0.3s ease'
-            }}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                  {materialsOrdered.length}
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#000000', fontWeight: 'bold' }}>
-                  Materials Ordered
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
       </Box>
 
       {/* Two Column Layout */}
@@ -413,20 +402,20 @@ const MaterialRequestPage = () => {
                   <Box sx={{ 
                     display: 'flex', 
                     alignItems: 'center', 
-                    mb: 2,
-                    p: 2,
+                    mb: 1,
+                    p: 1,
                     backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                    borderRadius: 2,
+                    borderRadius: 1,
                     border: '1px solid rgba(185, 143, 51, 0.3)'
                   }}>
-                    <BusinessIcon sx={{ mr: 1, color: '#b98f33' }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                    <BusinessIcon sx={{ mr: 1, color: '#b98f33', fontSize: 18 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {company}
                     </Typography>
                     <Chip 
                       label={materials.length} 
                       size="small" 
-                      sx={{ ml: 'auto', backgroundColor: '#ff6b6b', color: 'white' }}
+                      sx={{ ml: 'auto', backgroundColor: '#ff6b6b', color: 'white', fontSize: '0.7rem' }}
                     />
                   </Box>
                   
@@ -444,94 +433,90 @@ const MaterialRequestPage = () => {
                       transition: 'all 0.3s ease'
                     }}>
                       <CardContent sx={{ p: 2 }}>
-                        {/* Main Material Info Row */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                              <ReceiptIcon sx={{ mr: 1, color: '#000000', fontSize: 20 }} />
-                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                Invoice: {material.invoiceNo}
-                              </Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              {material.materialCode} - {material.materialName}
+                        {/* Single Row Layout */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                          {/* Invoice */}
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', minWidth: 80 }}>
+                            {material.invoiceNo}
+                          </Typography>
+                          
+                          {/* Customer Name */}
+                          <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000', flex: 1, textAlign: 'center' }}>
+                            {material.customerName}
+                          </Typography>
+                          
+                          {/* Material Code and Quantity */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                              {material.materialCode}
                             </Typography>
-                            <Typography variant="body2" sx={{ color: '#000000' }}>
-                              Customer: {material.customerName}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#000000' }}>
-                              Date: {formatDate(material.orderDate)}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ textAlign: 'right', ml: 2 }}>
                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              Qty: {material.quantity}
+                              {material.materialQntyJL}
                             </Typography>
                           </Box>
-                        </Box>
-
-                        {/* Note Field */}
-                        <Box sx={{ mb: 2 }}>
-                          <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Add notes for this material..."
-                            value={materialNotes[material.id] || material.materialNote || ''}
-                            onChange={(e) => handleNoteChange(material.id, e.target.value)}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <NoteIcon sx={{ color: '#000000', fontSize: 20 }} />
-                                </InputAdornment>
-                              )
-                            }}
+                          
+                          {/* Note Toggle Icon */}
+                          <IconButton
+                            size="small"
+                            onClick={() => openNoteDialog(material)}
                             sx={{
-                              '& .MuiOutlinedInput-root': {
-                                backgroundColor: 'rgba(255,255,255,0.8)',
-                                '& fieldset': {
-                                  borderColor: '#8b6b1f'
-                                },
-                                '&:hover fieldset': {
-                                  borderColor: '#b98f33'
-                                },
-                                '&.Mui-focused fieldset': {
-                                  borderColor: '#b98f33'
-                                },
-                                '& .MuiInputBase-input': {
-                                  color: '#000000'
-                                },
-                                '& .MuiInputBase-input::placeholder': {
-                                  color: '#666666'
-                                }
+                              color: '#000000',
+                              backgroundColor: 'rgba(255,255,255,0.8)',
+                              '&:hover': {
+                                backgroundColor: 'rgba(255,255,255,0.9)'
                               }
                             }}
-                          />
+                          >
+                            <NoteIcon sx={{ fontSize: 20 }} />
+                          </IconButton>
+                          
+                          {/* Action Button */}
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<LocalShippingIcon />}
+                            onClick={() => updateMaterialStatus(
+                              material.id, 
+                              'Ordered', 
+                              materialNotes[material.id] || material.materialNote || ''
+                            )}
+                            disabled={updating}
+                            sx={{
+                              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                              color: '#000000',
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem',
+                              padding: '4px 12px',
+                              '&:hover': {
+                                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                              }
+                            }}
+                          >
+                            Order
+                          </Button>
                         </Box>
-                        
-                                                 {/* Action Button */}
-                         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                           <Button
-                             variant="contained"
-                             startIcon={<LocalShippingIcon />}
-                             onClick={() => updateMaterialStatus(
-                               material.id, 
-                               'Ordered', 
-                               materialNotes[material.id] || material.materialNote || ''
-                             )}
-                             disabled={updating}
-                             sx={{
-                               background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                               color: '#000000',
-                               fontWeight: 'bold',
-                               '&:hover': {
-                                 background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
-                               }
-                             }}
-                           >
-                             Order Material
-                           </Button>
-                         </Box>
+
+                        {/* Note Display Row */}
+                        {(materialNotes[material.id] || material.materialNote) && (
+                          <Box sx={{ 
+                            mt: 1, 
+                            p: 1, 
+                            backgroundColor: 'rgba(255,255,255,0.9)', 
+                            borderRadius: 1,
+                            border: '1px solid #8b6b1f'
+                          }}>
+                            <Typography variant="body2" sx={{ 
+                              color: '#000000', 
+                              fontStyle: 'italic',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1
+                            }}>
+                              <NoteIcon sx={{ fontSize: 16, color: '#b98f33' }} />
+                              {materialNotes[material.id] || material.materialNote}
+                            </Typography>
+                          </Box>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -573,20 +558,20 @@ const MaterialRequestPage = () => {
                   <Box sx={{ 
                     display: 'flex', 
                     alignItems: 'center', 
-                    mb: 2,
-                    p: 2,
+                    mb: 1,
+                    p: 1,
                     backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                    borderRadius: 2,
+                    borderRadius: 1,
                     border: '1px solid rgba(185, 143, 51, 0.3)'
                   }}>
-                    <BusinessIcon sx={{ mr: 1, color: '#b98f33' }} />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                    <BusinessIcon sx={{ mr: 1, color: '#b98f33', fontSize: 18 }} />
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {company}
                     </Typography>
                     <Chip 
                       label={materials.length} 
                       size="small" 
-                      sx={{ ml: 'auto', backgroundColor: '#feca57', color: 'white' }}
+                      sx={{ ml: 'auto', backgroundColor: '#feca57', color: 'white', fontSize: '0.7rem' }}
                     />
                   </Box>
                   
@@ -604,100 +589,115 @@ const MaterialRequestPage = () => {
                       transition: 'all 0.3s ease'
                     }}>
                       <CardContent sx={{ p: 2 }}>
-                        {/* Main Material Info Row */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                          <Box sx={{ flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                              <ReceiptIcon sx={{ mr: 1, color: '#000000', fontSize: 20 }} />
-                              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                Invoice: {material.invoiceNo}
-                              </Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              {material.materialCode} - {material.materialName}
+                        {/* Single Row Layout */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                          {/* Invoice */}
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', minWidth: 80 }}>
+                            {material.invoiceNo}
+                          </Typography>
+                          
+                          {/* Customer Name */}
+                          <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000', flex: 1, textAlign: 'center' }}>
+                            {material.customerName}
+                          </Typography>
+                          
+                          {/* Material Code and Quantity */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                              {material.materialCode}
                             </Typography>
-                            <Typography variant="body2" sx={{ color: '#000000' }}>
-                              Customer: {material.customerName}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#000000' }}>
-                              Date: {formatDate(material.orderDate)}
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                              {material.materialQntyJL}
                             </Typography>
                           </Box>
-                          <Box sx={{ textAlign: 'right', ml: 2 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              Qty: {material.quantity}
-                            </Typography>
+                          
+                          {/* Note Toggle Icon */}
+                          <IconButton
+                            size="small"
+                            onClick={() => openNoteDialog(material)}
+                            sx={{
+                              color: '#000000',
+                              backgroundColor: 'rgba(255,255,255,0.8)',
+                              '&:hover': {
+                                backgroundColor: 'rgba(255,255,255,0.9)'
+                              }
+                            }}
+                          >
+                            <NoteIcon sx={{ fontSize: 20 }} />
+                          </IconButton>
+                          
+                          {/* Action Buttons */}
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              startIcon={<CheckCircleIcon />}
+                              onClick={() => updateMaterialStatus(
+                                material.id, 
+                                'Received', 
+                                materialNotes[material.id] || material.materialNote || ''
+                              )}
+                              disabled={updating}
+                              sx={{
+                                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                                color: '#000000',
+                                fontWeight: 'bold',
+                                fontSize: '0.75rem',
+                                padding: '4px 8px',
+                                '&:hover': {
+                                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                                }
+                              }}
+                            >
+                              Received
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<ArrowBackIcon />}
+                              onClick={() => updateMaterialStatus(
+                                material.id, 
+                                null, 
+                                materialNotes[material.id] || material.materialNote || ''
+                              )}
+                              disabled={updating}
+                              sx={{
+                                borderColor: '#8b6b1f',
+                                color: '#000000',
+                                fontSize: '0.75rem',
+                                padding: '4px 8px',
+                                '&:hover': {
+                                  borderColor: '#b98f33',
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                                }
+                              }}
+                            >
+                              Back
+                            </Button>
                           </Box>
                         </Box>
 
-                        {/* Note Field */}
-                        <Box sx={{ mb: 2 }}>
-                          <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Add notes for this material..."
-                            value={materialNotes[material.id] || material.materialNote || ''}
-                            onChange={(e) => handleNoteChange(material.id, e.target.value)}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  <NoteIcon sx={{ color: '#000000', fontSize: 20 }} />
-                                </InputAdornment>
-                              )
-                            }}
-                            sx={{
-                              '& .MuiOutlinedInput-root': {
-                                backgroundColor: 'rgba(255,255,255,0.8)',
-                                '& fieldset': {
-                                  borderColor: '#8b6b1f'
-                                },
-                                '&:hover fieldset': {
-                                  borderColor: '#b98f33'
-                                },
-                                '&.Mui-focused fieldset': {
-                                  borderColor: '#b98f33'
-                                },
-                                '& .MuiInputBase-input': {
-                                  color: '#000000'
-                                },
-                                '& .MuiInputBase-input::placeholder': {
-                                  color: '#666666'
-                                }
-                              }
-                            }}
-                          />
-                        </Box>
-                        
-                        {/* Action Buttons */}
-                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
-                          <Button
-                            variant="contained"
-                            startIcon={<CheckCircleIcon />}
-                            onClick={() => updateMaterialStatus(
-                              material.id, 
-                              'Received', 
-                              materialNotes[material.id] || material.materialNote || ''
-                            )}
-                            disabled={updating}
-                                                          sx={buttonStyles.primaryButton}
-                          >
-                            Mark Received
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            startIcon={<ArrowBackIcon />}
-                            onClick={() => updateMaterialStatus(
-                              material.id, 
-                              null, 
-                              materialNotes[material.id] || material.materialNote || ''
-                            )}
-                            disabled={updating}
-                                                          sx={buttonStyles.cancelButton}
-                          >
-                            Back to Required
-                          </Button>
-                        </Box>
+                        {/* Note Display Row */}
+                        {(materialNotes[material.id] || material.materialNote) && (
+                          <Box sx={{ 
+                            mt: 1, 
+                            p: 1, 
+                            backgroundColor: 'rgba(255,255,255,0.9)', 
+                            borderRadius: 1,
+                            border: '1px solid #8b6b1f'
+                          }}>
+                            <Typography variant="body2" sx={{ 
+                              color: '#000000', 
+                              fontStyle: 'italic',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1
+                            }}>
+                              <NoteIcon sx={{ fontSize: 16, color: '#b98f33' }} />
+                              {materialNotes[material.id] || material.materialNote}
+                            </Typography>
+                          </Box>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
@@ -707,6 +707,72 @@ const MaterialRequestPage = () => {
           </Box>
         </Paper>
       </Box>
+
+      {/* Note Dialog */}
+      <Dialog open={noteDialogOpen} onClose={closeNoteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <NoteIcon />
+          Add Note for Material
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            placeholder="Enter your note here..."
+            value={currentNoteText}
+            onChange={(e) => setCurrentNoteText(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '& fieldset': {
+                  borderColor: '#8b6b1f'
+                },
+                '&:hover fieldset': {
+                  borderColor: '#b98f33'
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#b98f33'
+                }
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={closeNoteDialog}
+            sx={{
+              borderColor: '#8b6b1f',
+              color: '#000000',
+              '&:hover': {
+                borderColor: '#b98f33',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveNote}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              fontWeight: 'bold',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+              }
+            }}
+          >
+            Save Note
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

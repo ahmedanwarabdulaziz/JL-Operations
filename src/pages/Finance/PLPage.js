@@ -77,6 +77,7 @@ import {
   getPeriodComparison,
   calculateYTD
 } from '../../utils/plCalculations';
+import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';
 
 const PLPage = () => {
   const [orders, setOrders] = useState([]);
@@ -165,11 +166,15 @@ const PLPage = () => {
     try {
       if (!selectedOrder) return;
       
+      // Convert date to Firestore Timestamp for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreNow = Timestamp.fromDate(new Date());
+      
       const orderRef = doc(db, 'orders', selectedOrder.id);
       const allocationData = {
         method: allocationMethod,
         allocations: manualAllocations,
-        appliedAt: new Date()
+        appliedAt: firestoreNow
       };
       
       await updateDoc(orderRef, { allocation: allocationData });
@@ -415,7 +420,20 @@ const PLPage = () => {
           <Grid item xs={12} sm={2}>
             <Chip
               label={appliedDateFrom && appliedDateTo ?
-                `${appliedDateFrom.toLocaleDateString()} - ${appliedDateTo.toLocaleDateString()}` :
+                `${(() => {
+                  try {
+                    const fromDate = appliedDateFrom?.toDate ? appliedDateFrom.toDate() :
+                      (appliedDateFrom?.seconds ? new Date(appliedDateFrom.seconds * 1000) :
+                      new Date(appliedDateFrom));
+                    const toDate = appliedDateTo?.toDate ? appliedDateTo.toDate() :
+                      (appliedDateTo?.seconds ? new Date(appliedDateTo.seconds * 1000) :
+                      new Date(appliedDateTo));
+                    return `${fromDate.toLocaleDateString()} - ${toDate.toLocaleDateString()}`;
+                  } catch (error) {
+                    console.error('Error formatting applied date range:', error);
+                    return 'Invalid Date Range';
+                  }
+                })()}` :
                 'No filter applied'}
               color={appliedDateFrom && appliedDateTo ? 'success' : 'default'}
               sx={{
@@ -671,7 +689,7 @@ const PLPage = () => {
                     <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
                     <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Costs</TableCell>
                     <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
-                    <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Allocation</TableCell>
+      
                     <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -681,26 +699,25 @@ const PLPage = () => {
                       <TableCell>{order.orderDetails?.billInvoice || order.id}</TableCell>
                       <TableCell>{order.personalInfo?.customerName}</TableCell>
                       <TableCell>
-                        {order.startDate.toLocaleDateString()} - {order.endDate.toLocaleDateString()}
+                        {(() => {
+                          try {
+                            const startDate = order.startDate?.toDate ? order.startDate.toDate() :
+                              (order.startDate?.seconds ? new Date(order.startDate.seconds * 1000) :
+                              new Date(order.startDate));
+                            const endDate = order.endDate?.toDate ? order.endDate.toDate() :
+                              (order.endDate?.seconds ? new Date(order.endDate.seconds * 1000) :
+                              new Date(order.endDate));
+                            return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+                          } catch (error) {
+                            console.error('Error formatting PL order date range:', error);
+                            return 'Invalid Date Range';
+                          }
+                        })()}
                       </TableCell>
                       <TableCell>{formatCurrency(order.profitData.revenue)}</TableCell>
                       <TableCell>{formatCurrency(order.profitData.cost)}</TableCell>
                       <TableCell>{formatCurrency(order.profitData.profit)}</TableCell>
-                      <TableCell>
-                        {order.allocation ? (
-                          <Chip 
-                            label={order.allocation.method} 
-                            color="success" 
-                            size="small" 
-                          />
-                        ) : (
-                          <Chip 
-                            label="Pending" 
-                            color="warning" 
-                            size="small" 
-                          />
-                        )}
-                      </TableCell>
+
                       <TableCell>
                         <Button
                           size="small"
@@ -759,7 +776,20 @@ const PLPage = () => {
                       Customer: {selectedOrder.personalInfo?.customerName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Period: {selectedOrder.startDate.toLocaleDateString()} - {selectedOrder.endDate.toLocaleDateString()}
+                      Period: {(() => {
+                        try {
+                          const startDate = selectedOrder.startDate?.toDate ? selectedOrder.startDate.toDate() :
+                            (selectedOrder.startDate?.seconds ? new Date(selectedOrder.startDate.seconds * 1000) :
+                            new Date(selectedOrder.startDate));
+                          const endDate = selectedOrder.endDate?.toDate ? selectedOrder.endDate.toDate() :
+                            (selectedOrder.endDate?.seconds ? new Date(selectedOrder.endDate.seconds * 1000) :
+                            new Date(selectedOrder.endDate));
+                          return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+                        } catch (error) {
+                          console.error('Error formatting selected order period:', error);
+                          return 'Invalid Period';
+                        }
+                      })()}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>

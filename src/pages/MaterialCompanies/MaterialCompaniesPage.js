@@ -73,6 +73,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { formatDate, formatDateOnly } from '../../utils/dateUtils';
 
 const MaterialCompaniesPage = () => {
   const [companies, setCompanies] = useState([]);
@@ -638,16 +639,9 @@ const MaterialCompaniesPage = () => {
                          />
                        </TableCell>
                                              <TableCell>
-                         {company.createdAt ? (
-                           <Typography variant="body2" sx={{ color: '#b98f33' }}>
-                             {company.createdAt.seconds 
-                               ? new Date(company.createdAt.seconds * 1000).toLocaleDateString()
-                               : new Date(company.createdAt).toLocaleDateString()
-                             }
-                           </Typography>
-                         ) : (
-                           <Typography variant="body2" sx={{ color: '#b98f33' }}>-</Typography>
-                         )}
+                         <Typography variant="body2" sx={{ color: '#b98f33' }}>
+                           {formatDateOnly(company.createdAt)}
+                         </Typography>
                        </TableCell>
                       <TableCell align="center">
                         <Box display="flex" gap={1} justifyContent="center">

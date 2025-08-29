@@ -44,11 +44,11 @@ import {
   Print as PrintIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../shared/firebase/config';
+import { db } from '../../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderTax, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
-import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../shared/utils/materialTaxRates';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderTax, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
+import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../../shared/utils/materialTaxRates';
 import autoTable from 'jspdf-autotable';
 
 // Register the autoTable plugin
@@ -228,328 +228,428 @@ const InvoicePage = () => {
     }
 
     try {
-      showNotification('Generating PDF preview...', 'info');
+      showNotification('Opening print preview...', 'info');
       
-      const doc = new jsPDF();
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
       const totals = calculateInvoiceTotals(selectedOrder);
       
-      // Page margins
-      const leftMargin = 15;
-      const rightMargin = 195;
-      const pageWidth = 180;
+      // Generate HTML content that matches the review panel exactly
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Invoice - ${selectedOrder.orderDetails?.billInvoice || 'N/A'}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 12px;
+              background-color: #ffffff;
+              color: #000000;
+            }
+            .invoice-container {
+              max-width: 210mm;
+              margin: 0 auto;
+              padding: 12px;
+              background-color: #ffffff;
+              color: #000000;
+              min-height: 297mm;
+              box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 16px;
+              padding-bottom: 12px;
+              border-bottom: 1px solid #ccc;
+            }
+            .customer-info {
+              flex: 1;
+            }
+            .customer-name {
+              font-size: 1.5rem;
+              font-weight: bold;
+              color: #274290;
+              margin-bottom: 8px;
+            }
+            .customer-details {
+              display: flex;
+              gap: 16px;
+            }
+            .detail-column {
+              flex: 1;
+            }
+            .detail-item {
+              font-size: 0.8rem;
+              color: #666666;
+              margin-bottom: 4px;
+            }
+            .invoice-number {
+              text-align: right;
+            }
+            .invoice-number h1 {
+              font-size: 1.5rem;
+              font-weight: bold;
+              color: #274290;
+              margin: 0 0 4px 0;
+            }
+            .logo {
+              height: 45px;
+              width: auto;
+              margin-bottom: 8px;
+            }
+            .section-title {
+              font-size: 1.1rem;
+              font-weight: bold;
+              color: #274290;
+              margin-bottom: 8px;
+            }
+            .table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 16px;
+            }
+            .table th {
+              background-color: #f0f0f0;
+              border: 1px solid #ccc;
+              padding: 4px 8px;
+              font-size: 0.8rem;
+              font-weight: bold;
+              text-align: left;
+            }
+            .table td {
+              border: 1px solid #ccc;
+              padding: 2px 4px;
+              font-size: 0.8rem;
+              text-align: left;
+            }
+            .furniture-group-header {
+              background-color: #f8f8f8;
+              font-weight: bold;
+              font-size: 0.8rem;
+              padding: 2px 4px;
+            }
+            .notes-totals-section {
+              display: flex;
+              gap: 16px;
+              margin-bottom: 16px;
+            }
+            .notes-section {
+              flex: 1;
+            }
+            .notes-header {
+              background-color: #f8f8f8;
+              padding: 4px 8px;
+              border: 1px solid #ccc;
+              border-bottom: none;
+              font-weight: bold;
+              font-size: 0.8rem;
+            }
+            .notes-content {
+              border: 1px solid #ccc;
+              min-height: 60px;
+              padding: 12px;
+              font-size: 0.8rem;
+              background-color: #ffffff;
+            }
+            .notes-item {
+              margin-bottom: 8px;
+            }
+            .totals-section {
+              width: 300px;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 4px;
+              font-size: 0.8rem;
+            }
+            .total-row.grand-total {
+              border-top: 1px solid #ccc;
+              padding-top: 4px;
+              margin-bottom: 8px;
+              font-weight: bold;
+              font-size: 0.9rem;
+            }
+            .total-row.balance-due {
+              background-color: #fff3cd;
+              padding: 4px;
+              border-radius: 4px;
+              font-weight: bold;
+              font-size: 0.9rem;
+            }
+            .jl-section {
+              margin-top: 16px;
+            }
+            .jl-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 16px;
+            }
+            .jl-table th {
+              background-color: #f0f0f0;
+              border: 1px solid #ccc;
+              padding: 4px 8px;
+              font-size: 0.8rem;
+              font-weight: bold;
+              text-align: left;
+            }
+            .jl-table td {
+              border: 1px solid #ccc;
+              padding: 2px 4px;
+              font-size: 0.8rem;
+              text-align: left;
+            }
+            .jl-totals {
+              width: 300px;
+              background-color: #f0f0f0;
+              border: 1px solid #999;
+              padding: 12px;
+              margin-top: 8px;
+            }
+            .jl-total-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 4px;
+              font-size: 0.8rem;
+            }
+            .jl-total-row.grand-total {
+              border-top: 1px solid #ccc;
+              padding-top: 4px;
+              margin-bottom: 8px;
+              font-weight: bold;
+              font-size: 0.9rem;
+            }
+            .footer {
+              margin-top: 12px;
+              padding-top: 8px;
+              text-align: center;
+              font-size: 0.8rem;
+              color: #666666;
+              border-top: 1px solid #ccc;
+            }
+            @media print {
+              body { margin: 0; padding: 0; }
+              .invoice-container { box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <!-- Header -->
+            <div class="header">
+              <div class="customer-info">
+                <div class="customer-name">${selectedOrder.personalInfo?.customerName || 'N/A'}</div>
+                <div class="customer-details">
+                  <div class="detail-column">
+                    <div class="detail-item">Email: ${selectedOrder.personalInfo?.email || 'N/A'}</div>
+                    <div class="detail-item">Phone: ${selectedOrder.personalInfo?.phone || 'N/A'}</div>
+                    <div class="detail-item">Platform: ${selectedOrder.orderDetails?.platform || 'N/A'}</div>
+                  </div>
+                  <div class="detail-column">
+                    <div class="detail-item">Date: ${formatDate(selectedOrder.createdAt)}</div>
+                    <div class="detail-item">Address: ${selectedOrder.personalInfo?.address || 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="invoice-number">
+                <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo">
+                <h1>${selectedOrder.orderDetails?.billInvoice || 'N/A'}</h1>
+              </div>
+            </div>
+
+            <!-- Items & Services -->
+            <div class="section-title">Items & Services</div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="flex: 3">Description</th>
+                  <th style="flex: 1; text-align: right">Price</th>
+                  <th style="flex: 1; text-align: right">Qty</th>
+                  <th style="flex: 1; text-align: right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${selectedOrder.furnitureData?.groups?.map(group => `
+                  <tr class="furniture-group-header">
+                    <td colspan="4">${group.furnitureType || 'Furniture Group'}</td>
+                  </tr>
+                  ${group.labourPrice && parseFloat(group.labourPrice) > 0 ? `
+                    <tr>
+                      <td>Labour ${group.labourNote ? group.labourNote : 'without piping design'}</td>
+                      <td style="text-align: right">$${(parseFloat(group.labourPrice) || 0).toFixed(2)}</td>
+                      <td style="text-align: right">${group.labourQnty || 1}</td>
+                      <td style="text-align: right">$${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}</td>
+                    </tr>
+                  ` : ''}
+                  ${group.materialPrice && parseFloat(group.materialPrice) > 0 ? `
+                    <tr>
+                      <td>Material ${group.materialCompany || ''} ${group.materialCode ? `(${group.materialCode})` : ''}</td>
+                      <td style="text-align: right">$${(parseFloat(group.materialPrice) || 0).toFixed(2)}</td>
+                      <td style="text-align: right">${group.materialQnty || 1}</td>
+                      <td style="text-align: right">$${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1)).toFixed(2)}</td>
+                    </tr>
+                  ` : ''}
+                  ${group.foamPrice && parseFloat(group.foamPrice) > 0 ? `
+                    <tr>
+                      <td>Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}</td>
+                      <td style="text-align: right">$${(parseFloat(group.foamPrice) || 0).toFixed(2)}</td>
+                      <td style="text-align: right">${group.foamQnty || 1}</td>
+                      <td style="text-align: right">$${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}</td>
+                    </tr>
+                  ` : ''}
+                  ${group.paintingLabour && parseFloat(group.paintingLabour) > 0 ? `
+                    <tr>
+                      <td>Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}</td>
+                      <td style="text-align: right">$${(parseFloat(group.paintingLabour) || 0).toFixed(2)}</td>
+                      <td style="text-align: right">${group.paintingQnty || 1}</td>
+                      <td style="text-align: right">$${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}</td>
+                    </tr>
+                  ` : ''}
+                `).join('') || ''}
+              </tbody>
+            </table>
+
+            <!-- Notes and Totals Section -->
+            <div class="notes-totals-section">
+              <div class="notes-section">
+                <div class="notes-item">
+                  <div class="notes-header">Internal Notes</div>
+                  <div class="notes-content">${selectedOrder.paymentData?.generalNotes || ''}</div>
+                </div>
+                <div class="notes-item">
+                  <div class="notes-header">Customer's Item Notes</div>
+                  <div class="notes-content">${selectedOrder.paymentData?.customerNotes || ''}</div>
+                </div>
+              </div>
+              <div class="totals-section">
+                <div class="total-row">
+                  <span>Items Subtotal:</span>
+                  <span>$${totals.itemsSubtotal.toFixed(2)}</span>
+                </div>
+                <div class="total-row">
+                  <span>Tax (13% on M&F):</span>
+                  <span>$${totals.taxAmount.toFixed(2)}</span>
+                </div>
+                <div class="total-row">
+                  <span>Pickup & Delivery:</span>
+                  <span>$${totals.pickupDeliveryCost.toFixed(2)}</span>
+                </div>
+                <div class="total-row grand-total">
+                  <span>Grand Total:</span>
+                  <span>$${totals.grandTotal.toFixed(2)}</span>
+                </div>
+                <div class="total-row">
+                  <span>Deposit Paid:</span>
+                  <span>-$${totals.amountPaid.toFixed(2)}</span>
+                </div>
+                <div class="total-row balance-due">
+                  <span>Balance Due:</span>
+                  <span>$${totals.balanceDue.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Internal JL Cost Analysis -->
+            <div class="jl-section">
+              <div class="section-title">Internal JL Cost Analysis</div>
+              <table class="jl-table">
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th style="text-align: right">Qty</th>
+                    <th style="text-align: right">Unit Price</th>
+                    <th style="text-align: right">Subtotal</th>
+                    <th style="text-align: right">TAX</th>
+                    <th style="text-align: right">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${selectedOrder.furnitureData?.groups?.map(group => {
+                    const hasMaterial = group.materialJLPrice && parseFloat(group.materialJLPrice) > 0;
+                    const hasFoam = group.foamJLPrice && parseFloat(group.foamJLPrice) > 0;
+                    const hasRecords = hasMaterial || hasFoam;
+                    
+                    if (!hasRecords) return '';
+                    
+                    return `
+                      <tr class="furniture-group-header">
+                        <td colspan="6">${group.furnitureType || 'Furniture Group'}</td>
+                      </tr>
+                      ${hasMaterial ? `
+                        <tr>
+                          <td>Material (${group.materialCode || 'N/A'})</td>
+                          <td style="text-align: right">${(parseFloat(group.materialJLQnty) || 0).toFixed(2)}</td>
+                          <td style="text-align: right">$${(parseFloat(group.materialJLPrice) || 0).toFixed(2)}</td>
+                          <td style="text-align: right">$${((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)).toFixed(2)}</td>
+                          <td style="text-align: right">$${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}</td>
+                          <td style="text-align: right">$${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * 1.13).toFixed(2)}</td>
+                        </tr>
+                      ` : ''}
+                      ${hasFoam ? `
+                        <tr>
+                          <td>Foam</td>
+                          <td style="text-align: right">${(parseFloat(group.foamQnty) || 1).toFixed(2)}</td>
+                          <td style="text-align: right">$${(parseFloat(group.foamJLPrice) || 0).toFixed(2)}</td>
+                          <td style="text-align: right">$${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}</td>
+                          <td style="text-align: right">$0.00</td>
+                          <td style="text-align: right">$${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}</td>
+                        </tr>
+                      ` : ''}
+                    `;
+                  }).join('') || ''}
+                  ${selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 ? `
+                    <tr class="furniture-group-header">
+                      <td colspan="6">Extra Expenses</td>
+                    </tr>
+                    ${selectedOrder.extraExpenses.map(expense => `
+                      <tr>
+                        <td>${expense.description || 'Extra Expense'}</td>
+                        <td style="text-align: right">${(parseFloat(expense.quantity) || 1).toFixed(2)}</td>
+                        <td style="text-align: right">$${(parseFloat(expense.price) || 0).toFixed(2)}</td>
+                        <td style="text-align: right">$${((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)).toFixed(2)}</td>
+                        <td style="text-align: right">$${(((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)) * (parseFloat(expense.taxRate) || 0.13)).toFixed(2)}</td>
+                        <td style="text-align: right">$${(parseFloat(expense.total) || 0).toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  ` : ''}
+                </tbody>
+              </table>
+              <div class="jl-totals">
+                <div class="jl-total-row">
+                  <span>Subtotal (Before Tax):</span>
+                  <span>$${totals.jlSubtotalBeforeTax.toFixed(2)}</span>
+                </div>
+                <div class="jl-total-row grand-total">
+                  <span>Grand Total (JL Internal Cost):</span>
+                  <span>$${totals.jlGrandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+              Payment is due upon receipt.
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
       
-      let currentY = 20;
+      // Write the HTML content to the new window
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
       
-      // Header Section - Customer Info (Left) and Invoice Number (Right)
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
+      // Wait for the content to load, then print
+      printWindow.onload = () => {
+        printWindow.print();
+      };
       
-      // Left side - Customer Info
-      doc.text(`Name:`, leftMargin, currentY);
-      doc.text(`${selectedOrder.personalInfo?.customerName || 'N/A'}`, leftMargin + 25, currentY);
-      currentY += 6;
-      
-      doc.text(`Email:`, leftMargin, currentY);
-      doc.text(`${selectedOrder.personalInfo?.email || 'N/A'}`, leftMargin + 25, currentY);
-      currentY += 6;
-      
-      doc.text(`Phone:`, leftMargin, currentY);
-      doc.text(`${selectedOrder.personalInfo?.phone || 'N/A'}`, leftMargin + 25, currentY);
-      currentY += 6;
-      
-      doc.text(`Platform:`, leftMargin, currentY);
-      doc.text(`${selectedOrder.orderDetails?.platform || 'N/A'}`, leftMargin + 25, currentY);
-      currentY += 6;
-      
-      doc.text(`Address:`, leftMargin, currentY);
-      const address = selectedOrder.personalInfo?.address || 'N/A';
-      doc.text(address, leftMargin + 25, currentY);
-      
-      // Right side - Invoice Number and Date
-      doc.setFontSize(24);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${selectedOrder.orderDetails?.billInvoice || 'N/A'}`, rightMargin - 20, 25, { align: 'right' });
-      
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatDate(selectedOrder.createdAt), rightMargin - 20, 35, { align: 'right' });
-      
-      // Horizontal line separator
-      currentY = 50;
-      doc.setLineWidth(0.5);
-      doc.line(leftMargin, currentY, rightMargin, currentY);
-      
-      currentY += 15;
-      
-      // Items & Services Section
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Items & Services', leftMargin, currentY);
-      currentY += 10;
-      
-      // Table headers
-      const tableY = currentY;
-      doc.setFillColor(230, 230, 230);
-      doc.rect(leftMargin, tableY, pageWidth, 8, 'F');
-      doc.setDrawColor(0, 0, 0);
-      doc.rect(leftMargin, tableY, pageWidth, 8, 'S');
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Description', leftMargin + 2, tableY + 5);
-      doc.text('Price', leftMargin + 120, tableY + 5);
-      doc.text('Qty', leftMargin + 145, tableY + 5);
-      doc.text('Total', leftMargin + 165, tableY + 5);
-      
-      currentY = tableY + 8;
-      
-      // Table content
-      if (selectedOrder.furnitureData?.groups) {
-        selectedOrder.furnitureData.groups.forEach(group => {
-          // Furniture type header
-          doc.setFillColor(245, 245, 245);
-          doc.rect(leftMargin, currentY, pageWidth, 6, 'F');
-          doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.text(`${group.furnitureType || 'Furniture Group'}`, leftMargin + 2, currentY + 4);
-          currentY += 6;
-          
-          // Labour
-          if (group.labourPrice && parseFloat(group.labourPrice) > 0) {
-            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-            doc.setFont('helvetica', 'normal');
-            const labourDesc = `Labour ${group.labourNote ? group.labourNote : 'without piping design'}`;
-            doc.text(labourDesc, leftMargin + 2, currentY + 4);
-            doc.text(`$${(parseFloat(group.labourPrice) || 0).toFixed(2)}`, leftMargin + 120, currentY + 4);
-            doc.text(`${group.labourQnty || 1}`, leftMargin + 145, currentY + 4);
-            doc.text(`$${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
-            currentY += 6;
-          }
-          
-          // Material
-          if (group.materialPrice && parseFloat(group.materialPrice) > 0) {
-            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-            doc.setFont('helvetica', 'normal');
-            const materialDesc = `Material ${group.materialCompany || ''} ${group.materialCode ? `(${group.materialCode})` : ''}`;
-            doc.text(materialDesc, leftMargin + 2, currentY + 4);
-            doc.text(`$${(parseFloat(group.materialPrice) || 0).toFixed(2)}`, leftMargin + 120, currentY + 4);
-            doc.text(`${group.materialQnty || 1}`, leftMargin + 145, currentY + 4);
-            doc.text(`$${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
-            currentY += 6;
-          }
-          
-          // Foam
-          if (group.foamPrice && parseFloat(group.foamPrice) > 0) {
-            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-            doc.setFont('helvetica', 'normal');
-            const foamDesc = `Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}`;
-            doc.text(foamDesc, leftMargin + 2, currentY + 4);
-            doc.text(`$${(parseFloat(group.foamPrice) || 0).toFixed(2)}`, leftMargin + 120, currentY + 4);
-            doc.text(`${group.foamQnty || 1}`, leftMargin + 145, currentY + 4);
-            doc.text(`$${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
-            currentY += 6;
-          }
-          
-          // Painting
-          if (group.paintingLabour && parseFloat(group.paintingLabour) > 0) {
-            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-            doc.setFont('helvetica', 'normal');
-            const paintingDesc = `Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}`;
-            doc.text(paintingDesc, leftMargin + 2, currentY + 4);
-            doc.text(`$${(parseFloat(group.paintingLabour) || 0).toFixed(2)}`, leftMargin + 120, currentY + 4);
-            doc.text(`${group.paintingQnty || 1}`, leftMargin + 145, currentY + 4);
-            doc.text(`$${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}`, leftMargin + 165, currentY + 4);
-            currentY += 6;
-          }
-        });
-      }
-      
-      currentY += 10;
-      
-      // Totals Section (Right aligned)
-      const totalsX = 120;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      
-      doc.text('Items Subtotal:', totalsX, currentY);
-      doc.text(`$${totals.itemsSubtotal.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      currentY += 5;
-      
-      doc.text('Tax (13% on M&F):', totalsX, currentY);
-      doc.text(`$${totals.taxAmount.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      currentY += 5;
-      
-      doc.text('Pickup & Delivery:', totalsX, currentY);
-      doc.text(`$${totals.pickupDeliveryCost.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      currentY += 8;
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text('Grand Total:', totalsX, currentY);
-      doc.text(`$${totals.grandTotal.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      currentY += 8;
-      
-      doc.setFont('helvetica', 'normal');
-      doc.text('Deposit Paid:', totalsX, currentY);
-      doc.text(`-$${totals.amountPaid.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      currentY += 8;
-      
-      // Balance Due with highlight
-      doc.setFillColor(255, 255, 200);
-      doc.rect(totalsX - 5, currentY - 4, 75, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.text('Balance Due:', totalsX, currentY);
-      doc.text(`$${totals.balanceDue.toFixed(2)}`, rightMargin - 10, currentY, { align: 'right' });
-      
-      currentY += 20;
-      
-      // Notes Section (Two columns)
-      const notesY = currentY;
-      const col1X = leftMargin;
-      const col2X = 110;
-      const colWidth = 85;
-      const notesHeight = 25;
-      
-      // Internal Notes
-      doc.setFillColor(245, 245, 245);
-      doc.rect(col1X, notesY, colWidth, 8, 'F');
-      doc.rect(col1X, notesY, colWidth, notesHeight, 'S');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('Internal Notes', col1X + 2, notesY + 5);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      const internalNotes = selectedOrder.paymentData?.generalNotes || '';
-      if (internalNotes.trim()) {
-        doc.text(internalNotes, col1X + 2, notesY + 12);
-      }
-      
-      // Customer's Item Notes
-      doc.setFillColor(245, 245, 245);
-      doc.rect(col2X, notesY, colWidth, 8, 'F');
-      doc.rect(col2X, notesY, colWidth, notesHeight, 'S');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text("Customer's Item Notes", col2X + 2, notesY + 5);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      const customerNotes = selectedOrder.paymentData?.customerNotes || '';
-      if (customerNotes.trim()) {
-        doc.text(customerNotes, col2X + 2, notesY + 12);
-      }
-      
-      currentY = notesY + notesHeight + 15;
-      
-      // Internal JL Cost Analysis
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('Internal JL Cost Analysis', leftMargin, currentY);
-      currentY += 10;
-      
-      // JL Table headers
-      doc.setFillColor(230, 230, 230);
-      doc.rect(leftMargin, currentY, pageWidth, 8, 'F');
-      doc.rect(leftMargin, currentY, pageWidth, 8, 'S');
-      
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Component', leftMargin + 2, currentY + 5);
-      doc.text('Qty', leftMargin + 60, currentY + 5);
-      doc.text('Unit Price', leftMargin + 80, currentY + 5);
-      doc.text('Subtotal', leftMargin + 110, currentY + 5);
-      doc.text('TAX', leftMargin + 140, currentY + 5);
-      doc.text('Line Total', leftMargin + 160, currentY + 5);
-      
-      currentY += 8;
-      
-      // JL Content
-      if (selectedOrder.furnitureData?.groups) {
-        selectedOrder.furnitureData.groups.forEach(group => {
-          // Furniture type header
-          doc.setFillColor(245, 245, 245);
-          doc.rect(leftMargin, currentY, pageWidth, 6, 'F');
-          doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-          doc.setFont('helvetica', 'bold');
-          doc.text(`${group.furnitureType || 'Furniture Group'}`, leftMargin + 2, currentY + 4);
-          currentY += 6;
-          
-          // JL Material
-          if (group.materialJLPrice && parseFloat(group.materialJLPrice) > 0) {
-            doc.rect(leftMargin, currentY, pageWidth, 6, 'S');
-            doc.setFont('helvetica', 'normal');
-            const jlQty = parseFloat(group.materialJLQnty) || 0;
-            const jlPrice = parseFloat(group.materialJLPrice) || 0;
-            const jlSubtotal = jlQty * jlPrice;
-            const jlTax = jlSubtotal * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates);
-            const jlTotal = jlSubtotal + jlTax;
-            
-            doc.text(`Material (${group.materialCode || 'N/A'})`, leftMargin + 2, currentY + 4);
-            doc.text(`${jlQty.toFixed(2)}`, leftMargin + 60, currentY + 4);
-            doc.text(`$${jlPrice.toFixed(2)}`, leftMargin + 80, currentY + 4);
-            doc.text(`$${jlSubtotal.toFixed(2)}`, leftMargin + 110, currentY + 4);
-            doc.text(`$${jlTax.toFixed(2)}`, leftMargin + 140, currentY + 4);
-            doc.text(`$${jlTotal.toFixed(2)}`, leftMargin + 160, currentY + 4);
-            currentY += 6;
-          }
-        });
-      }
-      
-      currentY += 10;
-      
-      // JL Totals Section with enhanced styling
-      const totalsBoxWidth = 95;
-      const totalsBoxHeight = 20;
-      const totalsBoxX = rightMargin - totalsBoxWidth; // Right-align the box
-      
-      // Background box for totals
-      doc.setFillColor(240, 240, 240);
-      doc.rect(totalsBoxX, currentY, totalsBoxWidth, totalsBoxHeight, 'F');
-      doc.setDrawColor(100, 100, 100);
-      doc.setLineWidth(1);
-      doc.rect(totalsBoxX, currentY, totalsBoxWidth, totalsBoxHeight, 'S');
-      
-      // JL Subtotal (Before Tax)
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(60, 60, 60);
-      doc.text('Subtotal (Before Tax):', totalsBoxX + 5, currentY + 7);
-      doc.setTextColor(39, 66, 144); // Blue color for amount
-      doc.text(`$${totals.jlSubtotalBeforeTax.toFixed(2)}`, totalsBoxX + totalsBoxWidth - 5, currentY + 7, { align: 'right' });
-      
-      // Separator line
-      doc.setDrawColor(180, 180, 180);
-      doc.setLineWidth(0.3);
-      doc.line(totalsBoxX + 5, currentY + 9, totalsBoxX + totalsBoxWidth - 5, currentY + 9);
-      
-      // JL Grand Total
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(60, 60, 60);
-      doc.text('Grand Total (JL Internal Cost):', totalsBoxX + 5, currentY + 16);
-      doc.setTextColor(242, 121, 33); // Orange color for grand total
-      doc.text(`$${totals.jlGrandTotal.toFixed(2)}`, totalsBoxX + totalsBoxWidth - 5, currentY + 16, { align: 'right' });
-      
-      // Reset text color
-      doc.setTextColor(0, 0, 0);
-      currentY += totalsBoxHeight;
-      
-      currentY += 20;
-      
-      // Footer
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text('Payment is due upon receipt.', 105, currentY, { align: 'center' });
-      
-      // Open PDF in new window for review and printing
-      const pdfUrl = doc.output('bloburl');
-      window.open(pdfUrl, '_blank');
-      
-      showNotification('PDF opened for review. You can now print from your browser.', 'success');
+      showNotification('Print preview opened successfully', 'success');
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      showNotification('Failed to generate PDF', 'error');
+      console.error('Error generating print preview:', error);
+      showNotification('Error generating print preview', 'error');
     }
   };
 
@@ -679,31 +779,65 @@ const InvoicePage = () => {
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'flex-start',
-          mb: 3,
-          pb: 2,
+          mb: 2,
+          pb: 1.5,
           borderBottom: '1px solid #ccc'
         }}>
           {/* Left Side - Customer Info */}
           <Box sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1, color: '#000000' }}>
-              Name: {selectedOrder.personalInfo?.customerName || 'N/A'}
+            {/* Customer Name - Bigger Font */}
+            <Typography variant="h4" sx={{ 
+              fontWeight: 'bold', 
+              mb: 1.5, 
+              color: '#274290',
+              fontSize: '1.5rem'
+            }}>
+              {selectedOrder.personalInfo?.customerName || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
-              Email: {selectedOrder.personalInfo?.email || 'N/A'}
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
-              Phone: {selectedOrder.personalInfo?.phone || 'N/A'}
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 1, color: '#000000' }}>
-              Platform: {selectedOrder.orderDetails?.platform || 'N/A'}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#000000' }}>
-              Address: {selectedOrder.personalInfo?.address || 'N/A'}
-            </Typography>
+            
+            {/* Other Data in Two Columns */}
+            <Box sx={{ display: 'flex', gap: 4 }}>
+              {/* Left Column */}
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Email: {selectedOrder.personalInfo?.email || 'N/A'}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Phone: {selectedOrder.personalInfo?.phone || 'N/A'}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.8rem' }}>
+                  Platform: {selectedOrder.orderDetails?.platform || 'N/A'}
+                </Typography>
+              </Box>
+              
+              {/* Right Column */}
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Date: {formatDate(selectedOrder.createdAt)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.8rem' }}>
+                  Address: {selectedOrder.personalInfo?.address || 'N/A'}
+                </Typography>
+              </Box>
+            </Box>
           </Box>
 
-          {/* Right Side - Invoice Number and Date */}
+          {/* Right Side - Logo and Invoice Number */}
           <Box sx={{ textAlign: 'right' }}>
+            {/* Logo */}
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <img 
+                src="/assets/images/logo-001.png" 
+                alt="JL Upholstery Logo" 
+                style={{ 
+                  height: '60px', 
+                  width: 'auto',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+                }}
+              />
+            </Box>
+            {/* Invoice Number */}
             <Typography variant="h4" sx={{ 
               fontWeight: 'bold', 
               color: '#274290',
@@ -711,17 +845,14 @@ const InvoicePage = () => {
             }}>
               {selectedOrder.orderDetails?.billInvoice || 'N/A'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666666' }}>
-              {formatDate(selectedOrder.createdAt)}
-            </Typography>
           </Box>
         </Box>
 
         {/* Items & Services Section */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2 }}>
           <Typography variant="h6" sx={{ 
             fontWeight: 'bold', 
-            mb: 2,
+            mb: 1.5,
             color: '#274290'
           }}>
             Items & Services
@@ -733,13 +864,13 @@ const InvoicePage = () => {
             backgroundColor: '#f0f0f0',
             border: '1px solid #ccc',
             fontWeight: 'bold',
-            fontSize: '0.875rem',
+            fontSize: '0.8rem',
             color: '#000000'
           }}>
-            <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>Description</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Price</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
-            <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>Total</Box>
+            <Box sx={{ flex: 3, p: 0.5, borderRight: '1px solid #ccc' }}>Description</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Price</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+            <Box sx={{ flex: 1, p: 0.5, textAlign: 'right' }}>Total</Box>
           </Box>
 
           {/* Table Content */}
@@ -752,125 +883,183 @@ const InvoicePage = () => {
                 border: '1px solid #ccc',
                 borderTop: 'none',
                 fontWeight: 'bold',
-                fontSize: '0.875rem',
-                color: '#000000'
+                fontSize: '0.8rem',
+                color: '#000000',
+                minHeight: '24px'
               }}>
-                <Box sx={{ flex: 6, p: 1 }}>
+                <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
                   {group.furnitureType || 'Furniture Group'}
                 </Box>
               </Box>
 
-              {/* Labour */}
-              {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
-                <Box sx={{ 
-                  display: 'flex',
-                  border: '1px solid #ccc',
-                  borderTop: 'none',
-                  fontSize: '0.875rem',
-                  color: '#000000'
-                }}>
-                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
-                    Labour {group.labourNote ? group.labourNote : 'without piping design'}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(parseFloat(group.labourPrice) || 0).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    {group.labourQnty || 1}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}
-                  </Box>
-                </Box>
-              )}
+                             {/* Labour */}
+               {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   borderLeft: '1px solid #ccc',
+                   borderRight: '1px solid #ccc',
+                   fontSize: '0.8rem',
+                   color: '#000000',
+                   minHeight: '24px'
+                 }}>
+                   <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                     Labour {group.labourNote ? group.labourNote : 'without piping design'}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${(parseFloat(group.labourPrice) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     {group.labourQnty || 1}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
 
-              {/* Material */}
-              {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
-                <Box sx={{ 
-                  display: 'flex',
-                  border: '1px solid #ccc',
-                  borderTop: 'none',
-                  fontSize: '0.875rem',
-                  color: '#000000'
-                }}>
-                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
-                    Material {group.materialCompany || ''} {group.materialCode ? `(${group.materialCode})` : ''}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(parseFloat(group.materialPrice) || 0).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    {group.materialQnty || 1}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1)).toFixed(2)}
-                  </Box>
-                </Box>
-              )}
+               {/* Material */}
+               {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   borderLeft: '1px solid #ccc',
+                   borderRight: '1px solid #ccc',
+                   fontSize: '0.8rem',
+                   color: '#000000',
+                   minHeight: '24px'
+                 }}>
+                   <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                     Material {group.materialCompany || ''} {group.materialCode ? `(${group.materialCode})` : ''}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${(parseFloat(group.materialPrice) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     {group.materialQnty || 1}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 1)).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
 
-              {/* Foam */}
-              {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
-                <Box sx={{ 
-                  display: 'flex',
-                  border: '1px solid #ccc',
-                  borderTop: 'none',
-                  fontSize: '0.875rem',
-                  color: '#000000'
-                }}>
-                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
-                    Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(parseFloat(group.foamPrice) || 0).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    {group.foamQnty || 1}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}
-                  </Box>
-                </Box>
-              )}
+               {/* Foam */}
+               {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   borderLeft: '1px solid #ccc',
+                   borderRight: '1px solid #ccc',
+                   fontSize: '0.8rem',
+                   color: '#000000',
+                   minHeight: '24px'
+                 }}>
+                   <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                     Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${(parseFloat(group.foamPrice) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     {group.foamQnty || 1}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
 
-              {/* Painting */}
-              {group.paintingLabour && parseFloat(group.paintingLabour) > 0 && (
-                <Box sx={{ 
-                  display: 'flex',
-                  border: '1px solid #ccc',
-                  borderTop: 'none',
-                  fontSize: '0.875rem',
-                  color: '#000000'
-                }}>
-                  <Box sx={{ flex: 3, p: 1, borderRight: '1px solid #ccc' }}>
-                    Painting{group.paintingNote ? ` - ${group.paintingNote}` : ''}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(parseFloat(group.paintingLabour) || 0).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    {group.paintingQnty || 1}
-                  </Box>
-                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}
-                  </Box>
-                </Box>
-              )}
+               {/* Painting */}
+               {group.paintingLabour && parseFloat(group.paintingLabour) > 0 && (
+                 <Box sx={{ 
+                   display: 'flex',
+                   borderLeft: '1px solid #ccc',
+                   borderRight: '1px solid #ccc',
+                   fontSize: '0.8rem',
+                   color: '#000000',
+                   minHeight: '24px'
+                 }}>
+                   <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                     Painting{group.paintingNote ? ` - ${group.paintingNote}` : ''}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${(parseFloat(group.paintingLabour) || 0).toFixed(2)}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     {group.paintingQnty || 1}
+                   </Box>
+                   <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                     ${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}
+                   </Box>
+                 </Box>
+               )}
             </Box>
           ))}
         </Box>
 
-        {/* Totals Section */}
+        {/* Notes and Totals Section - Compact Layout */}
         <Box sx={{ 
           display: 'flex', 
-          justifyContent: 'flex-end',
-          mb: 3
+          gap: 2,
+          mb: 2
         }}>
+          {/* Notes Section - Stacked Vertically */}
+          <Box sx={{ flex: 1 }}>
+            {/* Internal Notes */}
+            <Box sx={{ mb: 1 }}>
+              <Box sx={{ 
+                backgroundColor: '#f8f8f8',
+                p: 0.5,
+                border: '1px solid #ccc',
+                borderBottom: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.8rem',
+                color: '#000000'
+              }}>
+                Internal Notes
+              </Box>
+              <Box sx={{ 
+                border: '1px solid #ccc',
+                minHeight: 60,
+                p: 1.5,
+                fontSize: '0.8rem',
+                backgroundColor: '#ffffff',
+                color: '#000000'
+              }}>
+                {selectedOrder.paymentData?.generalNotes || ''}
+              </Box>
+            </Box>
+            {/* Customer Notes */}
+            <Box>
+              <Box sx={{ 
+                backgroundColor: '#f8f8f8',
+                p: 0.5,
+                border: '1px solid #ccc',
+                borderBottom: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.8rem',
+                color: '#000000'
+              }}>
+                Customer's Item Notes
+              </Box>
+              <Box sx={{ 
+                border: '1px solid #ccc',
+                minHeight: 60,
+                p: 1.5,
+                fontSize: '0.8rem',
+                backgroundColor: '#ffffff',
+                color: '#000000'
+              }}>
+                {selectedOrder.paymentData?.customerNotes || ''}
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Totals Section - Beside Notes */}
           <Box sx={{ width: 300 }}>
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 1,
-              fontSize: '0.875rem',
+              mb: 0.5,
+              fontSize: '0.8rem',
               color: '#000000'
             }}>
               <span>Items Subtotal:</span>
@@ -879,8 +1068,8 @@ const InvoicePage = () => {
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 1,
-              fontSize: '0.875rem',
+              mb: 0.5,
+              fontSize: '0.8rem',
               color: '#000000'
             }}>
               <span>Tax (13% on M&F):</span>
@@ -889,8 +1078,8 @@ const InvoicePage = () => {
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 2,
-              fontSize: '0.875rem',
+              mb: 1,
+              fontSize: '0.8rem',
               color: '#000000'
             }}>
               <span>Pickup & Delivery:</span>
@@ -899,11 +1088,11 @@ const InvoicePage = () => {
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 2,
+              mb: 1,
               fontWeight: 'bold',
-              fontSize: '1rem',
+              fontSize: '0.9rem',
               borderTop: '1px solid #ccc',
-              pt: 1,
+              pt: 0.5,
               color: '#000000'
             }}>
               <span>Grand Total:</span>
@@ -912,8 +1101,8 @@ const InvoicePage = () => {
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 2,
-              fontSize: '0.875rem',
+              mb: 1,
+              fontSize: '0.8rem',
               color: '#000000'
             }}>
               <span>Deposit Paid:</span>
@@ -923,10 +1112,10 @@ const InvoicePage = () => {
               display: 'flex', 
               justifyContent: 'space-between',
               backgroundColor: '#fff3cd',
-              p: 1,
+              p: 0.5,
               borderRadius: 1,
               fontWeight: 'bold',
-              fontSize: '1rem',
+              fontSize: '0.9rem',
               color: '#000000'
             }}>
               <span>Balance Due:</span>
@@ -935,68 +1124,11 @@ const InvoicePage = () => {
           </Box>
         </Box>
 
-        {/* Notes Section */}
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 2,
-          mb: 3
-        }}>
-          {/* Internal Notes */}
-          <Box sx={{ flex: 1 }}>
-            <Box sx={{ 
-              backgroundColor: '#f8f8f8',
-              p: 1,
-              border: '1px solid #ccc',
-              borderBottom: 'none',
-              fontWeight: 'bold',
-              fontSize: '0.875rem',
-              color: '#000000'
-            }}>
-              Internal Notes
-            </Box>
-            <Box sx={{ 
-              border: '1px solid #ccc',
-              minHeight: 80,
-              p: 2,
-              fontSize: '0.875rem',
-              backgroundColor: '#ffffff',
-              color: '#000000'
-            }}>
-              {selectedOrder.paymentData?.generalNotes || ''}
-            </Box>
-          </Box>
-
-          {/* Customer Notes */}
-          <Box sx={{ flex: 1 }}>
-            <Box sx={{ 
-              backgroundColor: '#f8f8f8',
-              p: 1,
-              border: '1px solid #ccc',
-              borderBottom: 'none',
-              fontWeight: 'bold',
-              fontSize: '0.875rem',
-              color: '#000000'
-            }}>
-              Customer's Item Notes
-            </Box>
-            <Box sx={{ 
-              border: '1px solid #ccc',
-              minHeight: 80,
-              p: 2,
-              fontSize: '0.875rem',
-              backgroundColor: '#ffffff',
-              color: '#000000'
-            }}>
-              {selectedOrder.paymentData?.customerNotes || ''}
-            </Box>
-          </Box>
-        </Box>
-
         {/* Internal JL Cost Analysis */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2 }}>
           <Typography variant="h6" sx={{ 
             fontWeight: 'bold', 
-            mb: 2,
+            mb: 1.5,
             color: '#274290'
           }}>
             Internal JL Cost Analysis
@@ -1008,86 +1140,181 @@ const InvoicePage = () => {
             backgroundColor: '#f0f0f0',
             border: '1px solid #ccc',
             fontWeight: 'bold',
-            fontSize: '0.875rem',
+            fontSize: '0.8rem',
             color: '#000000'
           }}>
-            <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>Component</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Unit Price</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>Subtotal</Box>
-            <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>TAX</Box>
-            <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>Line Total</Box>
+            <Box sx={{ flex: 2, p: 0.5, borderRight: '1px solid #ccc' }}>Component</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Unit Price</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Subtotal</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>TAX</Box>
+            <Box sx={{ flex: 1, p: 0.5, textAlign: 'right' }}>Line Total</Box>
           </Box>
 
           {/* JL Table Content */}
-          {selectedOrder.furnitureData?.groups?.map((group, groupIndex) => (
-            <Box key={groupIndex}>
-              {/* Furniture Type Header */}
+          {selectedOrder.furnitureData?.groups?.map((group, groupIndex) => {
+            // Check if this group has any records (Material, Foam, etc.)
+            const hasMaterial = group.materialJLPrice && parseFloat(group.materialJLPrice) > 0;
+            const hasFoam = group.foamJLPrice && parseFloat(group.foamJLPrice) > 0;
+            const hasRecords = hasMaterial || hasFoam;
+            
+            // Only render the group if it has records
+            if (!hasRecords) return null;
+            
+            return (
+              <Box key={groupIndex}>
+                {/* Furniture Type Header */}
+                <Box sx={{ 
+                  display: 'flex',
+                  backgroundColor: '#f8f8f8',
+                  border: '1px solid #ccc',
+                  borderTop: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
+                }}>
+                  <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
+                    {group.furnitureType || 'Furniture Group'}
+                  </Box>
+                </Box>
+
+                {/* JL Material */}
+                {group.materialJLPrice && parseFloat(group.materialJLPrice) > 0 && (
+                  <Box sx={{ 
+                    display: 'flex',
+                    border: '1px solid #ccc',
+                    borderTop: 'none',
+                    fontSize: '0.8rem',
+                    color: '#000000',
+                    minHeight: '24px'
+                  }}>
+                    <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                      Material ({group.materialCode || 'N/A'})
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      {(parseFloat(group.materialJLQnty) || 0).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${(parseFloat(group.materialJLPrice) || 0).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * 1.13).toFixed(2)}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* JL Foam */}
+                {group.foamJLPrice && parseFloat(group.foamJLPrice) > 0 && (
+                  <Box sx={{ 
+                    display: 'flex',
+                    border: '1px solid #ccc',
+                    borderTop: 'none',
+                    fontSize: '0.8rem',
+                    color: '#000000',
+                    minHeight: '24px'
+                  }}>
+                    <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                      Foam
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      {(parseFloat(group.foamQnty) || 1).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${(parseFloat(group.foamJLPrice) || 0).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      $0.00
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+
+          {/* Extra Expenses in JL Table */}
+          {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
+            <>
+              {/* Extra Expenses Header */}
               <Box sx={{ 
                 display: 'flex',
                 backgroundColor: '#f8f8f8',
                 border: '1px solid #ccc',
                 borderTop: 'none',
                 fontWeight: 'bold',
-                fontSize: '0.875rem',
-                color: '#000000'
+                fontSize: '0.8rem',
+                color: '#000000',
+                minHeight: '24px'
               }}>
-                <Box sx={{ flex: 6, p: 1 }}>
-                  {group.furnitureType || 'Furniture Group'}
+                <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
+                  Extra Expenses
                 </Box>
               </Box>
 
-              {/* JL Material */}
-              {group.materialJLPrice && parseFloat(group.materialJLPrice) > 0 && (
-                <Box sx={{ 
+              {/* Extra Expenses Items */}
+              {selectedOrder.extraExpenses.map((expense, expenseIndex) => (
+                <Box key={expenseIndex} sx={{ 
                   display: 'flex',
                   border: '1px solid #ccc',
                   borderTop: 'none',
-                  fontSize: '0.875rem',
-                  color: '#000000'
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
                 }}>
-                  <Box sx={{ flex: 2, p: 1, borderRight: '1px solid #ccc' }}>
-                    Material ({group.materialCode || 'N/A'})
+                  <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                    {expense.description || 'Extra Expense'}
                   </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    {(parseFloat(group.materialJLQnty) || 0).toFixed(2)}
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {(parseFloat(expense.quantity) || 1).toFixed(2)}
                   </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(parseFloat(group.materialJLPrice) || 0).toFixed(2)}
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(expense.price) || 0).toFixed(2)}
                   </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)).toFixed(2)}
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)).toFixed(2)}
                   </Box>
-                  <Box sx={{ flex: 1, p: 1, borderRight: '1px solid #ccc', textAlign: 'right' }}>
-                    ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)) * (parseFloat(expense.taxRate) || 0.13)).toFixed(2)}
                   </Box>
-                  <Box sx={{ flex: 1, p: 1, textAlign: 'right' }}>
-                    ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * 1.13).toFixed(2)}
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(expense.total) || 0).toFixed(2)}
                   </Box>
                 </Box>
-              )}
-            </Box>
-          ))}
+              ))}
+            </>
+          )}
         </Box>
 
         {/* JL Totals */}
         <Box sx={{ 
           display: 'flex', 
           justifyContent: 'flex-end',
-          mb: 3
+          mb: 2
         }}>
           <Box sx={{ 
             width: 300,
             backgroundColor: '#f0f0f0',
             border: '1px solid #999',
-            p: 2
+            p: 1.5
           }}>
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              mb: 1,
+              mb: 0.5,
               fontWeight: 'bold',
-              fontSize: '0.875rem',
+              fontSize: '0.8rem',
               color: '#000000'
             }}>
               <span>Subtotal (Before Tax):</span>
@@ -1095,11 +1322,11 @@ const InvoicePage = () => {
             </Box>
             <Box sx={{ 
               borderTop: '1px solid #ccc',
-              pt: 1,
+              pt: 0.5,
               display: 'flex', 
               justifyContent: 'space-between',
               fontWeight: 'bold',
-              fontSize: '1rem',
+              fontSize: '0.9rem',
               color: '#000000'
             }}>
               <span>Grand Total (JL Internal Cost):</span>
@@ -1123,7 +1350,14 @@ const InvoicePage = () => {
     );
   };
 
-  if (loading && orders.length === 0) {
+  // Filter out orders with "done" or "cancelled" end states
+  const filteredOrders = orders.filter(order => {
+    const status = order.invoiceStatus;
+    // Exclude orders that have "done" or "cancelled" end state types
+    return status !== 'done' && status !== 'cancelled';
+  });
+  
+  if (loading && filteredOrders.length === 0) {
     return (
       <Box sx={{ p: 3 }}>
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -1217,13 +1451,13 @@ const InvoicePage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 3, height: '70vh' }}>
+      <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 200px)' }}>
         {/* Orders List */}
         <Box sx={{ width: 300, flexShrink: 0 }}>
           <Paper elevation={2} sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '2px solid #333333' }}>
             <Box sx={{ p: 2, backgroundColor: 'background.paper', color: 'text.primary' }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                📋 Orders ({orders.length})
+                📋 Orders ({filteredOrders.length})
               </Typography>
             </Box>
             {loading ? (
@@ -1233,7 +1467,7 @@ const InvoicePage = () => {
             ) : (
               <Box sx={{ flex: 1, overflow: 'auto' }}>
                 <List sx={{ p: 0 }}>
-                  {orders.map((order) => (
+                  {filteredOrders.map((order) => (
                     <React.Fragment key={order.id}>
                       <ListItem
                         selected={selectedOrder?.id === order.id}

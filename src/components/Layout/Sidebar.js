@@ -39,7 +39,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ConstructionIcon from '@mui/icons-material/Construction';
-import FlashOnIcon from '@mui/icons-material/FlashOn';
+
 import InventoryIcon from '@mui/icons-material/Inventory';
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
@@ -50,10 +50,8 @@ const menuItems = [
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
   { text: 'Material Request', path: '/admin/material-request', icon: <InventoryIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
-  { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
-  { text: 'Flash Invoices', path: '/admin/flash-invoices', icon: <FlashOnIcon /> },
-  { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
+  { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
 ];
@@ -73,6 +71,7 @@ const underConstructionItems = [
   { text: 'Completion Email Test', path: '/admin/email-test', icon: <EmailIcon /> },
   { text: 'Data Management', path: '/admin/data-management', icon: <SettingsIcon /> },
   { text: 'Testing Financial', path: '/admin/testing-financial', icon: <TrendingUpIcon /> },
+  { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
 ];
 
 const Sidebar = ({ onToggle, onPin }) => {

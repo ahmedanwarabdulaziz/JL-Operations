@@ -48,6 +48,7 @@ import Step5Review from './steps/Step5Review';
 import FastOrderModal from '../../components/FastOrder/FastOrderModal';
 import { calculateOrderTotal, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
 import { buttonStyles } from '../../styles/buttonStyles';
+import { formatDate } from '../../utils/dateUtils';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -235,38 +236,6 @@ const OrdersPage = () => {
 
   // Using shared calculateOrderTotal utility for consistency
 
-  // Format date
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    
-    try {
-      let dateObj;
-      
-      // Handle Firebase timestamp
-      if (date && typeof date === 'object' && date.toDate) {
-        dateObj = date.toDate();
-      } else {
-        dateObj = new Date(date);
-      }
-      
-      // Check if the date is valid
-      if (isNaN(dateObj.getTime())) {
-        return 'Invalid Date';
-      }
-      
-      return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      console.error('Error formatting date:', error, 'Date value:', date);
-      return 'Invalid Date';
-    }
-  };
-
   // Handle fast order submission
   const handleFastOrderSubmit = async (orderData) => {
     try {
@@ -294,8 +263,17 @@ const OrdersPage = () => {
         showSuccess('Fast order created successfully!');
       }
       
+      // Ensure orderData has proper createdAt field
+      const orderDataWithTimestamp = {
+        ...orderData,
+        createdAt: orderData.createdAt || new Date(),
+        updatedAt: orderData.updatedAt || new Date()
+      };
+      
+      console.log('Fast order data being saved:', orderDataWithTimestamp);
+      
       // Add the order to Firebase
-      const docRef = await addDoc(collection(db, 'orders'), orderData);
+      const docRef = await addDoc(collection(db, 'orders'), orderDataWithTimestamp);
       
       // Refresh both orders and customers lists
       await fetchOrders();

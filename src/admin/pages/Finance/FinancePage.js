@@ -57,6 +57,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData } from '../shared/utils/orderCalculations';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
+import { formatDate, formatDateOnly, formatDateRange, toDateObject } from '../../../utils/dateUtils';
 
 // Invoice statuses will be loaded dynamically from database
 
@@ -97,6 +98,14 @@ const FinancePage = () => {
     return new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
   });
   const [dateTo, setDateTo] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
+  });
+  const [appliedDateFrom, setAppliedDateFrom] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
+  });
+  const [appliedDateTo, setAppliedDateTo] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
   });
@@ -181,17 +190,94 @@ const FinancePage = () => {
     }
   };
 
-  // Calculate financial summary
+  // Helper function to calculate partial amounts for allocated orders
+  const calculatePartialAmounts = (order, profitData, normalizedPayment) => {
+    let orderRevenue = profitData.revenue;
+    let orderCost = profitData.cost;
+    let orderProfit = profitData.profit;
+    let orderPaidAmount = normalizedPayment.amountPaid;
+    
+    // For allocated orders, calculate partial amounts based on date filter
+    if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
+      const fromDate = new Date(appliedDateFrom);
+      const toDate = new Date(appliedDateTo);
+      
+      // Set time to start/end of day for accurate comparison
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
+      
+      // Calculate total allocation percentage for the filtered date range
+      let totalAllocationPercentage = 0;
+      order.allocation.allocations.forEach(allocation => {
+        const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+        if (allocationDate >= fromDate && allocationDate <= toDate) {
+          totalAllocationPercentage += allocation.percentage || 0;
+        }
+      });
+      
+      // Only apply allocation if there are allocations in the date range
+      if (totalAllocationPercentage > 0) {
+        const allocationMultiplier = totalAllocationPercentage / 100;
+        orderRevenue = profitData.revenue * allocationMultiplier;
+        orderCost = profitData.cost * allocationMultiplier;
+        orderProfit = profitData.profit * allocationMultiplier;
+        orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
+      }
+    }
+    
+    return {
+      revenue: orderRevenue,
+      cost: orderCost,
+      profit: orderProfit,
+      paidAmount: orderPaidAmount,
+      profitPercentage: orderRevenue > 0 ? (orderProfit / orderRevenue) * 100 : 0
+    };
+  };
+
+  // Calculate financial summary with allocation support
   const calculateFinancialSummary = (ordersData) => {
     const summary = ordersData.reduce((acc, order) => {
       const profitData = calculateOrderProfit(order);
       const normalizedPayment = normalizePaymentData(order.paymentData);
       
-      acc.totalRevenue += profitData.revenue;
-      acc.totalCost += profitData.cost;
-      acc.totalProfit += profitData.profit;
-      acc.paidAmount += normalizedPayment.amountPaid;
-      acc.pendingAmount += (profitData.revenue - normalizedPayment.amountPaid);
+      let orderRevenue = profitData.revenue;
+      let orderCost = profitData.cost;
+      let orderProfit = profitData.profit;
+      let orderPaidAmount = normalizedPayment.amountPaid;
+      
+      // For allocated orders, calculate partial amounts based on date filter
+      if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
+        const fromDate = new Date(appliedDateFrom);
+        const toDate = new Date(appliedDateTo);
+        
+        // Set time to start/end of day for accurate comparison
+        fromDate.setHours(0, 0, 0, 0);
+        toDate.setHours(23, 59, 59, 999);
+        
+        // Calculate total allocation percentage for the filtered date range
+        let totalAllocationPercentage = 0;
+        order.allocation.allocations.forEach(allocation => {
+          const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+          if (allocationDate >= fromDate && allocationDate <= toDate) {
+            totalAllocationPercentage += allocation.percentage || 0;
+          }
+        });
+        
+        // Only apply allocation if there are allocations in the date range
+        if (totalAllocationPercentage > 0) {
+          const allocationMultiplier = totalAllocationPercentage / 100;
+          orderRevenue = profitData.revenue * allocationMultiplier;
+          orderCost = profitData.cost * allocationMultiplier;
+          orderProfit = profitData.profit * allocationMultiplier;
+          orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
+        }
+      }
+      
+      acc.totalRevenue += orderRevenue;
+      acc.totalCost += orderCost;
+      acc.totalProfit += orderProfit;
+      acc.paidAmount += orderPaidAmount;
+      acc.pendingAmount += (orderRevenue - orderPaidAmount);
       acc.totalOrders += 1;
       
       return acc;
@@ -216,17 +302,115 @@ const FinancePage = () => {
     let filtered = orders;
     
     // Apply date range filter
-    if (dateFrom && dateTo) {
+    if (appliedDateFrom && appliedDateTo) {
       filtered = filtered.filter(order => {
-        const orderDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-        const fromDate = new Date(dateFrom);
-        const toDate = new Date(dateTo);
+        const fromDate = new Date(appliedDateFrom);
+        const toDate = new Date(appliedDateTo);
         
         // Set time to start/end of day for accurate comparison
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(23, 59, 59, 999);
         
-        return orderDate >= fromDate && orderDate <= toDate;
+        // For allocated orders, check both allocation months and order dates
+        if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
+          // Debug logging for allocated orders
+          if (order.orderDetails?.billInvoice === '116017') {
+            console.log('Admin - Order 116017 allocation debugging:', {
+              orderId: order.id,
+              billInvoice: order.orderDetails?.billInvoice,
+              allocations: order.allocation.allocations,
+              startDate: order.orderDetails?.startDate,
+              endDate: order.orderDetails?.endDate,
+              fromDate: fromDate,
+              toDate: toDate
+            });
+          }
+          
+          // Check if any allocation month falls within the selected date range
+          const hasAllocationInRange = order.allocation.allocations.some(allocation => {
+            const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+            
+            // Debug logging for order 116017
+            if (order.orderDetails?.billInvoice === '116017') {
+              console.log('Admin - Allocation check for 116017:', {
+                allocation: allocation,
+                allocationDate: allocationDate,
+                isInRange: allocationDate >= fromDate && allocationDate <= toDate
+              });
+            }
+            
+            return allocationDate >= fromDate && allocationDate <= toDate;
+          });
+          
+          // Also check if the order's startDate/endDate (updated during allocation) fall within the range
+          let hasOrderDateInRange = false;
+          if (order.orderDetails?.startDate && order.orderDetails?.endDate) {
+            try {
+              const orderStartDate = toDateObject(order.orderDetails.startDate);
+              const orderEndDate = toDateObject(order.orderDetails.endDate);
+              
+              // Check if the order date range overlaps with the filter date range
+              hasOrderDateInRange = (orderStartDate <= toDate && orderEndDate >= fromDate);
+              
+              // Debug logging for order 116017
+              if (order.orderDetails?.billInvoice === '116017') {
+                console.log('Admin - Order date check for 116017:', {
+                  orderStartDate: orderStartDate,
+                  orderEndDate: orderEndDate,
+                  hasOrderDateInRange: hasOrderDateInRange
+                });
+              }
+            } catch (error) {
+              console.error('Error checking order dates for allocated order:', error);
+            }
+          }
+          
+          // Return true if either allocation months OR order dates fall within the range
+          const finalResult = hasAllocationInRange || hasOrderDateInRange;
+          
+          // Debug logging for order 116017
+          if (order.orderDetails?.billInvoice === '116017') {
+            console.log('Admin - Order 116017 final result:', {
+              hasAllocationInRange: hasAllocationInRange,
+              hasOrderDateInRange: hasOrderDateInRange,
+              finalResult: finalResult
+            });
+          }
+          
+          return finalResult;
+        } else {
+          // For unallocated orders, use startDate if available, otherwise use createdAt
+          let orderDate;
+          
+          if (order.orderDetails?.startDate) {
+            // Use dateUtils to properly convert Firestore Timestamps
+            try {
+              orderDate = toDateObject(order.orderDetails.startDate);
+            } catch (error) {
+              console.error('Error converting startDate:', error);
+              // Fallback to createdAt
+              orderDate = toDateObject(order.createdAt);
+            }
+          } else {
+            orderDate = toDateObject(order.createdAt);
+          }
+          
+          // Debug logging for fast orders
+          if (order.isFastOrder) {
+            console.log('Fast order filtering:', {
+              orderId: order.id,
+              billInvoice: order.orderDetails?.billInvoice,
+              startDate: order.orderDetails?.startDate,
+              createdAt: order.createdAt,
+              orderDate: orderDate,
+              fromDate: fromDate,
+              toDate: toDate,
+              isInRange: orderDate >= fromDate && orderDate <= toDate
+            });
+          }
+          
+          return orderDate >= fromDate && orderDate <= toDate;
+        }
       });
     }
     
@@ -247,7 +431,32 @@ const FinancePage = () => {
     
     setFilteredOrders(filtered);
     calculateFinancialSummary(filtered);
-  }, [searchTerm, statusFilter, orders, dateFrom, dateTo]);
+  }, [searchTerm, statusFilter, orders, appliedDateFrom, appliedDateTo]);
+
+  // Apply date filter functions
+  const handleApplyDateFilter = () => {
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+  };
+
+  const handleClearDateFilter = () => {
+    setDateFrom(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    setDateTo(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    });
+    setAppliedDateFrom(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    });
+    setAppliedDateTo(() => {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    });
+  };
 
   // Update invoice status
   const updateInvoiceStatus = async (orderId, newStatus) => {
@@ -334,12 +543,17 @@ const FinancePage = () => {
   // Format date
   const formatDate = (date) => {
     if (!date) return 'N/A';
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
-    return dateObj.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
+    try {
+      const dateObj = toDateObject(date);
+      return dateObj.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   // Get status info
@@ -361,7 +575,7 @@ const FinancePage = () => {
 
   // Check if order spans multiple months
   const checkIfCrossMonth = (order, customStartDate = null, customEndDate = null) => {
-    const startDate = customStartDate || (order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt));
+    const startDate = customStartDate || toDateObject(order.createdAt);
     const endDate = customEndDate || new Date();
     
     const startMonth = startDate.getMonth();
@@ -395,7 +609,7 @@ const FinancePage = () => {
 
   // Handle allocation dialog
   const handleAllocationDialog = (order, newStatus) => {
-    const orderStartDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+    const orderStartDate = toDateObject(order.createdAt);
     const orderEndDate = new Date(); // Current date when status changes
     
     setSelectedOrderForAllocation({ ...order, newStatus });
@@ -414,19 +628,29 @@ const FinancePage = () => {
     try {
       if (!selectedOrderForAllocation) return;
       
+      // Convert dates to Firestore Timestamps for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreNow = Timestamp.fromDate(new Date());
+      const firestoreStartDate = startDate ? Timestamp.fromDate(startDate) : null;
+      const firestoreEndDate = endDate ? Timestamp.fromDate(endDate) : null;
+      
       const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
       
       // Update order with new dates and allocation
       const updateData = {
         invoiceStatus: selectedOrderForAllocation.newStatus.value,
-        statusUpdatedAt: new Date(),
+        statusUpdatedAt: firestoreNow,
         allocation: {
           method: allocationMethod,
           allocations: manualAllocations,
-          appliedAt: new Date(),
-          startDate: startDate,
-          endDate: endDate
-        }
+          appliedAt: firestoreNow,
+          startDate: firestoreStartDate,
+          endDate: firestoreEndDate
+        },
+        // Update orderDetails dates to match allocation dates
+        'orderDetails.startDate': firestoreStartDate,
+        'orderDetails.endDate': firestoreEndDate,
+        'orderDetails.lastUpdated': firestoreNow
       };
       
       await updateDoc(orderRef, updateData);
@@ -482,7 +706,7 @@ const FinancePage = () => {
       // Prepare payment history entry
       const paymentEntry = {
         amount: pendingAmount,
-        date: new Date(),
+        date: firestoreNow,
         type: 'Status Change - Full Payment',
         method: 'System Adjustment',
         description: `Auto-payment for status change to ${newStatus.label}`
@@ -502,7 +726,7 @@ const FinancePage = () => {
       // Now update the status directly
       const statusUpdateData = {
         invoiceStatus: newStatus.value,
-        statusUpdatedAt: new Date()
+        statusUpdatedAt: firestoreNow
       };
       
       await updateDoc(orderRef, statusUpdateData);
@@ -543,7 +767,7 @@ const FinancePage = () => {
       // Prepare payment history entry for refund
       const paymentEntry = {
         amount: -currentAmount, // Negative amount for refund
-        date: new Date(),
+        date: firestoreNow,
         type: 'Status Change - Refund',
         method: 'System Adjustment',
         description: `Auto-refund for status change to ${newStatus.label}`
@@ -563,7 +787,7 @@ const FinancePage = () => {
       // Now update the status directly
       const statusUpdateData = {
         invoiceStatus: newStatus.value,
-        statusUpdatedAt: new Date()
+        statusUpdatedAt: firestoreNow
       };
       
       await updateDoc(orderRef, statusUpdateData);
@@ -929,7 +1153,15 @@ const FinancePage = () => {
               label="From Date"
               type="date"
               value={dateFrom ? dateFrom.toISOString().split('T')[0] : ''}
-              onChange={(e) => setDateFrom(e.target.value ? new Date(e.target.value) : null)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const date = new Date(e.target.value);
+                  date.setHours(0, 0, 0, 0); // Set to start of day
+                  setDateFrom(date);
+                } else {
+                  setDateFrom(null);
+                }
+              }}
               InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
@@ -953,7 +1185,15 @@ const FinancePage = () => {
               label="To Date"
               type="date"
               value={dateTo ? dateTo.toISOString().split('T')[0] : ''}
-              onChange={(e) => setDateTo(e.target.value ? new Date(e.target.value) : null)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  const date = new Date(e.target.value);
+                  date.setHours(0, 0, 0, 0); // Set to start of day
+                  setDateTo(date);
+                } else {
+                  setDateTo(null);
+                }
+              }}
               InputLabelProps={{ shrink: true }}
               sx={{
                 '& .MuiOutlinedInput-root': {
@@ -962,6 +1202,47 @@ const FinancePage = () => {
                 }
               }}
             />
+          </Grid>
+
+          {/* Date Filter Actions */}
+          <Grid item xs={12} sm={6} lg={1}>
+            <Box sx={{ display: 'flex', gap: 1, height: '100%', alignItems: 'center' }}>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={handleApplyDateFilter}
+                sx={{ 
+                  fontSize: '0.75rem',
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
+                  border: '1px solid #8b6b1f',
+                  boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
+                  background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+                  '&:hover': { 
+                    backgroundColor: '#d4af5a',
+                    boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
+                  }
+                }}
+              >
+                Apply
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleClearDateFilter}
+                sx={{ 
+                  fontSize: '0.75rem',
+                  borderColor: '#b98f33',
+                  color: '#b98f33',
+                  '&:hover': { 
+                    borderColor: '#d4af5a',
+                    color: '#d4af5a'
+                  }
+                }}
+              >
+                Clear
+              </Button>
+            </Box>
           </Grid>
 
           {/* Status Filter */}
@@ -1022,6 +1303,8 @@ const FinancePage = () => {
                     const now = new Date();
                     setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
                     setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+                    setAppliedDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
+                    setAppliedDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
                   }}
                   sx={{ 
                     fontSize: '0.75rem',
@@ -1045,6 +1328,8 @@ const FinancePage = () => {
                     const now = new Date();
                     setDateFrom(new Date(now.getFullYear(), 0, 1));
                     setDateTo(new Date(now.getFullYear(), 11, 31));
+                    setAppliedDateFrom(new Date(now.getFullYear(), 0, 1));
+                    setAppliedDateTo(new Date(now.getFullYear(), 11, 31));
                   }}
                   sx={{ 
                     fontSize: '0.75rem',
@@ -1070,7 +1355,7 @@ const FinancePage = () => {
         </Grid>
 
         {/* Active Filters Display */}
-        {(statusFilter !== 'all' || searchTerm || (dateFrom && dateTo)) && (
+        {(statusFilter !== 'all' || searchTerm || (appliedDateFrom && appliedDateTo)) && (
           <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #333333' }}>
             <Typography variant="body2" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>
               Active Filters:
@@ -1092,13 +1377,15 @@ const FinancePage = () => {
                   size="small"
                 />
               )}
-              {dateFrom && dateTo && (
+              {appliedDateFrom && appliedDateTo && (
                 <Chip
-                  label={`Date: ${dateFrom.toLocaleDateString()} - ${dateTo.toLocaleDateString()}`}
+                  label={`Date: ${formatDateRange(appliedDateFrom, appliedDateTo)}`}
                   onDelete={() => {
                     const now = new Date();
                     setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
                     setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+                    setAppliedDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
+                    setAppliedDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
                   }}
                   color="primary"
                   size="small"
@@ -1113,6 +1400,8 @@ const FinancePage = () => {
                   const now = new Date();
                   setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
                   setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+                  setAppliedDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
+                  setAppliedDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
                 }}
                 sx={{ 
                   backgroundColor: '#b98f33',
@@ -1157,7 +1446,8 @@ const FinancePage = () => {
             {filteredOrders.map((order) => {
               const profitData = calculateOrderProfit(order);
               const normalizedPayment = normalizePaymentData(order.paymentData);
-              const balance = profitData.revenue - normalizedPayment.amountPaid;
+              const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
+              const balance = partialAmounts.revenue - partialAmounts.paidAmount;
               const paymentStatus = getPaymentStatus(order);
               const statusInfo = getStatusInfo(order.invoiceStatus);
               
@@ -1185,13 +1475,13 @@ const FinancePage = () => {
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(profitData.revenue)}
+                      {formatCurrency(partialAmounts.revenue)}
                     </Typography>
                   </TableCell>
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(profitData.cost)}
+                      {formatCurrency(partialAmounts.cost)}
                     </Typography>
                   </TableCell>
                   
@@ -1200,10 +1490,10 @@ const FinancePage = () => {
                       variant="subtitle1" 
                       sx={{ 
                         fontWeight: 'bold', 
-                        color: profitData.profit >= 0 ? '#4caf50' : '#f44336' 
+                        color: partialAmounts.profit >= 0 ? '#4caf50' : '#f44336' 
                       }}
                     >
-                      {formatCurrency(profitData.profit)}
+                      {formatCurrency(partialAmounts.profit)}
                     </Typography>
                   </TableCell>
                   
@@ -1213,11 +1503,11 @@ const FinancePage = () => {
                         variant="subtitle2" 
                         sx={{ 
                           fontWeight: 'bold', 
-                          color: profitData.profitPercentage >= 0 ? '#4caf50' : '#f44336',
+                          color: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
                           mr: 1
                         }}
                       >
-                        {profitData.profitPercentage.toFixed(1)}%
+                        {partialAmounts.profitPercentage.toFixed(1)}%
                       </Typography>
                       <Box
                         sx={{
@@ -1230,9 +1520,9 @@ const FinancePage = () => {
                       >
                         <Box
                           sx={{
-                            width: `${Math.min(Math.abs(profitData.profitPercentage), 100)}%`,
+                            width: `${Math.min(Math.abs(partialAmounts.profitPercentage), 100)}%`,
                             height: '100%',
-                            backgroundColor: profitData.profitPercentage >= 0 ? '#4caf50' : '#f44336',
+                            backgroundColor: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
                             transition: 'width 0.3s ease'
                           }}
                         />
@@ -1242,7 +1532,7 @@ const FinancePage = () => {
                   
                   <TableCell>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(normalizedPayment.amountPaid)}
+                      {formatCurrency(partialAmounts.paidAmount)}
                     </Typography>
                   </TableCell>
                   
@@ -1287,9 +1577,14 @@ const FinancePage = () => {
                   </TableCell>
                   
                   <TableCell>
-                    <Typography variant="body2">
-                      {formatDate(order.createdAt)}
-                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                        {formatDateOnly(order.orderDetails?.startDate || order.createdAt)}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                        {formatDateOnly(order.orderDetails?.endDate || order.statusUpdatedAt || order.createdAt)}
+                      </Typography>
+                    </Box>
                   </TableCell>
                   
                   <TableCell align="center">

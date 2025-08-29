@@ -75,6 +75,7 @@ import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWit
 
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
+import { useTreatments } from '../../hooks/useTreatments';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData } from '../../utils/orderCalculations';
@@ -83,6 +84,7 @@ import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '
 import { useAutoSelect } from '../../hooks/useAutoSelect';
 import { useNavigate } from 'react-router-dom';
 import { buttonStyles } from '../../styles/buttonStyles';
+import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';
 
 const WorkshopPage = () => {
   const navigate = useNavigate();
@@ -172,6 +174,7 @@ const WorkshopPage = () => {
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
+  const { treatments, loading: treatmentsLoading } = useTreatments();
   const { onFocus: handleAutoSelect } = useAutoSelect();
   const [materialTaxRates, setMaterialTaxRates] = useState({});
 
@@ -691,7 +694,11 @@ const WorkshopPage = () => {
       const actualStartDate = standaloneStartDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
       const actualEndDate = standaloneEndDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
 
-      // Using user-entered dates for allocation
+      // Convert dates to Firestore Timestamps for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreStartDate = Timestamp.fromDate(actualStartDate);
+      const firestoreEndDate = Timestamp.fromDate(actualEndDate);
+      const firestoreNow = Timestamp.fromDate(new Date());
 
       // Prepare allocation data with detailed information
       const allocationData = {
@@ -709,33 +716,33 @@ const WorkshopPage = () => {
             cost: cost,
             profit: profit,
             monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: new Date()
+            calculatedAt: firestoreNow
           };
         }),
-        appliedAt: new Date(),
+        appliedAt: firestoreNow,
         originalRevenue: standaloneTotalRevenue,
         originalCost: standaloneTotalCost,
         originalProfit: standaloneTotalRevenue - standaloneTotalCost,
         dateRange: {
-          startDate: actualStartDate,
-          endDate: actualEndDate
+          startDate: firestoreStartDate,
+          endDate: firestoreEndDate
         },
-        recalculatedAt: new Date()
+        recalculatedAt: firestoreNow
       };
 
       // Prepare update data (only allocation, no status change)
       const updateData = {
         allocation: allocationData,
-        startDate: actualStartDate,
-        endDate: actualEndDate
+        startDate: firestoreStartDate,
+        endDate: firestoreEndDate
       };
 
       // Force update the order dates to match the actual allocation range
       updateData.orderDetails = {
         ...selectedOrderForStandaloneAllocation.orderDetails,
-        startDate: actualStartDate,
-        endDate: actualEndDate,
-        lastUpdated: new Date()
+        startDate: firestoreStartDate,
+        endDate: firestoreEndDate,
+        lastUpdated: firestoreNow
       };
 
       // Force hide allocation dialog and show confirmation
@@ -754,7 +761,7 @@ const WorkshopPage = () => {
         'Confirm Allocation',
         `Are you sure you want to apply this allocation?\n\n` +
         `Order: ${selectedOrderForStandaloneAllocation.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation.id}\n` +
-        `Date Range: ${actualStartDate.toLocaleDateString()} - ${actualEndDate.toLocaleDateString()}\n` +
+        `Date Range: ${formatDateRange(actualStartDate, actualEndDate)}\n` +
         `Allocations: ${allocationSummary}\n` +
         `Total Revenue: ${formatCurrency(standaloneTotalRevenue)}\n` +
         `Total Cost: ${formatCurrency(standaloneTotalCost)}\n` +
@@ -872,7 +879,11 @@ const WorkshopPage = () => {
       const actualStartDate = startDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
       const actualEndDate = endDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
 
-      // Using user-entered dates for allocation
+      // Convert dates to Firestore Timestamps for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreStartDate = Timestamp.fromDate(actualStartDate);
+      const firestoreEndDate = Timestamp.fromDate(actualEndDate);
+      const firestoreNow = Timestamp.fromDate(new Date());
 
       // Prepare allocation data with detailed information
       const allocationData = {
@@ -890,34 +901,34 @@ const WorkshopPage = () => {
             cost: cost,
             profit: profit,
             monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: new Date()
+            calculatedAt: firestoreNow
           };
         }),
-        appliedAt: new Date(),
+        appliedAt: firestoreNow,
         originalRevenue: totalRevenue,
         originalCost: totalCost,
         originalProfit: totalRevenue - totalCost,
         dateRange: {
-          startDate: actualStartDate,
-          endDate: actualEndDate
+          startDate: firestoreStartDate,
+          endDate: firestoreEndDate
         },
-        recalculatedAt: new Date()
+        recalculatedAt: firestoreNow
       };
 
       // Prepare update data
       const updateData = {
         invoiceStatus: selectedOrderForAllocation.newStatus?.value || 'done',
         allocation: allocationData,
-        startDate: actualStartDate,
-        endDate: actualEndDate
+        startDate: firestoreStartDate,
+        endDate: firestoreEndDate
       };
 
       // Force update the order dates to match the actual allocation range
       updateData.orderDetails = {
         ...selectedOrderForAllocation.orderDetails,
-        startDate: actualStartDate,
-        endDate: actualEndDate,
-        lastUpdated: new Date()
+        startDate: firestoreStartDate,
+        endDate: firestoreEndDate,
+        lastUpdated: firestoreNow
       };
 
       // Force hide allocation dialog and show confirmation
@@ -944,15 +955,7 @@ const WorkshopPage = () => {
 
       const confirmed = await showEnhancedConfirm(
         'Confirm Order Completion & Email',
-        `Are you sure you want to complete this order and apply the allocation?\n\n` +
-        `Order: ${selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}\n` +
-        `Customer: ${selectedOrderForAllocation.personalInfo?.customerName || 'N/A'}\n` +
-        `Status: ${selectedOrderForAllocation.newStatus?.label || 'Done'}\n` +
-        `Date Range: ${actualStartDate.toLocaleDateString()} - ${actualEndDate.toLocaleDateString()}\n` +
-        `Allocations: ${allocationSummary}\n` +
-        `Total Revenue: ${formatCurrency(totalRevenue)}\n` +
-        `Total Cost: ${formatCurrency(totalCost)}\n` +
-        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`,
+        '', // Empty message since we display order/customer info directly in dialog
         hasEmail,
         includeReviewRequest
       );
@@ -2065,6 +2068,74 @@ const WorkshopPage = () => {
     setExpenseModalOpen(false);
   };
 
+  // Completion Email Dialog State
+  const [completionEmailDialog, setCompletionEmailDialog] = useState({
+    open: false,
+    sendEmail: true,
+    includeReview: true
+  });
+
+  // Completion Email Functions
+  const handleSendCompletionEmail = () => {
+    if (!selectedOrder?.personalInfo?.email) {
+      showError('No customer email available for this order');
+      return;
+    }
+    
+    // Open the completion email dialog
+    setCompletionEmailDialog({
+      open: true,
+      sendEmail: true,
+      includeReview: true
+    });
+  };
+
+  const handleCompletionEmailConfirm = async () => {
+    try {
+      setSendingCompletionEmail(true);
+      setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+      
+      // Prepare order data for email
+      const orderDataForEmail = {
+        personalInfo: selectedOrder.personalInfo,
+        orderDetails: selectedOrder.orderDetails,
+        furnitureData: {
+          groups: selectedOrder.furnitureData?.groups || []
+        },
+        paymentData: selectedOrder.paymentData
+      };
+
+      // Progress callback for email sending
+      const onEmailProgress = (message) => {
+        console.log('🔍 Workshop Debug - Completion email progress:', message);
+        showSuccess(`📧 ${message}`);
+      };
+
+      // Send the completion email
+      const emailResult = await sendCompletionEmailWithGmail(
+        orderDataForEmail, 
+        selectedOrder.personalInfo.email, 
+        completionEmailDialog.includeReview, // includeReviewRequest
+        onEmailProgress
+      );
+      
+      if (emailResult.success) {
+        showSuccess('✅ Completion email sent successfully!');
+      } else {
+        showError(`❌ Failed to send completion email: ${emailResult.message}`);
+      }
+    } catch (error) {
+      console.error('🔍 Workshop Debug - Error sending completion email:', error);
+      showError(`Failed to send completion email: ${error.message}`);
+    } finally {
+      setSendingCompletionEmail(false);
+    }
+  };
+
+  const handleCompletionEmailCancel = () => {
+    setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -2374,6 +2445,27 @@ const WorkshopPage = () => {
                   }}
                 >
                   {selectedOrder.allocation && selectedOrder.allocation.allocations ? 'Edit Allocation' : 'Allocate'}
+                </Button>
+
+                {/* Send Completion Email Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  startIcon={sendingCompletionEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <CheckCircleIcon sx={{ color: '#000000' }} />}
+                  onClick={handleSendCompletionEmail}
+                  disabled={sendingCompletionEmail || !selectedOrder?.personalInfo?.email}
+                  sx={{
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '2px solid #f27921',
+                    fontWeight: 'bold',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '2px solid #e06810'
+                    }
+                  }}
+                >
+                  {sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}
                 </Button>
               </Box>
             </Box>
@@ -2729,9 +2821,15 @@ const WorkshopPage = () => {
                                          selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery' : 
                                          'Pickup & Delivery'}
                                   </Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                                    ${selectedOrder.paymentData.pickupDeliveryCost || '0.00'}
-                                  </Typography>
+                                                                                                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
+                                   ${(() => {
+                                     const cost = selectedOrder.paymentData.pickupDeliveryCost || 0;
+                                     const displayValue = selectedOrder.paymentData.pickupDeliveryServiceType === 'both' 
+                                       ? cost * 2 
+                                       : cost;
+                                     return displayValue % 1 === 0 ? displayValue.toString() : displayValue.toFixed(2);
+                                   })()}
+                                 </Typography>
                                 </Box>
                                 
                                 {/* Bottom Row: Status Indicator and Text */}
@@ -2748,9 +2846,9 @@ const WorkshopPage = () => {
                                     color: '#4caf50',
                                     fontSize: '0.7rem'
                                   }}>
-                                    {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'Pickup Only' : 
-                                     selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery Only' : 
-                                     'Both Services'}
+                                                                          {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'One Way' :
+                                       selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'One Way' :
+                                       'Both Services'}
                                   </Typography>
                                 </Box>
                               </CardContent>
@@ -2835,6 +2933,11 @@ const WorkshopPage = () => {
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
                       Extra Expenses
                     </Typography>
+                    {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', ml: 2 }}>
+                        • Total: ${selectedOrder.extraExpenses.reduce((sum, expense) => sum + parseFloat(expense.total || 0), 0).toFixed(2)}
+                      </Typography>
+                    )}
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Button
@@ -2861,41 +2964,36 @@ const WorkshopPage = () => {
                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                    {selectedOrder.extraExpenses.map((expense, index) => (
                      <Card key={index} sx={{ p: 1.5, border: '1px solid #e3f2fd', backgroundColor: '#2a2a2a' }}>
-                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem' }}>
-                           {expense.description}
-                         </Typography>
-                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem' }}>
+                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', minWidth: '120px' }}>
+                             {expense.description}
+                           </Typography>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Price:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               ${parseFloat(expense.price || 0).toFixed(2)}
+                             </Typography>
+                           </Box>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Unit:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               {expense.unit || 'N/A'}
+                             </Typography>
+                           </Box>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Tax:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               {expense.taxType === 'percent' ? `${expense.tax}%` : `$${parseFloat(expense.tax || 0).toFixed(2)}`}
+                             </Typography>
+                           </Box>
+                         </Box>
+                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', ml: 2 }}>
                            ${parseFloat(expense.total || 0).toFixed(2)}
                          </Typography>
                        </Box>
-                       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-                         <Box>
-                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Price</Typography>
-                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                             ${parseFloat(expense.price || 0).toFixed(2)}
-                           </Typography>
-                         </Box>
-                         <Box>
-                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Unit</Typography>
-                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                             {expense.unit || 'N/A'}
-                           </Typography>
-                         </Box>
-                         <Box>
-                           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Tax</Typography>
-                           <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                             {expense.taxType === 'percent' ? `${expense.tax}%` : `$${parseFloat(expense.tax || 0).toFixed(2)}`}
-                           </Typography>
-                         </Box>
-                       </Box>
                      </Card>
                    ))}
-                   <Box sx={{ mt: 1, p: 1.5, backgroundColor: '#1a1a1a', borderRadius: 1, border: '1px solid #333333' }}>
-                     <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', textAlign: 'center', fontSize: '0.9rem' }}>
-                       Total Extra Expenses: ${selectedOrder.extraExpenses.reduce((sum, expense) => sum + parseFloat(expense.total || 0), 0).toFixed(2)}
-                     </Typography>
-                   </Box>
                  </Box>
                   ) : (
                     <Box sx={{ textAlign: 'center', py: 3 }}>
@@ -2986,8 +3084,8 @@ const WorkshopPage = () => {
                               </Tooltip>
                             </Box>
                             
-                            {/* Row 1: Material Company - Material Code */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                            {/* Row 1: Material Company - Material Code - Treatment */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
@@ -3039,6 +3137,50 @@ const WorkshopPage = () => {
                                 size="small"
                                 fullWidth
                               />
+                              <FormControl fullWidth size="small">
+                                <InputLabel 
+                                  sx={{ 
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff',
+                                    px: 1,
+                                    '&.Mui-focused': {
+                                      backgroundColor: '#2a2a2a',
+                                      color: '#ffffff'
+                                    }
+                                  }}
+                                >
+                                  Treatment
+                                </InputLabel>
+                                <Select
+                                  value={currentGroup.treatment || ''}
+                                  onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
+                                  displayEmpty
+                                  disabled={treatmentsLoading}
+                                  sx={{
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderWidth: '2px',
+                                      borderColor: 'grey.300',
+                                      borderRadius: 2,
+                                    },
+                                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                    },
+                                    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                      borderWidth: '2px',
+                                    },
+                                  }}
+                                >
+                                  <MenuItem value="" disabled>
+                                    {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
+                                  </MenuItem>
+                                  {treatments.map((treatment) => (
+                                    <MenuItem key={treatment.id} value={treatment.treatmentKind}>
+                                      {treatment.treatmentKind}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
                             </Box>
 
                             {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -3150,43 +3292,21 @@ const WorkshopPage = () => {
                             </Box>
 
                             {/* Foam Toggle */}
-                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
+                            <Box sx={{ mb: currentGroup.foamEnabled ? 1 : 0.5, p: 2 }}>
                               <FormControlLabel
                                 control={
                                   <Switch
-                                    checked={(() => {
-                                      // Auto-expand if foam has prices
-                                      if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
-                                        return true;
-                                      }
-                                      // Auto-fold if only quantity 1 with no other data
-                                      if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
-                                        return false;
-                                      }
-                                      // Use existing enabled state
-                                      return currentGroup.foamEnabled || false;
-                                    })()}
+                                    checked={currentGroup.foamEnabled || false}
                                     onChange={(e) => updateFurnitureGroup(index, 'foamEnabled', e.target.checked)}
                                     color="primary"
                                   />
                                 }
                                 label={
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                      🪣 Enable Foam
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af37', fontSize: '1.2rem' }}>
+                                      Enable Foam
                                     </Typography>
-                                    {(() => {
-                                      // Auto-expand if foam has prices
-                                      if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
-                                        return true;
-                                      }
-                                      // Auto-fold if only quantity 1 with no other data
-                                      if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
-                                        return false;
-                                      }
-                                      // Use existing enabled state
-                                      return currentGroup.foamEnabled || false;
-                                    })() && (
+                                    {(currentGroup.foamEnabled || false) && (
                                       <Chip 
                                         label="Enabled" 
                                         size="small" 
@@ -3199,18 +3319,7 @@ const WorkshopPage = () => {
                               />
                             </Box>
                             
-                            {(() => {
-                              // Auto-expand if foam has prices
-                              if (currentGroup.foamPrice || currentGroup.foamJLPrice) {
-                                return true;
-                              }
-                              // Auto-fold if only quantity 1 with no other data
-                              if (currentGroup.foamQnty === 1 && !currentGroup.foamPrice && !currentGroup.foamJLPrice && !currentGroup.foamThickness && !currentGroup.foamNote) {
-                                return false;
-                              }
-                              // Use existing enabled state
-                              return currentGroup.foamEnabled || false;
-                            })() && (
+                            {(currentGroup.foamEnabled || false) && (
                               <>
                                 {/* Row 4: Foam Price - Foam JL Price - Foam Thickness - Foam Note - Foam Quantity */}
                                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 2, mb: 2 }}>
@@ -3280,7 +3389,18 @@ const WorkshopPage = () => {
                             )}
                             
                             {/* Painting Section */}
-                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
+                            <Box sx={{ mb: (() => {
+                              // Auto-expand if painting has prices
+                              if (currentGroup.paintingLabour) {
+                                return 1;
+                              }
+                              // Auto-fold if only quantity 1 with no other data
+                              if (currentGroup.paintingQnty === 1 && !currentGroup.paintingLabour && !currentGroup.paintingNote) {
+                                return 0.5;
+                              }
+                              // Use existing enabled state
+                              return currentGroup.paintingEnabled ? 1 : 0.5;
+                            })(), p: 2 }}>
                               <FormControlLabel
                                 control={
                                   <Switch
@@ -3302,8 +3422,8 @@ const WorkshopPage = () => {
                                 }
                                 label={
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                      🎨 Enable Painting
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af37', fontSize: '1.2rem' }}>
+                                      Enable Painting
                                     </Typography>
                                     {(() => {
                                       // Auto-expand if painting has prices
@@ -3633,8 +3753,8 @@ const WorkshopPage = () => {
                       </Typography>
                     </Box>
                     
-                    {/* Row 1: Material Company - Material Code */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                    {/* Row 1: Material Company - Material Code - Treatment */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel 
                           sx={{ 
@@ -3684,6 +3804,48 @@ const WorkshopPage = () => {
                         size="small"
                         fullWidth
                       />
+                      <FormControl fullWidth size="small">
+                        <InputLabel 
+                          sx={{ 
+                            backgroundColor: 'white',
+                            px: 1,
+                            '&.Mui-focused': {
+                              backgroundColor: 'white'
+                            }
+                          }}
+                        >
+                          Treatment
+                        </InputLabel>
+                        <Select
+                          value={group.treatment || ''}
+                          onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
+                          displayEmpty
+                          disabled={treatmentsLoading}
+                          sx={{
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              borderWidth: '2px',
+                              borderColor: 'grey.300',
+                              borderRadius: 2,
+                            },
+                            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                            },
+                            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                              borderWidth: '2px',
+                            },
+                          }}
+                        >
+                          <MenuItem value="" disabled>
+                            {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
+                          </MenuItem>
+                          {treatments.map((treatment) => (
+                            <MenuItem key={treatment.id} value={treatment.treatmentKind}>
+                              {treatment.treatmentKind}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     </Box>
 
                     {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -3894,42 +4056,53 @@ const WorkshopPage = () => {
       <Dialog 
         open={paymentDialog} 
         onClose={handleClosePaymentDialog}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#1a1a1a',
+            color: '#ffffff',
+            borderRadius: 2,
+            border: '2px solid #333333'
+          }
+        }}
       >
         <DialogTitle sx={{ 
-          backgroundColor: '#f27921', 
-          color: 'white',
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
-          gap: 1
+          gap: 1,
+          borderBottom: '2px solid #333333',
+          fontWeight: 'bold'
         }}>
           <PaymentIcon />
           Payment Details
         </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
+        <DialogContent sx={{ pt: 3, backgroundColor: '#1a1a1a' }}>
           {selectedOrder && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* Invoice Information (Read-only) */}
               <Box sx={{ 
-                backgroundColor: '#f5f5f5', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #e0e0e0'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#1976d2' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Invoice Information
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Invoice Number</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Invoice Number</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff' }}>
                       #{selectedOrder.orderDetails?.billInvoice || 'N/A'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Customer Name</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Customer Name</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff' }}>
                       {selectedOrder.personalInfo?.customerName || 'N/A'}
                     </Typography>
                   </Box>
@@ -3938,29 +4111,30 @@ const WorkshopPage = () => {
 
               {/* Payment Summary (Read-only) */}
               <Box sx={{ 
-                backgroundColor: '#e8f5e8', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #c8e6c9'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#2e7d32' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Payment Summary
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Total Invoice Amount</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Total Invoice Amount</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#f27921' }}>
                       ${calculateInvoiceTotals(selectedOrder).grandTotal.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Amount Paid</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Amount Paid</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
                       ${selectedOrder.paymentData?.amountPaid || '0.00'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Remaining Balance</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Remaining Balance</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
                       ${(calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2)}
                     </Typography>
@@ -3970,15 +4144,16 @@ const WorkshopPage = () => {
 
               {/* New Payment Form */}
               <Box sx={{ 
-                backgroundColor: '#fff3e0', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #ffcc02'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#e65100' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Add New Payment
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <TextField
                     label="Payment Amount"
                     type="number"
@@ -3992,14 +4167,25 @@ const WorkshopPage = () => {
                       startAdornment: <InputAdornment position="start">$</InputAdornment>,
                     }}
                     sx={{
-                      '& .MuiOutlinedInput-root': {
-                        '&:hover': {
-                          borderColor: '#f27921'
-                        },
-                        '&.Mui-focused': {
-                          borderColor: '#f27921'
-                        }
-                      }
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
                     }}
                   />
                   <TextField
@@ -4014,6 +4200,27 @@ const WorkshopPage = () => {
                     InputLabelProps={{
                       shrink: true,
                     }}
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
+                    }}
                   />
                   <TextField
                     label="Payment Notes (Optional)"
@@ -4025,6 +4232,27 @@ const WorkshopPage = () => {
                     multiline
                     rows={2}
                     placeholder="Enter any notes about this payment..."
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
+                    }}
                   />
                 </Box>
               </Box>
@@ -4032,33 +4260,34 @@ const WorkshopPage = () => {
               {/* Payment History */}
               {selectedOrder.paymentData?.payments && selectedOrder.paymentData.payments.length > 0 && (
                 <Box sx={{ 
-                  backgroundColor: '#f3e5f5', 
-                  p: 2, 
+                  backgroundColor: '#2a2a2a', 
+                  p: 3, 
                   borderRadius: 2,
-                  border: '1px solid #ce93d8'
+                  border: '2px solid #333333',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
                 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#7b1fa2' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                     Payment History
                   </Typography>
                   <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
                     {selectedOrder.paymentData.payments.map((payment, index) => (
                       <Box key={index} sx={{ 
-                        p: 1.5, 
+                        p: 2, 
                         mb: 1, 
-                        backgroundColor: 'white', 
+                        backgroundColor: '#1a1a1a', 
                         borderRadius: 1,
-                        border: '1px solid #e1bee7'
+                        border: '1px solid #333333'
                       }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#ffffff' }}>
                             ${payment.amount.toFixed(2)}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body2" sx={{ color: '#b98f33' }}>
                             {formatDate(payment.date)}
                           </Typography>
                         </Box>
                         {payment.notes && (
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mt: 0.5, fontStyle: 'italic' }}>
                             {payment.notes}
                           </Typography>
                         )}
@@ -4070,7 +4299,7 @@ const WorkshopPage = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
+        <DialogActions sx={{ p: 3, gap: 2, backgroundColor: '#1a1a1a', borderTop: '2px solid #333333' }}>
           <Button onClick={handleClosePaymentDialog} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
@@ -4589,7 +4818,20 @@ const WorkshopPage = () => {
                   <strong style={{ color: '#b98f33' }}>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
-                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
+                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {(() => {
+                    try {
+                      const startDateStr = startDate?.toDate ? startDate.toDate().toLocaleDateString() :
+                        (startDate?.seconds ? new Date(startDate.seconds * 1000).toLocaleDateString() :
+                        (startDate ? new Date(startDate).toLocaleDateString() : 'Not set'));
+                      const endDateStr = endDate?.toDate ? endDate.toDate().toLocaleDateString() :
+                        (endDate?.seconds ? new Date(endDate.seconds * 1000).toLocaleDateString() :
+                        (endDate ? new Date(endDate).toLocaleDateString() : 'Not set'));
+                      return `${startDateStr} - ${endDateStr}`;
+                    } catch (error) {
+                      console.error('Error formatting date range:', error);
+                      return 'Invalid Date Range';
+                    }
+                  })()}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
                   <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> {formatCurrency(totalRevenue)}
@@ -4946,7 +5188,20 @@ const WorkshopPage = () => {
                   <strong style={{ color: '#b98f33' }}>Order:</strong> {selectedOrderForStandaloneAllocation?.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation?.id}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
-                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {standaloneStartDate ? standaloneStartDate.toLocaleDateString() : 'Not set'} - {standaloneEndDate ? standaloneEndDate.toLocaleDateString() : 'Not set'}
+                  <strong style={{ color: '#b98f33' }}>Date Range:</strong> {(() => {
+                    try {
+                      const startDateStr = standaloneStartDate?.toDate ? standaloneStartDate.toDate().toLocaleDateString() :
+                        (standaloneStartDate?.seconds ? new Date(standaloneStartDate.seconds * 1000).toLocaleDateString() :
+                        (standaloneStartDate ? new Date(standaloneStartDate).toLocaleDateString() : 'Not set'));
+                      const endDateStr = standaloneEndDate?.toDate ? standaloneEndDate.toDate().toLocaleDateString() :
+                        (standaloneEndDate?.seconds ? new Date(standaloneEndDate.seconds * 1000).toLocaleDateString() :
+                        (standaloneEndDate ? new Date(standaloneEndDate).toLocaleDateString() : 'Not set'));
+                      return `${startDateStr} - ${endDateStr}`;
+                    } catch (error) {
+                      console.error('Error formatting date range:', error);
+                      return 'Invalid Date Range';
+                    }
+                  })()}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
                   <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> {formatCurrency(standaloneTotalRevenue)}
@@ -5348,17 +5603,31 @@ const WorkshopPage = () => {
         </DialogTitle>
         
         <DialogContent sx={{ mt: 2 }}>
-          <Typography 
-            variant="body1" 
-            sx={{ 
-              whiteSpace: 'pre-line', 
-              lineHeight: 1.6,
-              mb: 2,
-              color: '#ffffff'
-            }}
-          >
-            {enhancedConfirmDialog.message}
-          </Typography>
+          {/* Order and Customer Info in Big Font */}
+          <Box sx={{ 
+            p: 3, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 3,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h4" sx={{ 
+              color: '#b98f33', 
+              mb: 2, 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Order: {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id || 'N/A'}
+            </Typography>
+            <Typography variant="h4" sx={{ 
+              color: '#ffffff', 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Customer: {selectedOrderForAllocation?.personalInfo?.customerName || 'N/A'}
+            </Typography>
+          </Box>
 
           {enhancedConfirmDialog.hasEmail ? (
             <Box sx={{ 
@@ -5456,6 +5725,145 @@ const WorkshopPage = () => {
             sx={buttonStyles.primaryButton}
           >
             Complete Order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Completion Email Dialog */}
+      <Dialog
+        open={completionEmailDialog.open}
+        onClose={handleCompletionEmailCancel}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #b98f33',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#2a2a2a', 
+          color: '#ffffff',
+          borderBottom: '2px solid #b98f33',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <span style={{ fontSize: '24px' }}>📧</span>
+          Send Completion Email
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          {/* Order and Customer Info in Big Font */}
+          <Box sx={{ 
+            p: 3, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 3,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h4" sx={{ 
+              color: '#b98f33', 
+              mb: 2, 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Order: {selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A'}
+            </Typography>
+            <Typography variant="h4" sx={{ 
+              color: '#ffffff', 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Customer: {selectedOrder?.personalInfo?.customerName || 'N/A'}
+            </Typography>
+          </Box>
+
+          {/* Email Options */}
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 2
+          }}>
+            <Typography variant="h6" sx={{ color: '#b98f33', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              📧 Email Options
+            </Typography>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.sendEmail}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, sendEmail: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Send completion email to customer"
+              sx={{ 
+                color: '#ffffff',
+                mb: 1,
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.includeReview}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, includeReview: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Include Google review request"
+              sx={{ 
+                color: '#ffffff',
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <Typography variant="body2" sx={{ 
+              mt: 1, 
+              color: '#cccccc', 
+              fontStyle: 'italic',
+              fontSize: '13px'
+            }}>
+              The email will include a warm thank you message, treatment care instructions, and a review request.
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleCompletionEmailCancel}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCompletionEmailConfirm}
+            disabled={!completionEmailDialog.sendEmail}
+            sx={buttonStyles.primaryButton}
+          >
+            Send Email
           </Button>
         </DialogActions>
       </Dialog>

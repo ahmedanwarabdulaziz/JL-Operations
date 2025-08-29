@@ -41,6 +41,7 @@ import { db } from '../../firebase/config';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { calculateOrderProfit, calculateOrderTotal } from '../../utils/orderCalculations';
 import { formatCurrency } from '../../utils/plCalculations';
+import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';
 
 const TestingFinancialPage = () => {
   const [orders, setOrders] = useState([]);
@@ -517,19 +518,25 @@ const TestingFinancialPage = () => {
         return;
       }
 
+      // Convert dates to Firestore Timestamps for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreNow = Timestamp.fromDate(new Date());
+      const firestoreStartDate = startDate ? Timestamp.fromDate(startDate) : null;
+      const firestoreEndDate = endDate ? Timestamp.fromDate(endDate) : null;
+
       // Prepare update data
       const updateData = {
         allocation: {
           allocations: monthlyAllocations,
-          appliedAt: new Date(),
+          appliedAt: firestoreNow,
           totalRevenue,
           totalCost,
           totalProfit: totalRevenue - totalCost
         },
-        'orderDetails.startDate': startDate,
-        'orderDetails.endDate': endDate,
-        'startDate': startDate,
-        'endDate': endDate
+        'orderDetails.startDate': firestoreStartDate,
+        'orderDetails.endDate': firestoreEndDate,
+        'startDate': firestoreStartDate,
+        'endDate': firestoreEndDate
       };
 
       // Update in Firebase
@@ -817,7 +824,7 @@ const TestingFinancialPage = () => {
                   <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
                   <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Cost</TableCell>
                   <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
-                  <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Allocation</TableCell>
+
                   <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Actions</TableCell>
                 </TableRow>
              </TableHead>
@@ -906,59 +913,7 @@ const TestingFinancialPage = () => {
                                            <TableCell sx={{ color: '#ffffff' }}>
                         {formatCurrency(displayProfit)}
                       </TableCell>
-                      <TableCell>
-                        {isAllocated(order) ? (
-                          <Box sx={{ width: '200px', height: '20px' }}>
-                            <Box sx={{ 
-                              display: 'flex', 
-                              height: '20px', 
-                              borderRadius: '4px', 
-                              overflow: 'hidden',
-                              border: '1px solid #333333',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                              position: 'relative'
-                            }}>
-                              {order.allocation.allocations.map((allocation, index) => {
-                                const percentage = allocation.percentage || 0;
-                                const width = `${percentage}%`;
-                                
-                                // Generate professional color palette
-                                const colors = [
-                                  '#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336',
-                                  '#00BCD4', '#8BC34A', '#FF5722', '#3F51B5', '#009688',
-                                  '#E91E63', '#673AB7'
-                                ];
-                                const color = colors[index % colors.length];
-                                
-                                                                 return (
-                                                                       <Box
-                                      key={index}
-                                      className="table-allocation-segment"
-                                      sx={{
-                                        width,
-                                        backgroundColor: color,
-                                        position: 'relative',
-                                        transition: 'all 0.2s ease',
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                          filter: 'brightness(1.3)',
-                                          transform: 'scaleY(1.1)',
-                                          zIndex: 10
-                                        }
-                                      }}
-                                      onMouseEnter={(e) => handleTooltipShow(e, `${new Date(allocation.year, allocation.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}: ${percentage.toFixed(1)}%`)}
-                                      onMouseLeave={handleTooltipHide}
-                                    />
-                                );
-                              })}
-                            </Box>
-                          </Box>
-                        ) : (
-                          <Typography variant="caption" sx={{ color: '#666666', fontStyle: 'italic' }}>
-                            Not allocated
-                          </Typography>
-                        )}
-                      </TableCell>
+
                       <TableCell>
                         <Tooltip title="Allocate Financial Data">
                           <IconButton
@@ -1420,7 +1375,20 @@ const TestingFinancialPage = () => {
                       <strong style={{ color: '#b98f33' }}>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
-                      <strong style={{ color: '#b98f33' }}>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
+                      <strong style={{ color: '#b98f33' }}>Date Range:</strong> {(() => {
+                        try {
+                          const startDateStr = startDate?.toDate ? startDate.toDate().toLocaleDateString() :
+                            (startDate?.seconds ? new Date(startDate.seconds * 1000).toLocaleDateString() :
+                            (startDate ? new Date(startDate).toLocaleDateString() : 'Not set'));
+                          const endDateStr = endDate?.toDate ? endDate.toDate().toLocaleDateString() :
+                            (endDate?.seconds ? new Date(endDate.seconds * 1000).toLocaleDateString() :
+                            (endDate ? new Date(endDate).toLocaleDateString() : 'Not set'));
+                          return `${startDateStr} - ${endDateStr}`;
+                        } catch (error) {
+                          console.error('Error formatting date range:', error);
+                          return 'Invalid Date Range';
+                        }
+                      })()}
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 1, color: '#ffffff' }}>
                       <strong style={{ color: '#b98f33' }}>Total Revenue:</strong> {formatCurrency(totalRevenue)}

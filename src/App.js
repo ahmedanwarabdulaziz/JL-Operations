@@ -19,8 +19,8 @@ import WorkshopPage from './pages/Workshop/WorkshopPage';
 import TreatmentPage from './pages/Treatment/TreatmentPage';
 import MaterialCompaniesPage from './pages/MaterialCompanies/MaterialCompaniesPage';
 import PlatformsPage from './pages/Platforms/PlatformsPage';
-import InvoicePage from './pages/Invoice/InvoicePage';
-import FlashInvoicePage from './pages/FlashInvoice/FlashInvoicePage';
+import InvoicePage from './admin/pages/Invoice/InvoicePage';
+
 import FinancePage from './pages/Finance/FinancePage';
 import PLPage from './pages/Finance/PLPage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
@@ -86,7 +86,6 @@ const AppContent = () => {
                       location.pathname === '/material-companies' ||
                       location.pathname === '/platforms' ||
                       location.pathname === '/invoices' ||
-                      location.pathname === '/flash-invoices' ||
                       location.pathname === '/finance' ||
                       location.pathname === '/pl' ||
                       location.pathname === '/status-management' ||
@@ -143,8 +142,7 @@ const AppContent = () => {
           <Route path="/admin/platforms" element={<PlatformsPage />} />
           <Route path="/invoices" element={<Navigate to="/admin/invoices" replace />} />
           <Route path="/admin/invoices" element={<InvoicePage />} />
-          <Route path="/flash-invoices" element={<Navigate to="/admin/flash-invoices" replace />} />
-          <Route path="/admin/flash-invoices" element={<FlashInvoicePage />} />
+
           <Route path="/finance" element={<Navigate to="/admin/finance" replace />} />
           <Route path="/admin/finance" element={<FinancePage />} />
           <Route path="/pl" element={<Navigate to="/admin/pl" replace />} />

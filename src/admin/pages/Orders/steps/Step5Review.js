@@ -18,6 +18,7 @@ import {
   Weekend as WeekendIcon,
   Payment as PaymentIcon
 } from '@mui/icons-material';
+import { formatDateOnly } from '../../../../utils/dateUtils';
 
 const SectionHeader = ({ icon, label }) => (
   <Box sx={{
@@ -106,7 +107,7 @@ const Step5Review = ({
               <Typography variant="body2" color="text.secondary">Platform</Typography>
               <Typography variant="body1" sx={{ mb: 1 }}>{orderDetails.platform}</Typography>
               <Typography variant="body2" color="text.secondary">Start Date</Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>{orderDetails.startDate}</Typography>
+              <Typography variant="body1" sx={{ mb: 1 }}>{formatDateOnly(orderDetails.startDate)}</Typography>
               <Typography variant="body2" color="text.secondary">Timeline</Typography>
               <Typography variant="body1">{orderDetails.timeline}</Typography>
             </Box>
@@ -181,8 +182,7 @@ const Step5Review = ({
                       <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>{group.labourPrice ? `$${group.labourPrice}` : '-'}</Typography>
                       <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Note:</Typography>
                       <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.labourNote || '-'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour || '-'}</Typography>
+
                     </Box>
                     {/* Foam Row - all fields in one row, only if foam price has value */}
                     {group.foamPrice && (
@@ -193,8 +193,7 @@ const Step5Review = ({
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamThickness || '-'}</Typography>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Note:</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.foamNote || '-'}</Typography>
-                        <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Quantity:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam || '-'}</Typography>
+
                       </Box>
                     )}
                     {/* Painting Row - all fields in one row, only if painting labour has value */}
@@ -204,8 +203,7 @@ const Step5Review = ({
                         <Typography variant="body1" sx={{ fontWeight: 700, color: '#1976d2', fontSize: 15, minWidth: 60, textAlign: 'left' }}>${group.paintingLabour}</Typography>
                         <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Note:</Typography>
                         <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.paintingNote || '-'}</Typography>
-                        <Typography variant="caption" sx={{ color: 'grey.700', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Quantity:</Typography>
-                        <Typography variant="body1" sx={{ fontWeight: 600, color: 'grey.900', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.paintingQnty || '-'}</Typography>
+
                       </Box>
                     )}
                     {/* Customer Note - only if has value */}

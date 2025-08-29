@@ -59,6 +59,7 @@ import { db } from '../../firebase/config';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { calculateOrderProfit, normalizePaymentData } from '../../utils/orderCalculations';
 import { formatCurrency, formatPercentage, calculateTimeBasedAllocation, processOrdersForPL } from '../../utils/plCalculations';
+import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 
 const PLPage = () => {
@@ -596,7 +597,20 @@ const PLPage = () => {
                </Typography>
                <Chip
                  label={appliedDateFrom && appliedDateTo ? 
-                   `${appliedDateFrom.toLocaleDateString()} - ${appliedDateTo.toLocaleDateString()}` : 
+                   `${(() => {
+                     try {
+                       const fromDate = appliedDateFrom?.toDate ? appliedDateFrom.toDate() :
+                         (appliedDateFrom?.seconds ? new Date(appliedDateFrom.seconds * 1000) :
+                         new Date(appliedDateFrom));
+                       const toDate = appliedDateTo?.toDate ? appliedDateTo.toDate() :
+                         (appliedDateTo?.seconds ? new Date(appliedDateTo.seconds * 1000) :
+                         new Date(appliedDateTo));
+                       return `${fromDate.toLocaleDateString()} - ${toDate.toLocaleDateString()}`;
+                     } catch (error) {
+                       console.error('Error formatting applied date range:', error);
+                       return 'Invalid Date Range';
+                     }
+                   })()}` : 
                    'No filter'
                  }
                  size="small"
@@ -1145,10 +1159,8 @@ const PLPage = () => {
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Invoice #</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Customer</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Order Month</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Allocation Month</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Days Difference</TableCell>
                       <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Revenue</TableCell>
-                      <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Allocation Method</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -1176,16 +1188,7 @@ const PLPage = () => {
                               color="primary"
                             />
                           </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={new Date(item.allocationMonth + '-01').toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'short' 
-                              })}
-                              size="small"
-                              color="secondary"
-                            />
-                          </TableCell>
+
                           <TableCell>
                             <Chip 
                               label={`${item.daysDiff} days`}
@@ -1198,11 +1201,7 @@ const PLPage = () => {
                               {formatCurrency(profitData.revenue)}
                             </Typography>
                           </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {item.order.allocation?.method || 'Unknown'}
-                            </Typography>
-                          </TableCell>
+
                         </TableRow>
                       );
                     })}
@@ -1250,7 +1249,21 @@ const PLPage = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {orderDate.toLocaleDateString()}
+                              {(() => {
+                                try {
+                                  if (orderDate?.toDate) {
+                                    return orderDate.toDate().toLocaleDateString();
+                                  } else if (orderDate?.seconds) {
+                                    return new Date(orderDate.seconds * 1000).toLocaleDateString();
+                                  } else if (orderDate) {
+                                    return new Date(orderDate).toLocaleDateString();
+                                  }
+                                  return 'N/A';
+                                } catch (error) {
+                                  console.error('Error formatting order date:', error);
+                                  return 'N/A';
+                                }
+                              })()}
                             </Typography>
                           </TableCell>
                           <TableCell>

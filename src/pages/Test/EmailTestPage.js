@@ -86,7 +86,8 @@ const EmailTestPage = () => {
         },
         furnitureData: {
           groups: treatments.split(',').map(treatment => ({
-            treatment: treatment.trim()
+            treatment: treatment.trim(),
+            furnitureType: `Test ${treatment.trim()} Item`
           }))
         },
         paymentData: {
@@ -102,8 +103,8 @@ const EmailTestPage = () => {
       };
 
       const result = await sendCompletionEmailWithGmail(
-        testEmail,
         testOrderData,
+        testEmail,
         includeReview,
         onProgress
       );

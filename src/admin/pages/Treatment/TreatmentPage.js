@@ -20,24 +20,17 @@ import {
   Alert,
   CircularProgress,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  OutlinedInput,
   Divider,
   Card,
   CardContent,
   InputAdornment,
-  Tooltip,
-  Fade
+  Tooltip
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Link as LinkIcon,
-  Business as BusinessIcon,
   Close as CloseIcon,
   Save as SaveIcon,
   Category as CategoryIcon
@@ -45,7 +38,7 @@ import {
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
-import useMaterialCompanies from '../shared/hooks/useMaterialCompanies';
+
 
 const TreatmentPage = () => {
   const [treatments, setTreatments] = useState([]);
@@ -54,12 +47,11 @@ const TreatmentPage = () => {
   const [editingTreatment, setEditingTreatment] = useState(null);
   const [formData, setFormData] = useState({
     treatmentKind: '',
-    materialCompanies: [],
     urlPageLink: ''
   });
   const [saving, setSaving] = useState(false);
   const { showSuccess, showError } = useNotification();
-  const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
+
 
   // Fetch treatments from Firebase
   const fetchTreatments = useCallback(async () => {
@@ -90,14 +82,12 @@ const TreatmentPage = () => {
       setEditingTreatment(treatment);
       setFormData({
         treatmentKind: treatment.treatmentKind || '',
-        materialCompanies: treatment.materialCompanies || [],
         urlPageLink: treatment.urlPageLink || ''
       });
     } else {
       setEditingTreatment(null);
       setFormData({
         treatmentKind: '',
-        materialCompanies: [],
         urlPageLink: ''
       });
     }
@@ -121,12 +111,7 @@ const TreatmentPage = () => {
     }));
   };
 
-  const handleRemoveMaterialCompany = (company) => {
-    setFormData(prev => ({
-      ...prev,
-      materialCompanies: prev.materialCompanies.filter(c => c !== company)
-    }));
-  };
+
 
   const handleSubmit = async () => {
     if (!formData.treatmentKind.trim()) {
@@ -141,7 +126,6 @@ const TreatmentPage = () => {
         const treatmentRef = doc(db, 'treatments', editingTreatment.id);
         await updateDoc(treatmentRef, {
           treatmentKind: formData.treatmentKind.trim(),
-          materialCompanies: formData.materialCompanies,
           urlPageLink: formData.urlPageLink.trim(),
           updatedAt: new Date().toISOString()
         });
@@ -150,7 +134,6 @@ const TreatmentPage = () => {
         // Add new treatment
         await addDoc(collection(db, 'treatments'), {
           treatmentKind: formData.treatmentKind.trim(),
-          materialCompanies: formData.materialCompanies,
           urlPageLink: formData.urlPageLink.trim(),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -273,7 +256,6 @@ const TreatmentPage = () => {
             <TableHead sx={{ backgroundColor: '#b98f33' }}>
               <TableRow>
                 <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Treatment Kind</TableCell>
-                <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Material Companies</TableCell>
                 <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Website Link</TableCell>
                 <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
               </TableRow>
@@ -285,28 +267,6 @@ const TreatmentPage = () => {
                     <Typography variant="body1" sx={{ fontWeight: 500, color: '#b98f33' }}>
                       {treatment.treatmentKind}
                     </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {treatment.materialCompanies?.length > 0 ? (
-                        treatment.materialCompanies.map((company, index) => (
-                          <Chip
-                            key={index}
-                            label={company}
-                            size="small"
-                            sx={{
-                              backgroundColor: '#d4af5a',
-                              color: '#000000',
-                              border: '1px solid #b98f33'
-                            }}
-                          />
-                        ))
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          No companies assigned
-                        </Typography>
-                      )}
-                    </Box>
                   </TableCell>
                   <TableCell>
                     {treatment.urlPageLink ? (
@@ -469,135 +429,7 @@ const TreatmentPage = () => {
                 </Card>
               </Grid>
               
-              {/* Material Companies Section */}
-              <Grid item xs={12}>
-                <Card 
-                  variant="outlined" 
-                  sx={{ 
-                    border: '2px solid #b98f33',
-                    borderRadius: 2
-                  }}
-                >
-                  <CardContent sx={{ pb: '16px !important' }}>
-                    <Typography 
-                      variant="subtitle1" 
-                      sx={{ 
-                        mb: 2, 
-                        fontWeight: 600,
-                        color: '#b98f33',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1
-                      }}
-                    >
-                      <BusinessIcon sx={{ fontSize: 20, color: '#b98f33' }} />
-                      Associated Material Companies
-                    </Typography>
-                    
-                    <Box sx={{ mb: 2 }}>
-                      <FormControl 
-                        fullWidth
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            '&:hover fieldset': {
-                              borderColor: '#b98f33',
-                            },
-                            '&.Mui-focused fieldset': {
-                              borderColor: '#b98f33',
-                            },
-                          },
-                          '& .MuiInputLabel-root.Mui-focused': {
-                            color: '#b98f33',
-                          },
-                        }}
-                      >
-                        <InputLabel>Select Material Company</InputLabel>
-                        <Select
-                          value=""
-                          onChange={(e) => {
-                            const selectedCompany = e.target.value;
-                            if (selectedCompany && !formData.materialCompanies.includes(selectedCompany)) {
-                              setFormData(prev => ({
-                                ...prev,
-                                materialCompanies: [...prev.materialCompanies, selectedCompany]
-                              }));
-                            }
-                          }}
-                          label="Select Material Company"
-                          disabled={companiesLoading}
-                          startAdornment={
-                            <InputAdornment position="start">
-                              <BusinessIcon sx={{ color: '#b98f33' }} />
-                            </InputAdornment>
-                          }
-                        >
-                          {companiesLoading && (
-                            <MenuItem value="" disabled>
-                              Loading companies...
-                            </MenuItem>
-                          )}
-                          {materialCompanies
-                            .filter(company => !formData.materialCompanies.includes(company.name))
-                            .map((company) => (
-                              <MenuItem key={company.id} value={company.name}>
-                                {company.name}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
-                    </Box>
 
-                    {/* Selected Companies */}
-                    {formData.materialCompanies.length > 0 ? (
-                      <Box>
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            mb: 1, 
-                            fontWeight: 500,
-                            color: '#b98f33'
-                          }}
-                        >
-                          Selected Companies:
-                        </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          {formData.materialCompanies.map((company, index) => (
-                            <Fade in={true} key={index}>
-                              <Chip
-                                label={company}
-                                onDelete={() => handleRemoveMaterialCompany(company)}
-                                sx={{
-                                  backgroundColor: '#f27921',
-                                  color: 'white',
-                                  '& .MuiChip-deleteIcon': {
-                                    color: 'white',
-                                    '&:hover': {
-                                      color: '#ffccbc'
-                                    }
-                                  }
-                                }}
-                              />
-                            </Fade>
-                          ))}
-                        </Box>
-                      </Box>
-                    ) : (
-                      <Box 
-                        sx={{ 
-                          p: 2, 
-                          backgroundColor: 'background.paper', 
-                          borderRadius: 1,
-                          textAlign: 'center'
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          No companies selected yet
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
               
               {/* Website Link Section */}
               <Grid item xs={12}>

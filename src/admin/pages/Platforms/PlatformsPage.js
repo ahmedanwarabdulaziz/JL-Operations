@@ -36,6 +36,7 @@ import {
   Description as DescriptionIcon
 } from '@mui/icons-material';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
+import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
 
@@ -273,13 +274,9 @@ const PlatformsPage = () => {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    {platform.createdAt ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {new Date(platform.createdAt).toLocaleDateString()}
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">-</Typography>
-                    )}
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDateOnly(platform.createdAt)}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>

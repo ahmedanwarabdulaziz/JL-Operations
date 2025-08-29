@@ -546,11 +546,12 @@ export const updateEmailStatus = async (leadId, emailId, status, replyData = nul
 
 // Send completion email with Gmail
 export const sendCompletionEmailWithGmail = async (orderData, customerEmail, includeReviewRequest = true, onProgress) => {
+  const updateProgress = (message) => {
+    if (onProgress) onProgress(message);
+    console.log('📧 Completion Email Progress:', message);
+  };
+
   try {
-    const updateProgress = (message) => {
-      if (onProgress) onProgress(message);
-      console.log('📧 Completion Email Progress:', message);
-    };
 
     updateProgress('Checking Gmail authorization...');
     

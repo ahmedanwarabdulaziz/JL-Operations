@@ -25,48 +25,88 @@ export const generateOrderEmailTemplate = (orderData) => {
       return '<p>No specific furniture items were detailed for this quote.</p>';
     }
 
+    // Debug: Log the furniture items data
+    console.log('🔍 Email Template Debug - Furniture items:', furnitureItemsArray);
+
     return furnitureItemsArray.map((item, index) => {
+      // Debug: Log each item
+      console.log(`🔍 Email Template Debug - Item ${index}:`, item);
       let labourText = '';
-      if (item.labourWork && parseFloat(item.labourWork) > 0) {
-        labourText = `Labour work for the ${item.furnitureType || 'item'} costs <strong>$${formatCurrency(item.labourWork)}</strong>`;
+      // Get labour price (correct field name)
+      const labourPrice = item.labourPrice || 0;
+      
+      console.log(`🔍 Debug - Item ${index} labour price:`, {
+        labourPrice: labourPrice,
+        availableFields: {
+          labourPrice: item.labourPrice,
+          labourWork: item.labourWork,
+          labourQnty: item.labourQnty,
+          paintingLabour: item.paintingLabour
+        }
+      });
+      
+      if (labourPrice > 0) {
+        labourText = `Professional upholstery labour for your ${item.furnitureType || 'item'} is <strong>$${formatCurrency(labourPrice)}</strong>`;
         if (item.labourNote && String(item.labourNote).trim() !== "") {
           let cleanLabourNote = String(item.labourNote).replace(/[()]/g, '').trim();
           if (cleanLabourNote) {
-            labourText += ` for ${cleanLabourNote}`;
+            labourText += ` (${cleanLabourNote})`;
           }
         }
         labourText += `.`;
+        console.log(`🔍 Debug - Labour text generated:`, labourText);
       }
 
       let materialOutput = '';
-      if (item.materialCode || (item.materialPrice && parseFloat(item.materialPrice) > 0) || (item.quantity && parseFloat(item.quantity) > 0)) {
-        materialOutput = `Material code you chose for your ${item.furnitureType || 'item'} is `;
+      // Calculate material total (price × quantity)
+      const materialPrice = item.materialPrice || item.materialJLPrice || 0;
+      const materialQnty = item.quantity || item.materialQnty || item.materialJLQnty || 0;
+      const materialTotal = parseFloat(materialPrice) * parseFloat(materialQnty);
+      
+      console.log(`🔍 Debug - Item ${index} material calculation:`, {
+        materialPrice: materialPrice,
+        materialQnty: materialQnty,
+        materialTotal: materialTotal
+      });
+      
+      if (item.materialCode || (materialPrice > 0) || (materialQnty > 0)) {
+        materialOutput = `For the fabric selection, your chosen material `;
         if (item.materialCode && String(item.materialCode).trim() !== "") {
           materialOutput += `(<strong>${String(item.materialCode).trim()}</strong>)`;
         } else {
-          materialOutput += `(not specified)`;
+          materialOutput += `(code to be specified)`;
         }
-        if (item.materialPrice && parseFloat(item.materialPrice) > 0) {
-          materialOutput += ` costs <strong>$${formatCurrency(item.materialPrice)}/yard</strong> (+Tax)`;
+        if (materialPrice > 0) {
+          materialOutput += ` is priced at <strong>$${formatCurrency(materialPrice)}/yard</strong> (+Tax)`;
         }
-        if (item.quantity && parseFloat(item.quantity) > 0) {
-          materialOutput += ((item.materialPrice && parseFloat(item.materialPrice) > 0) || (item.materialCode && String(item.materialCode).trim() !== "")) ?
-            ` and we need <strong>${parseFloat(item.quantity).toFixed(2)}</strong> yards.` :
-            ` We need <strong>${parseFloat(item.quantity).toFixed(2)}</strong> yards.`;
-        } else if (materialOutput.includes("costs") || (item.materialCode && String(item.materialCode).trim() !== "")) {
+        if (materialQnty > 0) {
+          materialOutput += ((materialPrice > 0) || (item.materialCode && String(item.materialCode).trim() !== "")) ?
+            ` and we need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.` :
+            ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.`;
+        } else if (materialOutput.includes("priced at") || (item.materialCode && String(item.materialCode).trim() !== "")) {
           materialOutput += `.`;
+        } else if (materialQnty > 0) {
+          materialOutput += ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.`;
         }
       }
+      console.log(`🔍 Debug - Material output generated:`, materialOutput);
 
       let foamHtmlOutput = '';
-      if ((item.foamPrice && parseFloat(item.foamPrice) > 0) || (item.foamThickness && String(item.foamThickness).trim() !== "")) {
-        foamHtmlOutput = `Regarding the foam, it will be `;
-        foamHtmlOutput += `high density commercial grade with one layer of Batting`;
+      // Get foam price (not total)
+      const foamPrice = item.foamPrice || 0;
+      
+      console.log(`🔍 Debug - Item ${index} foam price:`, {
+        foamPrice: foamPrice
+      });
+      
+      if ((foamPrice > 0) || (item.foamThickness && String(item.foamThickness).trim() !== "")) {
+        foamHtmlOutput = `For the cushioning, we will use `;
+        foamHtmlOutput += `high-density commercial grade foam with premium batting`;
         if (item.foamThickness && String(item.foamThickness).trim() !== "") {
-          foamHtmlOutput += ` <strong>${item.foamThickness}"</strong> thickness`;
+          foamHtmlOutput += ` (<strong>${item.foamThickness}"</strong> thickness)`;
         }
-        if (item.foamPrice && parseFloat(item.foamPrice) > 0) {
-          foamHtmlOutput += `, costing <strong>$${formatCurrency(item.foamPrice)}</strong> (+Tax)`;
+        if (foamPrice > 0) {
+          foamHtmlOutput += ` at <strong>$${formatCurrency(foamPrice)}</strong> (+Tax)`;
         }
         if (item.foamNote && String(item.foamNote).trim() !== "") {
           foamHtmlOutput += `, ${String(item.foamNote).trim()}`;
@@ -75,10 +115,17 @@ export const generateOrderEmailTemplate = (orderData) => {
       }
 
       let paintingHtmlOutput = '';
-      if ((item.paintingLabour && parseFloat(item.paintingLabour) > 0) || (item.paintingNote && String(item.paintingNote).trim() !== "")) {
-        paintingHtmlOutput = `For the painting service`;
-        if (item.paintingLabour && parseFloat(item.paintingLabour) > 0) {
-          paintingHtmlOutput += `, the labour cost will be <strong>$${formatCurrency(item.paintingLabour)}</strong> (+Tax)`;
+      // Get painting price (not total)
+      const paintingPrice = item.paintingLabour || 0;
+      
+      console.log(`🔍 Debug - Item ${index} painting price:`, {
+        paintingPrice: paintingPrice
+      });
+      
+      if ((paintingPrice > 0) || (item.paintingNote && String(item.paintingNote).trim() !== "")) {
+        paintingHtmlOutput = `For the finishing touches`;
+        if (paintingPrice > 0) {
+          paintingHtmlOutput += `, the professional painting service is <strong>$${formatCurrency(paintingPrice)}</strong> (+Tax)`;
         }
         if (item.paintingNote && String(item.paintingNote).trim() !== "") {
           paintingHtmlOutput += `, ${String(item.paintingNote).trim()}`;

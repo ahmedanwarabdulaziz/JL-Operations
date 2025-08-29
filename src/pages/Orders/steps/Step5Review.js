@@ -18,6 +18,7 @@ import {
   Weekend as WeekendIcon,
   Payment as PaymentIcon
 } from '@mui/icons-material';
+import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 
 // Utility function to check if a field has a meaningful value
 const hasValue = (value) => {
@@ -31,12 +32,25 @@ const hasValue = (value) => {
 };
 
 // Component to conditionally render a field with its label
-const ReviewField = ({ label, value, sx = {} }) => {
+const ReviewField = ({ label, value, sx = {}, isDate = false }) => {
   const hasValidValue = hasValue(value);
   
   if (!hasValidValue) {
     // Return empty space to preserve layout
     return <Box sx={{ height: 48, mb: 1 }} />;
+  }
+  
+  // Format the value based on type
+  let displayValue = value;
+  if (isDate) {
+    try {
+      displayValue = formatDateOnly(value);
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Date value:', value);
+      displayValue = 'Invalid Date';
+    }
+  } else if (typeof value === 'number' && value > 0) {
+    displayValue = `$${value}`;
   }
   
   return (
@@ -49,7 +63,7 @@ const ReviewField = ({ label, value, sx = {} }) => {
           ...sx
         }}
       >
-        {typeof value === 'number' && value > 0 ? `$${value}` : value}
+        {displayValue}
       </Typography>
     </Box>
   );
@@ -136,7 +150,7 @@ const Step5Review = ({
               <ReviewField label="Description" value={orderDetails.description} />
               <ReviewField label="Bill Invoice" value={orderDetails.billInvoice} />
               <ReviewField label="Platform" value={orderDetails.platform} />
-              <ReviewField label="Start Date" value={orderDetails.startDate} />
+              <ReviewField label="Start Date" value={orderDetails.startDate} isDate={true} />
               <ReviewField label="Timeline" value={orderDetails.timeline} />
             </Box>
           </CardContent>
@@ -234,12 +248,7 @@ const Step5Review = ({
                           <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.labourNote}</Typography>
                         </>
                       )}
-                      {hasValue(group.labourQnty || group.qntyLabour) && (
-                        <>
-                          <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Labour Quantity:</Typography>
-                          <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.labourQnty || group.qntyLabour}</Typography>
-                        </>
-                      )}
+
                     </Box>
                     {/* Foam Row - all fields in one row, only if foam price has value */}
                     {hasValue(group.foamPrice) && parseFloat(group.foamPrice) > 0 && (
@@ -262,12 +271,7 @@ const Step5Review = ({
                             <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.foamNote}</Typography>
                           </>
                         )}
-                        {hasValue(group.foamQnty || group.qntyFoam) && (
-                          <>
-                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Foam Quantity:</Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.foamQnty || group.qntyFoam}</Typography>
-                          </>
-                        )}
+
                       </Box>
                     )}
                     {/* Painting Row - all fields in one row, only if painting labour has value */}
@@ -285,12 +289,7 @@ const Step5Review = ({
                             <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 100, textAlign: 'left' }}>{group.paintingNote}</Typography>
                           </>
                         )}
-                        {hasValue(group.paintingQnty) && (
-                          <>
-                            <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 700, textTransform: 'uppercase', fontSize: 13 }}>Painting Quantity:</Typography>
-                            <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff', fontSize: 15, minWidth: 40, textAlign: 'left' }}>{group.paintingQnty}</Typography>
-                          </>
-                        )}
+
                       </Box>
                     )}
                     {/* Customer Note - only if has value */}

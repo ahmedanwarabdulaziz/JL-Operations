@@ -70,11 +70,13 @@ import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWit
 
 import useMaterialCompanies from '../shared/hooks/useMaterialCompanies';
 import { usePlatforms } from '../shared/hooks/usePlatforms';
+import { useTreatments } from '../shared/hooks/useTreatments';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
+import { formatDate, formatDateOnly, formatDateRange } from '../../../utils/dateUtils';
 import { useAutoSelect } from '../shared/hooks/useAutoSelect';
 
 const WorkshopPage = () => {
@@ -204,6 +206,7 @@ const WorkshopPage = () => {
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
+  const { treatments, loading: treatmentsLoading } = useTreatments();
   const { onFocus: handleAutoSelect } = useAutoSelect();
   const [materialTaxRates, setMaterialTaxRates] = useState({});
 
@@ -495,6 +498,12 @@ const WorkshopPage = () => {
         return;
       }
 
+      // Convert dates to Firestore Timestamps for consistent storage
+      const { Timestamp } = await import('firebase/firestore');
+      const firestoreStartDate = startDate ? Timestamp.fromDate(startDate) : null;
+      const firestoreEndDate = endDate ? Timestamp.fromDate(endDate) : null;
+      const firestoreNow = Timestamp.fromDate(new Date());
+
       // Prepare allocation data with detailed information
       const allocationData = {
         method: 'manual',
@@ -511,18 +520,18 @@ const WorkshopPage = () => {
             cost: cost,
             profit: profit,
             monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: new Date()
+            calculatedAt: firestoreNow
           };
         }),
-        appliedAt: new Date(),
+        appliedAt: firestoreNow,
         originalRevenue: totalRevenue,
         originalCost: totalCost,
         originalProfit: totalRevenue - totalCost,
         dateRange: {
-          startDate: startDate,
-          endDate: endDate
+          startDate: firestoreStartDate,
+          endDate: firestoreEndDate
         },
-        recalculatedAt: new Date()
+        recalculatedAt: firestoreNow
       };
 
       // Prepare update data
@@ -535,9 +544,9 @@ const WorkshopPage = () => {
       if (startDate && endDate) {
         updateData.orderDetails = {
           ...selectedOrderForAllocation.orderDetails,
-          startDate: startDate,
-          endDate: endDate,
-          lastUpdated: new Date()
+          startDate: firestoreStartDate,
+          endDate: firestoreEndDate,
+          lastUpdated: firestoreNow
         };
       }
 
@@ -559,15 +568,7 @@ const WorkshopPage = () => {
 
       const confirmed = await showEnhancedConfirm(
         'Confirm Order Completion & Email',
-        `Are you sure you want to complete this order and apply the allocation?\n\n` +
-        `Order: ${selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}\n` +
-        `Customer: ${selectedOrderForAllocation.personalInfo?.customerName || 'N/A'}\n` +
-        `Status: ${selectedOrderForAllocation.newStatus?.label || 'Done'}\n` +
-        `Date Range: ${startDate ? startDate.toLocaleDateString() : 'Not set'} - ${endDate ? endDate.toLocaleDateString() : 'Not set'}\n` +
-        `Allocations: ${allocationSummary}\n` +
-        `Total Revenue: ${formatCurrency(totalRevenue)}\n` +
-        `Total Cost: ${formatCurrency(totalCost)}\n` +
-        `Total Profit: ${formatCurrency(totalRevenue - totalCost)}`,
+        '', // Empty message since we display order/customer info directly in dialog
         hasEmail,
         includeReviewRequest
       );
@@ -1349,6 +1350,74 @@ const WorkshopPage = () => {
     }
   };
 
+  // Completion Email Dialog State
+  const [completionEmailDialog, setCompletionEmailDialog] = useState({
+    open: false,
+    sendEmail: true,
+    includeReview: true
+  });
+
+  // Completion Email Functions
+  const handleSendCompletionEmail = () => {
+    if (!selectedOrder?.personalInfo?.email) {
+      showError('No customer email available for this order');
+      return;
+    }
+    
+    // Open the completion email dialog
+    setCompletionEmailDialog({
+      open: true,
+      sendEmail: true,
+      includeReview: true
+    });
+  };
+
+  const handleCompletionEmailConfirm = async () => {
+    try {
+      setSendingCompletionEmail(true);
+      setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+      
+      // Prepare order data for email
+      const orderDataForEmail = {
+        personalInfo: selectedOrder.personalInfo,
+        orderDetails: selectedOrder.orderDetails,
+        furnitureData: {
+          groups: selectedOrder.furnitureData?.groups || []
+        },
+        paymentData: selectedOrder.paymentData
+      };
+
+      // Progress callback for email sending
+      const onEmailProgress = (message) => {
+        console.log('🔍 Admin Workshop Debug - Completion email progress:', message);
+        showSuccess(`📧 ${message}`);
+      };
+
+      // Send the completion email
+      const emailResult = await sendCompletionEmailWithGmail(
+        orderDataForEmail, 
+        selectedOrder.personalInfo.email, 
+        completionEmailDialog.includeReview, // includeReviewRequest
+        onEmailProgress
+      );
+      
+      if (emailResult.success) {
+        showSuccess('✅ Completion email sent successfully!');
+      } else {
+        showError(`❌ Failed to send completion email: ${emailResult.message}`);
+      }
+    } catch (error) {
+      console.error('🔍 Admin Workshop Debug - Error sending completion email:', error);
+      showError(`Failed to send completion email: ${error.message}`);
+    } finally {
+      setSendingCompletionEmail(false);
+    }
+  };
+
+  const handleCompletionEmailCancel = () => {
+    setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+  };
+
   // Handle deposit received
   const handleDepositReceived = async () => {
     if (!selectedOrder) {
@@ -1876,6 +1945,53 @@ const WorkshopPage = () => {
                 >
                   {getStatusInfo(selectedOrder.invoiceStatus).label}
                 </Button>
+
+                {/* Send Completion Email Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  startIcon={sendingCompletionEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <CheckCircleIcon sx={{ color: '#000000' }} />}
+                  onClick={handleSendCompletionEmail}
+                  disabled={sendingCompletionEmail || !selectedOrder?.personalInfo?.email}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: 2,
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #4CAF50',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #45a049',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
+                      transform: 'translateY(-1px)'
+                    },
+                    '&:disabled': {
+                      background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                      border: '3px solid #666666',
+                      color: '#666666',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                    },
+                    transition: 'all 0.3s ease',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
+                  }}
+                >
+                  {sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}
+                </Button>
               </Box>
             </Box>
 
@@ -2230,9 +2346,15 @@ const WorkshopPage = () => {
                                          selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery' : 
                                          'Pickup & Delivery'}
                                   </Typography>
-                                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                                    ${selectedOrder.paymentData.pickupDeliveryCost || '0.00'}
-                                  </Typography>
+                                                                                                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
+                                   ${(() => {
+                                     const cost = selectedOrder.paymentData.pickupDeliveryCost || 0;
+                                     const displayValue = selectedOrder.paymentData.pickupDeliveryServiceType === 'both' 
+                                       ? cost * 2 
+                                       : cost;
+                                     return displayValue % 1 === 0 ? displayValue.toString() : displayValue.toFixed(2);
+                                   })()}
+                                 </Typography>
                                 </Box>
                                 
                                 {/* Bottom Row: Status Indicator and Text */}
@@ -2249,9 +2371,9 @@ const WorkshopPage = () => {
                                     color: '#4caf50',
                                     fontSize: '0.7rem'
                                   }}>
-                                    {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'Pickup Only' : 
-                                     selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery Only' : 
-                                     'Both Services'}
+                                                                          {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'One Way' :
+                                       selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'One Way' :
+                                       'Both Services'}
                                   </Typography>
                                 </Box>
                               </CardContent>
@@ -2470,8 +2592,8 @@ const WorkshopPage = () => {
                               </Tooltip>
                             </Box>
                             
-                            {/* Row 1: Material Company - Material Code */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                            {/* Row 1: Material Company - Material Code - Treatment */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
@@ -2523,6 +2645,50 @@ const WorkshopPage = () => {
                                 size="small"
                                 fullWidth
                               />
+                              <FormControl fullWidth size="small">
+                                <InputLabel 
+                                  sx={{ 
+                                    backgroundColor: '#2a2a2a',
+                                    color: '#ffffff',
+                                    px: 1,
+                                    '&.Mui-focused': {
+                                      backgroundColor: '#2a2a2a',
+                                      color: '#ffffff'
+                                    }
+                                  }}
+                                >
+                                  Treatment
+                                </InputLabel>
+                                <Select
+                                  value={currentGroup.treatment || ''}
+                                  onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
+                                  displayEmpty
+                                  disabled={treatmentsLoading}
+                                  sx={{
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderWidth: '2px',
+                                      borderColor: 'grey.300',
+                                      borderRadius: 2,
+                                    },
+                                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                    },
+                                    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                      borderWidth: '2px',
+                                    },
+                                  }}
+                                >
+                                  <MenuItem value="" disabled>
+                                    {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
+                                  </MenuItem>
+                                  {treatments.map((treatment) => (
+                                    <MenuItem key={treatment.id} value={treatment.treatmentKind}>
+                                      {treatment.treatmentKind}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
                             </Box>
 
                             {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -2634,8 +2800,9 @@ const WorkshopPage = () => {
                             </Box>
 
                             {/* Foam Toggle */}
-                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
+                            <Box sx={{ mb: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
                               <FormControlLabel
+                                sx={{ p: 1 }}
                                 control={
                                   <Switch
                                     checked={currentGroup.foamEnabled || false}
@@ -2731,8 +2898,9 @@ const WorkshopPage = () => {
                             )}
                             
                             {/* Painting Section */}
-                            <Box sx={{ mb: 2, p: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
+                            <Box sx={{ mb: 2, background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)', borderRadius: 1, border: '2px solid #8b6b1f' }}>
                               <FormControlLabel
+                                sx={{ p: 1 }}
                                 control={
                                   <Switch
                                     checked={currentGroup.paintingEnabled || false}
@@ -3095,8 +3263,8 @@ const WorkshopPage = () => {
                       </Typography>
                     </Box>
                     
-                    {/* Row 1: Material Company - Material Code */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                    {/* Row 1: Material Company - Material Code - Treatment */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel 
                           sx={{ 
@@ -3146,6 +3314,48 @@ const WorkshopPage = () => {
                         size="small"
                         fullWidth
                       />
+                      <FormControl fullWidth size="small">
+                        <InputLabel 
+                          sx={{ 
+                            backgroundColor: 'white',
+                            px: 1,
+                            '&.Mui-focused': {
+                              backgroundColor: 'white'
+                            }
+                          }}
+                        >
+                          Treatment
+                        </InputLabel>
+                        <Select
+                          value={group.treatment || ''}
+                          onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
+                          displayEmpty
+                          disabled={treatmentsLoading}
+                          sx={{
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              borderWidth: '2px',
+                              borderColor: 'grey.300',
+                              borderRadius: 2,
+                            },
+                            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                            },
+                            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                              borderWidth: '2px',
+                            },
+                          }}
+                        >
+                          <MenuItem value="" disabled>
+                            {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
+                          </MenuItem>
+                          {treatments.map((treatment) => (
+                            <MenuItem key={treatment.id} value={treatment.treatmentKind}>
+                              {treatment.treatmentKind}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                     </Box>
 
                     {/* Row 2: Material Qnty - Material JL Qnty - Material Price - Material JL Price */}
@@ -3237,7 +3447,7 @@ const WorkshopPage = () => {
                     </Box>
 
                     {/* Foam Toggle */}
-                    <Box sx={{ mb: 2, p: 2, backgroundColor: '#f8f9fa', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                    <Box sx={{ mb: 2, backgroundColor: '#f8f9fa', borderRadius: 1, border: '1px solid #e0e0e0' }}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -3356,42 +3566,53 @@ const WorkshopPage = () => {
       <Dialog 
         open={paymentDialog} 
         onClose={handleClosePaymentDialog}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#1a1a1a',
+            color: '#ffffff',
+            borderRadius: 2,
+            border: '2px solid #333333'
+          }
+        }}
       >
         <DialogTitle sx={{ 
-          backgroundColor: '#f27921', 
-          color: 'white',
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
           display: 'flex',
           alignItems: 'center',
-          gap: 1
+          gap: 1,
+          borderBottom: '2px solid #333333',
+          fontWeight: 'bold'
         }}>
           <PaymentIcon />
           Payment Details
         </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
+        <DialogContent sx={{ pt: 3, backgroundColor: '#1a1a1a' }}>
           {selectedOrder && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* Invoice Information (Read-only) */}
               <Box sx={{ 
-                backgroundColor: '#f5f5f5', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #e0e0e0'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#1976d2' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Invoice Information
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Invoice Number</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Invoice Number</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff' }}>
                       #{selectedOrder.orderDetails?.billInvoice || 'N/A'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Customer Name</Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Customer Name</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#ffffff' }}>
                       {selectedOrder.personalInfo?.customerName || 'N/A'}
                     </Typography>
                   </Box>
@@ -3400,29 +3621,30 @@ const WorkshopPage = () => {
 
               {/* Payment Summary (Read-only) */}
               <Box sx={{ 
-                backgroundColor: '#e8f5e8', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #c8e6c9'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#2e7d32' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Payment Summary
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Total Invoice Amount</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Total Invoice Amount</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#f27921' }}>
                       ${calculateInvoiceTotals(selectedOrder).grandTotal.toFixed(2)}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Amount Paid</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Amount Paid</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
                       ${selectedOrder.paymentData?.amountPaid || '0.00'}
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">Remaining Balance</Typography>
+                    <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Remaining Balance</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
                       ${(calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2)}
                     </Typography>
@@ -3432,15 +3654,16 @@ const WorkshopPage = () => {
 
               {/* New Payment Form */}
               <Box sx={{ 
-                backgroundColor: '#fff3e0', 
-                p: 2, 
+                backgroundColor: '#2a2a2a', 
+                p: 3, 
                 borderRadius: 2,
-                border: '1px solid #ffcc02'
+                border: '2px solid #333333',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
               }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#e65100' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                   Add New Payment
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <TextField
                     label="Payment Amount"
                     type="number"
@@ -3454,14 +3677,25 @@ const WorkshopPage = () => {
                       startAdornment: <InputAdornment position="start">$</InputAdornment>,
                     }}
                     sx={{
-                      '& .MuiOutlinedInput-root': {
-                        '&:hover': {
-                          borderColor: '#f27921'
-                        },
-                        '&.Mui-focused': {
-                          borderColor: '#f27921'
-                        }
-                      }
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
                     }}
                   />
                   <TextField
@@ -3476,6 +3710,27 @@ const WorkshopPage = () => {
                     InputLabelProps={{
                       shrink: true,
                     }}
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
+                    }}
                   />
                   <TextField
                     label="Payment Notes (Optional)"
@@ -3487,6 +3742,27 @@ const WorkshopPage = () => {
                     multiline
                     rows={2}
                     placeholder="Enter any notes about this payment..."
+                    sx={{
+                      backgroundColor: '#1a1a1a',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: '#333333',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#b98f33',
+                        borderWidth: '2px',
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiInputBase-input': {
+                        color: '#ffffff',
+                      },
+                    }}
                   />
                 </Box>
               </Box>
@@ -3494,33 +3770,48 @@ const WorkshopPage = () => {
               {/* Payment History */}
               {selectedOrder.paymentData?.payments && selectedOrder.paymentData.payments.length > 0 && (
                 <Box sx={{ 
-                  backgroundColor: '#f3e5f5', 
-                  p: 2, 
+                  backgroundColor: '#2a2a2a', 
+                  p: 3, 
                   borderRadius: 2,
-                  border: '1px solid #ce93d8'
+                  border: '2px solid #333333',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
                 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#7b1fa2' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#b98f33' }}>
                     Payment History
                   </Typography>
                   <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
                     {selectedOrder.paymentData.payments.map((payment, index) => (
                       <Box key={index} sx={{ 
-                        p: 1.5, 
+                        p: 2, 
                         mb: 1, 
-                        backgroundColor: 'white', 
+                        backgroundColor: '#1a1a1a', 
                         borderRadius: 1,
-                        border: '1px solid #e1bee7'
+                        border: '1px solid #333333'
                       }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#ffffff' }}>
                             ${payment.amount.toFixed(2)}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {new Date(payment.date).toLocaleDateString()}
+                          <Typography variant="body2" sx={{ color: '#b98f33' }}>
+                            {(() => {
+                              try {
+                                if (payment.date?.toDate) {
+                                  return payment.date.toDate().toLocaleDateString();
+                                } else if (payment.date?.seconds) {
+                                  return new Date(payment.date.seconds * 1000).toLocaleDateString();
+                                } else if (payment.date) {
+                                  return new Date(payment.date).toLocaleDateString();
+                                }
+                                return '-';
+                              } catch (error) {
+                                console.error('Error formatting payment date:', error);
+                                return '-';
+                              }
+                            })()}
                           </Typography>
                         </Box>
                         {payment.notes && (
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mt: 0.5, fontStyle: 'italic' }}>
                             {payment.notes}
                           </Typography>
                         )}
@@ -3532,20 +3823,15 @@ const WorkshopPage = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={handleClosePaymentDialog} variant="outlined">
+        <DialogActions sx={{ p: 3, gap: 2, backgroundColor: '#1a1a1a', borderTop: '2px solid #333333' }}>
+          <Button onClick={handleClosePaymentDialog} sx={buttonStyles.cancelButton}>
             Cancel
           </Button>
           <Button 
             onClick={handleAddNewPayment} 
             variant="contained"
             disabled={!paymentForm.paymentAmount || parseFloat(paymentForm.paymentAmount) <= 0}
-            sx={{
-              backgroundColor: '#f27921',
-              '&:hover': {
-                backgroundColor: '#e65100'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Save Payment
           </Button>
@@ -3967,7 +4253,20 @@ const WorkshopPage = () => {
                   <strong>Order:</strong> {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  <strong>Date Range:</strong> {startDate ? startDate.toLocaleDateString() : 'Not set'} - {endDate ? endDate.toLocaleDateString() : 'Not set'}
+                  <strong>Date Range:</strong> {(() => {
+                    try {
+                      const startDateStr = startDate?.toDate ? startDate.toDate().toLocaleDateString() :
+                        (startDate?.seconds ? new Date(startDate.seconds * 1000).toLocaleDateString() :
+                        (startDate ? new Date(startDate).toLocaleDateString() : 'Not set'));
+                      const endDateStr = endDate?.toDate ? endDate.toDate().toLocaleDateString() :
+                        (endDate?.seconds ? new Date(endDate.seconds * 1000).toLocaleDateString() :
+                        (endDate ? new Date(endDate).toLocaleDateString() : 'Not set'));
+                      return `${startDateStr} - ${endDateStr}`;
+                    } catch (error) {
+                      console.error('Error formatting date range:', error);
+                      return 'Invalid Date Range';
+                    }
+                  })()}
                 </Typography>
                 <Typography variant="body2" sx={{ mb: 1 }}>
                   <strong>Total Revenue:</strong> {formatCurrency(totalRevenue)}
@@ -4056,17 +4355,31 @@ const WorkshopPage = () => {
         </DialogTitle>
         
         <DialogContent sx={{ mt: 2 }}>
-          <Typography 
-            variant="body1" 
-            sx={{ 
-              whiteSpace: 'pre-line', 
-              lineHeight: 1.6,
-              mb: 2,
-              color: '#ffffff'
-            }}
-          >
-            {enhancedConfirmDialog.message}
-          </Typography>
+          {/* Order and Customer Info in Big Font */}
+          <Box sx={{ 
+            p: 3, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 3,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h4" sx={{ 
+              color: '#b98f33', 
+              mb: 2, 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Order: {selectedOrderForAllocation?.orderDetails?.billInvoice || selectedOrderForAllocation?.id || 'N/A'}
+            </Typography>
+            <Typography variant="h4" sx={{ 
+              color: '#ffffff', 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Customer: {selectedOrderForAllocation?.personalInfo?.customerName || 'N/A'}
+            </Typography>
+          </Box>
 
           {enhancedConfirmDialog.hasEmail ? (
             <Box sx={{ 
@@ -4183,6 +4496,164 @@ const WorkshopPage = () => {
             }}
           >
             Complete Order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Completion Email Dialog */}
+      <Dialog
+        open={completionEmailDialog.open}
+        onClose={handleCompletionEmailCancel}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #b98f33',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#2a2a2a', 
+          color: '#ffffff',
+          borderBottom: '2px solid #b98f33',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <span style={{ fontSize: '24px' }}>📧</span>
+          Send Completion Email
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          {/* Order and Customer Info in Big Font */}
+          <Box sx={{ 
+            p: 3, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 3,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h4" sx={{ 
+              color: '#b98f33', 
+              mb: 2, 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Order: {selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A'}
+            </Typography>
+            <Typography variant="h4" sx={{ 
+              color: '#ffffff', 
+              fontWeight: 'bold',
+              fontSize: '2rem'
+            }}>
+              Customer: {selectedOrder?.personalInfo?.customerName || 'N/A'}
+            </Typography>
+          </Box>
+
+          {/* Email Options */}
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #b98f33',
+            mb: 2
+          }}>
+            <Typography variant="h6" sx={{ color: '#b98f33', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+              📧 Email Options
+            </Typography>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.sendEmail}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, sendEmail: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Send completion email to customer"
+              sx={{ 
+                color: '#ffffff',
+                mb: 1,
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.includeReview}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, includeReview: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Include Google review request"
+              sx={{ 
+                color: '#ffffff',
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <Typography variant="body2" sx={{ 
+              mt: 1, 
+              color: '#cccccc', 
+              fontStyle: 'italic',
+              fontSize: '13px'
+            }}>
+              The email will include a warm thank you message, treatment care instructions, and a review request.
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={handleCompletionEmailCancel}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCompletionEmailConfirm}
+            disabled={!completionEmailDialog.sendEmail}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              fontWeight: 'bold',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              },
+            }}
+          >
+            Send Email
           </Button>
         </DialogActions>
       </Dialog>

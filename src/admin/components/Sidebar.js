@@ -39,7 +39,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ConstructionIcon from '@mui/icons-material/Construction';
-import FlashOnIcon from '@mui/icons-material/FlashOn';
+
 
 import { useFirebaseStatus } from '../shared/contexts/FirebaseContext';
 
@@ -49,7 +49,7 @@ const menuItems = [
   { text: 'Orders', path: '/admin/orders', icon: <ReceiptIcon /> },
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
-  { text: 'Flash Invoices', path: '/admin/flash-invoices', icon: <FlashOnIcon /> },
+
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
   { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
