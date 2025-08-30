@@ -55,7 +55,7 @@ import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/fi
 import { db } from '../shared/firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData } from '../shared/utils/orderCalculations';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
 import { formatDate, formatDateOnly, formatDateRange, toDateObject } from '../../../utils/dateUtils';
 
@@ -116,6 +116,9 @@ const FinancePage = () => {
     averageProfitMargin: 0,
     paidAmount: 0,
     pendingAmount: 0,
+    totalExtraExpenses: 0,
+    totalPickupDelivery: 0,
+    totalTax: 0,
     totalOrders: 0
   });
 
@@ -196,6 +199,27 @@ const FinancePage = () => {
     let orderCost = profitData.cost;
     let orderProfit = profitData.profit;
     let orderPaidAmount = normalizedPayment.amountPaid;
+    let orderExtraExpenses = 0;
+    let orderPickupDelivery = 0;
+    let orderTax = 0;
+    
+    // Calculate extra expenses total
+    if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
+      orderExtraExpenses = order.extraExpenses.reduce((sum, exp) => {
+        return sum + (parseFloat(exp.total) || 0);
+      }, 0);
+    }
+    
+    // Calculate pickup & delivery cost
+    if (order.paymentData?.pickupDeliveryEnabled) {
+      const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
+      const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+      orderPickupDelivery = calculatePickupDeliveryCost(baseCost, serviceType);
+    }
+    
+    // Calculate tax on the base amount (before pickup & delivery)
+    const baseRevenueForTax = orderRevenue - orderPickupDelivery;
+    orderTax = baseRevenueForTax * 0.13; // 13% tax rate
     
     // For allocated orders, calculate partial amounts based on date filter
     if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
@@ -209,19 +233,31 @@ const FinancePage = () => {
       // Calculate total allocation percentage for the filtered date range
       let totalAllocationPercentage = 0;
       order.allocation.allocations.forEach(allocation => {
-        const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+        const allocationDate = new Date(allocation.year, allocation.month, 1);
         if (allocationDate >= fromDate && allocationDate <= toDate) {
           totalAllocationPercentage += allocation.percentage || 0;
         }
       });
       
+
+      
       // Only apply allocation if there are allocations in the date range
       if (totalAllocationPercentage > 0) {
         const allocationMultiplier = totalAllocationPercentage / 100;
+        
+        // Apply allocation to all components
         orderRevenue = profitData.revenue * allocationMultiplier;
         orderCost = profitData.cost * allocationMultiplier;
         orderProfit = profitData.profit * allocationMultiplier;
         orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
+        orderExtraExpenses = orderExtraExpenses * allocationMultiplier;
+        orderPickupDelivery = orderPickupDelivery * allocationMultiplier;
+        
+        // Recalculate tax on allocated base revenue
+        const allocatedBaseRevenueForTax = orderRevenue - orderPickupDelivery;
+        orderTax = allocatedBaseRevenueForTax * 0.13;
+        
+
       }
     }
     
@@ -230,6 +266,9 @@ const FinancePage = () => {
       cost: orderCost,
       profit: orderProfit,
       paidAmount: orderPaidAmount,
+      extraExpenses: orderExtraExpenses,
+      pickupDelivery: orderPickupDelivery,
+      tax: orderTax,
       profitPercentage: orderRevenue > 0 ? (orderProfit / orderRevenue) * 100 : 0
     };
   };
@@ -240,44 +279,17 @@ const FinancePage = () => {
       const profitData = calculateOrderProfit(order);
       const normalizedPayment = normalizePaymentData(order.paymentData);
       
-      let orderRevenue = profitData.revenue;
-      let orderCost = profitData.cost;
-      let orderProfit = profitData.profit;
-      let orderPaidAmount = normalizedPayment.amountPaid;
+      // Use the enhanced calculatePartialAmounts function
+      const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
       
-      // For allocated orders, calculate partial amounts based on date filter
-      if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
-        const fromDate = new Date(appliedDateFrom);
-        const toDate = new Date(appliedDateTo);
-        
-        // Set time to start/end of day for accurate comparison
-        fromDate.setHours(0, 0, 0, 0);
-        toDate.setHours(23, 59, 59, 999);
-        
-        // Calculate total allocation percentage for the filtered date range
-        let totalAllocationPercentage = 0;
-        order.allocation.allocations.forEach(allocation => {
-          const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
-          if (allocationDate >= fromDate && allocationDate <= toDate) {
-            totalAllocationPercentage += allocation.percentage || 0;
-          }
-        });
-        
-        // Only apply allocation if there are allocations in the date range
-        if (totalAllocationPercentage > 0) {
-          const allocationMultiplier = totalAllocationPercentage / 100;
-          orderRevenue = profitData.revenue * allocationMultiplier;
-          orderCost = profitData.cost * allocationMultiplier;
-          orderProfit = profitData.profit * allocationMultiplier;
-          orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
-        }
-      }
-      
-      acc.totalRevenue += orderRevenue;
-      acc.totalCost += orderCost;
-      acc.totalProfit += orderProfit;
-      acc.paidAmount += orderPaidAmount;
-      acc.pendingAmount += (orderRevenue - orderPaidAmount);
+      acc.totalRevenue += partialAmounts.revenue;
+      acc.totalCost += partialAmounts.cost;
+      acc.totalProfit += partialAmounts.profit;
+      acc.paidAmount += partialAmounts.paidAmount;
+      acc.pendingAmount += (partialAmounts.revenue - partialAmounts.paidAmount);
+      acc.totalExtraExpenses += partialAmounts.extraExpenses;
+      acc.totalPickupDelivery += partialAmounts.pickupDelivery;
+      acc.totalTax += partialAmounts.tax;
       acc.totalOrders += 1;
       
       return acc;
@@ -287,6 +299,9 @@ const FinancePage = () => {
       totalProfit: 0, 
       paidAmount: 0, 
       pendingAmount: 0, 
+      totalExtraExpenses: 0,
+      totalPickupDelivery: 0,
+      totalTax: 0,
       totalOrders: 0 
     });
     
@@ -313,31 +328,13 @@ const FinancePage = () => {
         
         // For allocated orders, check both allocation months and order dates
         if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
-          // Debug logging for allocated orders
-          if (order.orderDetails?.billInvoice === '116017') {
-            console.log('Admin - Order 116017 allocation debugging:', {
-              orderId: order.id,
-              billInvoice: order.orderDetails?.billInvoice,
-              allocations: order.allocation.allocations,
-              startDate: order.orderDetails?.startDate,
-              endDate: order.orderDetails?.endDate,
-              fromDate: fromDate,
-              toDate: toDate
-            });
-          }
+
           
           // Check if any allocation month falls within the selected date range
           const hasAllocationInRange = order.allocation.allocations.some(allocation => {
-            const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
+            const allocationDate = new Date(allocation.year, allocation.month, 1);
             
-            // Debug logging for order 116017
-            if (order.orderDetails?.billInvoice === '116017') {
-              console.log('Admin - Allocation check for 116017:', {
-                allocation: allocation,
-                allocationDate: allocationDate,
-                isInRange: allocationDate >= fromDate && allocationDate <= toDate
-              });
-            }
+
             
             return allocationDate >= fromDate && allocationDate <= toDate;
           });
@@ -352,14 +349,7 @@ const FinancePage = () => {
               // Check if the order date range overlaps with the filter date range
               hasOrderDateInRange = (orderStartDate <= toDate && orderEndDate >= fromDate);
               
-              // Debug logging for order 116017
-              if (order.orderDetails?.billInvoice === '116017') {
-                console.log('Admin - Order date check for 116017:', {
-                  orderStartDate: orderStartDate,
-                  orderEndDate: orderEndDate,
-                  hasOrderDateInRange: hasOrderDateInRange
-                });
-              }
+
             } catch (error) {
               console.error('Error checking order dates for allocated order:', error);
             }
@@ -368,14 +358,7 @@ const FinancePage = () => {
           // Return true if either allocation months OR order dates fall within the range
           const finalResult = hasAllocationInRange || hasOrderDateInRange;
           
-          // Debug logging for order 116017
-          if (order.orderDetails?.billInvoice === '116017') {
-            console.log('Admin - Order 116017 final result:', {
-              hasAllocationInRange: hasAllocationInRange,
-              hasOrderDateInRange: hasOrderDateInRange,
-              finalResult: finalResult
-            });
-          }
+
           
           return finalResult;
         } else {
@@ -1106,6 +1089,78 @@ const FinancePage = () => {
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
                   {financialSummary.totalRevenue > 0 ? 
                     ((financialSummary.paidAmount / financialSummary.totalRevenue) * 100).toFixed(1) : 0}%
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Extra Expenses Summary Card */}
+        <Grid item xs={6} sm={3} md={1.5}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
+                  Extra Expenses
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
+                  {formatCurrency(financialSummary.totalExtraExpenses)}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Pickup & Delivery Summary Card */}
+        <Grid item xs={6} sm={3} md={1.5}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <AssignmentIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
+                  Pickup & Delivery
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
+                  {formatCurrency(financialSummary.totalPickupDelivery)}
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        {/* Tax Summary Card */}
+        <Grid item xs={6} sm={3} md={1.5}>
+          <Card sx={{ 
+            backgroundColor: '#2a2a2a', 
+            color: '#ffffff', 
+            height: '100%',
+            border: '1px solid #333333',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
+          }}>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
+                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
+                  Tax Amount
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
+                  {formatCurrency(financialSummary.totalTax)}
                 </Typography>
               </Box>
             </CardContent>

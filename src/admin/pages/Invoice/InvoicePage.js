@@ -477,7 +477,7 @@ const InvoicePage = () => {
                   </tr>
                   ${group.labourPrice && parseFloat(group.labourPrice) > 0 ? `
                     <tr>
-                      <td>Labour ${group.labourNote ? group.labourNote : 'without piping design'}</td>
+                      <td>Labour ${group.labourNote || ''}</td>
                       <td style="text-align: right">$${(parseFloat(group.labourPrice) || 0).toFixed(2)}</td>
                       <td style="text-align: right">${group.labourQnty || 1}</td>
                       <td style="text-align: right">$${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}</td>
@@ -903,7 +903,7 @@ const InvoicePage = () => {
                    minHeight: '24px'
                  }}>
                    <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
-                     Labour {group.labourNote ? group.labourNote : 'without piping design'}
+                     Labour {group.labourNote || ''}
                    </Box>
                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                      ${(parseFloat(group.labourPrice) || 0).toFixed(2)}

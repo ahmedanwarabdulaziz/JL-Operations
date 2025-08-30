@@ -99,7 +99,7 @@ export const generateOrderEmailTemplate = (orderData) => {
       });
       
       if ((foamPrice > 0) || (item.foamThickness && String(item.foamThickness).trim() !== "")) {
-        foamHtmlOutput = `For the cushioning, we will use `;
+        foamHtmlOutput = `For the foam, we will use `;
         foamHtmlOutput += `high-density commercial grade foam with premium batting`;
         if (item.foamThickness && String(item.foamThickness).trim() !== "") {
           foamHtmlOutput += ` (<strong>${item.foamThickness}"</strong> thickness)`;
@@ -122,7 +122,7 @@ export const generateOrderEmailTemplate = (orderData) => {
       });
       
       if ((paintingPrice > 0) || (item.paintingNote && String(item.paintingNote).trim() !== "")) {
-        paintingHtmlOutput = `For the finishing touches`;
+        paintingHtmlOutput = `For the painting`;
         if (paintingPrice > 0) {
           paintingHtmlOutput += `, the professional painting service is <strong>$${formatCurrency(paintingPrice)}</strong> (+Tax)`;
         }

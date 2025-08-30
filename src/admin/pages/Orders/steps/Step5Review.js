@@ -19,6 +19,7 @@ import {
   Payment as PaymentIcon
 } from '@mui/icons-material';
 import { formatDateOnly } from '../../../../utils/dateUtils';
+import { calculatePickupDeliveryCost } from '../../../../utils/orderCalculations';
 
 const SectionHeader = ({ icon, label }) => (
   <Box sx={{
@@ -245,10 +246,17 @@ const Step5Review = ({
                 ${paymentDetails.amountPaid}
               </Typography>
             </Box>
-            {paymentDetails.pickupDeliveryEnabled && (
+            {paymentDetails.pickupDeliveryCost && paymentDetails.pickupDeliveryServiceType && (
               <Box>
                 <Typography variant="body2" color="text.secondary">Pickup & Delivery Cost</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#b98f33' }}>${paymentDetails.pickupDeliveryCost}</Typography>
+                <Typography variant="h5" sx={{ fontWeight: 700, color: '#DAA520', fontSize: '1.5rem' }}>
+                  ${calculatePickupDeliveryCost(paymentDetails.pickupDeliveryCost, paymentDetails.pickupDeliveryServiceType)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#DAA520', fontStyle: 'italic', fontWeight: 600, fontSize: '0.9rem' }}>
+                  {paymentDetails.pickupDeliveryServiceType === 'pickup' ? 'Pickup Only' :
+                   paymentDetails.pickupDeliveryServiceType === 'delivery' ? 'Delivery Only' :
+                   paymentDetails.pickupDeliveryServiceType === 'both' ? 'Pickup & Delivery (2x service)' : ''}
+                </Typography>
               </Box>
             )}
             {paymentDetails.notes && (

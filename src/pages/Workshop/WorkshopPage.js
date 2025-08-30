@@ -1359,10 +1359,30 @@ const WorkshopPage = () => {
   const getStatusColor = (order) => {
     const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
     const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const depositReceived = order.paymentData?.depositReceived;
     
-    if (order.paymentData?.depositReceived) return 'warning';
-    if (amountPaid >= requiredDeposit && requiredDeposit > 0) return 'success';
-    if (amountPaid > 0) return 'warning';
+    // Debug logging
+    console.log('Status Debug:', {
+      orderId: order.id,
+      requiredDeposit,
+      amountPaid,
+      depositReceived,
+      condition1: depositReceived,
+      condition2: (amountPaid >= requiredDeposit && requiredDeposit > 0)
+    });
+    
+    // If deposit is received or amount paid >= required deposit, show green
+    if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
+      console.log('Returning SUCCESS (green)');
+      return 'success';
+    }
+    // If some payment made but not enough, show orange
+    if (amountPaid > 0) {
+      console.log('Returning WARNING (orange)');
+      return 'warning';
+    }
+    // No payment made, show red
+    console.log('Returning ERROR (red)');
     return 'error';
   };
 
@@ -1370,10 +1390,15 @@ const WorkshopPage = () => {
   const getStatusText = (order) => {
     const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
     const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const depositReceived = order.paymentData?.depositReceived;
     
-    if (order.paymentData?.depositReceived) return 'Deposit Received';
-    if (amountPaid >= requiredDeposit && requiredDeposit > 0) return 'Paid';
-    if (amountPaid > 0) return 'Partial';
+    // Match the same logic as getStatusColor
+    if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
+      return 'Deposit Received';
+    }
+    if (amountPaid > 0) {
+      return 'Partial';
+    }
     return 'Not Paid';
   };
 
@@ -2278,57 +2303,52 @@ const WorkshopPage = () => {
                     <ListItemText
                       primary={
                         <Box>
-                          {/* Invoice Number */}
-                          <Typography 
-                            variant="h5" 
-                            sx={{ 
-                              fontWeight: 'bold',
-                              color: 'primary.main',
-                              mb: 1
-                            }}
-                          >
-                            #{order.orderDetails?.billInvoice || 'N/A'}
-                          </Typography>
-                          
-                          {/* Customer Details */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                            <PersonIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                            <Typography variant="body2" color="text.secondary">
+                          {/* Invoice Number and Customer Name */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography 
+                              variant="h5" 
+                              sx={{ 
+                                fontWeight: 'bold',
+                                color: 'primary.main'
+                              }}
+                            >
+                              #{order.orderDetails?.billInvoice || 'N/A'}
+                            </Typography>
+                            <Typography 
+                              variant="body1" 
+                              sx={{ 
+                                fontWeight: 600,
+                                color: 'text.secondary',
+                                fontSize: '0.9rem'
+                              }}
+                            >
                               {order.personalInfo?.customerName || 'No Name'}
                             </Typography>
                           </Box>
-                          
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                            <EmailIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                            <Typography variant="body2" color="text.secondary">
-                              {order.personalInfo?.email || 'No Email'}
-                            </Typography>
-                          </Box>
-                          
-                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                            <PhoneIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
-                            <Typography variant="body2" color="text.secondary">
-                              {order.personalInfo?.phone || 'No Phone'}
-                            </Typography>
-                          </Box>
 
-                          {/* Status and Date */}
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Chip
-                                label={getStatusText(order)}
-                                color={getStatusColor(order)}
-                                size="small"
-                              />
-                              {order.allocation && order.allocation.allocations && (
-                                <Tooltip title="Has allocation data">
-                                  <BarChartIcon sx={{ fontSize: 16, color: '#4CAF50' }} />
-                                </Tooltip>
-                              )}
-                            </Box>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatDate(order.createdAt)}
-                            </Typography>
+                          {/* Status */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Chip
+                              label={getStatusText(order)}
+                              size="small"
+                              sx={{
+                                backgroundColor: getStatusColor(order) === 'success' ? '#4CAF50' : 
+                                                getStatusColor(order) === 'warning' ? '#FF9800' : 
+                                                getStatusColor(order) === 'error' ? '#F44336' : '#757575',
+                                color: 'white',
+                                fontWeight: 'bold',
+                                border: 'none',
+                                outline: 'none',
+                                '& .MuiChip-root': {
+                                  border: 'none'
+                                }
+                              }}
+                            />
+                            {order.allocation && order.allocation.allocations && (
+                              <Tooltip title="Has allocation data">
+                                <BarChartIcon sx={{ fontSize: 16, color: '#4CAF50' }} />
+                              </Tooltip>
+                            )}
                           </Box>
                         </Box>
                       }
@@ -3156,6 +3176,12 @@ const WorkshopPage = () => {
                                   onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
                                   displayEmpty
                                   disabled={treatmentsLoading}
+                                  renderValue={(value) => {
+                                    if (!value) {
+                                      return <span style={{ color: '#666' }}>Select Treatment</span>;
+                                    }
+                                    return value;
+                                  }}
                                   sx={{
                                     '& .MuiOutlinedInput-notchedOutline': {
                                       borderWidth: '2px',
@@ -3171,9 +3197,11 @@ const WorkshopPage = () => {
                                     },
                                   }}
                                 >
-                                  <MenuItem value="" disabled>
-                                    {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
-                                  </MenuItem>
+                                  {treatmentsLoading && (
+                                    <MenuItem value="" disabled>
+                                      Loading treatments...
+                                    </MenuItem>
+                                  )}
                                   {treatments.map((treatment) => (
                                     <MenuItem key={treatment.id} value={treatment.treatmentKind}>
                                       {treatment.treatmentKind}
@@ -3821,6 +3849,12 @@ const WorkshopPage = () => {
                           onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
                           displayEmpty
                           disabled={treatmentsLoading}
+                          renderValue={(value) => {
+                            if (!value) {
+                              return <span style={{ color: '#666' }}>Select Treatment</span>;
+                            }
+                            return value;
+                          }}
                           sx={{
                             '& .MuiOutlinedInput-notchedOutline': {
                               borderWidth: '2px',
@@ -3836,9 +3870,11 @@ const WorkshopPage = () => {
                             },
                           }}
                         >
-                          <MenuItem value="" disabled>
-                            {treatmentsLoading ? 'Loading treatments...' : 'Select Treatment'}
-                          </MenuItem>
+                          {treatmentsLoading && (
+                            <MenuItem value="" disabled>
+                              Loading treatments...
+                            </MenuItem>
+                          )}
                           {treatments.map((treatment) => (
                             <MenuItem key={treatment.id} value={treatment.treatmentKind}>
                               {treatment.treatmentKind}
