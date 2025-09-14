@@ -38,6 +38,7 @@ const Step3Furniture = ({
       materialCode: '',
       materialQnty: '',
       materialPrice: '',
+      unit: 'Yard', // Default unit
       labourPrice: '',
       labourNote: '',
       labourQnty: 1,
@@ -236,6 +237,32 @@ const Step3Furniture = ({
                     },
                   }}
                 />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <FormControl fullWidth>
+                  <Select
+                    value={group.unit || 'Yard'}
+                    onChange={(e) => updateFurnitureGroup(index, 'unit', e.target.value)}
+                    displayEmpty
+                    sx={{
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderWidth: '2px',
+                        borderColor: 'grey.300',
+                        borderRadius: 2,
+                      },
+                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                      },
+                      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'primary.main',
+                        borderWidth: '2px',
+                      },
+                    }}
+                  >
+                    <MenuItem value="Yard">Yard</MenuItem>
+                    <MenuItem value="SQF">SQF</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
             </Grid>
 
