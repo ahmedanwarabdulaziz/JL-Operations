@@ -37,7 +37,8 @@ const Step2OrderDetails = ({
       </Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <TextField
+        {/* Order Description field hidden as requested */}
+        {/* <TextField
           fullWidth
           label="Order Description"
           value={orderDetails.description}
@@ -60,7 +61,7 @@ const Step2OrderDetails = ({
               borderWidth: '2px',
             },
           }}
-        />
+        /> */}
 
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>

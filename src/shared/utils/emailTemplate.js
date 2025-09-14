@@ -76,17 +76,21 @@ export const generateOrderEmailTemplate = (orderData) => {
         } else {
           materialOutput += `(code to be specified)`;
         }
+        // Get the unit from the furniture group (default to 'Yard' if not specified)
+        const unit = item.unit || 'Yard';
+        const unitLower = unit.toLowerCase();
+        
         if (materialPrice > 0) {
-          materialOutput += ` is priced at <strong>$${formatCurrency(materialPrice)}/yard</strong> (+Tax)`;
+          materialOutput += ` is priced at <strong>$${formatCurrency(materialPrice)}/${unitLower}</strong> (+Tax)`;
         }
         if (materialQnty > 0) {
           materialOutput += ((materialPrice > 0) || (item.materialCode && String(item.materialCode).trim() !== "")) ?
-            ` and we need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.` :
-            ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.`;
+            ` and we need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> ${unitLower}s.` :
+            ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> ${unitLower}s.`;
         } else if (materialOutput.includes("priced at") || (item.materialCode && String(item.materialCode).trim() !== "")) {
           materialOutput += `.`;
         } else if (materialQnty > 0) {
-          materialOutput += ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> yards.`;
+          materialOutput += ` We need <strong>${parseFloat(materialQnty).toFixed(2)}</strong> ${unitLower}s.`;
         }
       }
 

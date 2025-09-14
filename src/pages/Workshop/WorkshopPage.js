@@ -3104,8 +3104,8 @@ const WorkshopPage = () => {
                               </Tooltip>
                             </Box>
                             
-                            {/* Row 1: Material Company - Material Code - Treatment */}
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                            {/* Row 1: Material Company - Material Code - Treatment - Unit */}
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 2 }}>
                               <FormControl fullWidth size="small">
                                 <InputLabel 
                                   sx={{ 
@@ -3158,19 +3158,6 @@ const WorkshopPage = () => {
                                 fullWidth
                               />
                               <FormControl fullWidth size="small">
-                                <InputLabel 
-                                  sx={{ 
-                                    backgroundColor: '#2a2a2a',
-                                    color: '#ffffff',
-                                    px: 1,
-                                    '&.Mui-focused': {
-                                      backgroundColor: '#2a2a2a',
-                                      color: '#ffffff'
-                                    }
-                                  }}
-                                >
-                                  Treatment
-                                </InputLabel>
                                 <Select
                                   value={currentGroup.treatment || ''}
                                   onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
@@ -3207,6 +3194,30 @@ const WorkshopPage = () => {
                                       {treatment.treatmentKind}
                                     </MenuItem>
                                   ))}
+                                </Select>
+                              </FormControl>
+                              <FormControl fullWidth size="small">
+                                <Select
+                                  value={currentGroup.unit || 'Yard'}
+                                  onChange={(e) => updateFurnitureGroup(index, 'unit', e.target.value)}
+                                  displayEmpty
+                                  sx={{
+                                    '& .MuiOutlinedInput-notchedOutline': {
+                                      borderWidth: '2px',
+                                      borderColor: 'grey.300',
+                                      borderRadius: 2,
+                                    },
+                                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                    },
+                                    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                      borderColor: 'primary.main',
+                                      borderWidth: '2px',
+                                    },
+                                  }}
+                                >
+                                  <MenuItem value="Yard">Yard</MenuItem>
+                                  <MenuItem value="SQF">SQF</MenuItem>
                                 </Select>
                               </FormControl>
                             </Box>
@@ -3781,8 +3792,8 @@ const WorkshopPage = () => {
                       </Typography>
                     </Box>
                     
-                    {/* Row 1: Material Company - Material Code - Treatment */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 2 }}>
+                    {/* Row 1: Material Company - Material Code - Treatment - Unit */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 2 }}>
                       <FormControl fullWidth size="small">
                         <InputLabel 
                           sx={{ 
@@ -3833,17 +3844,6 @@ const WorkshopPage = () => {
                         fullWidth
                       />
                       <FormControl fullWidth size="small">
-                        <InputLabel 
-                          sx={{ 
-                            backgroundColor: 'white',
-                            px: 1,
-                            '&.Mui-focused': {
-                              backgroundColor: 'white'
-                            }
-                          }}
-                        >
-                          Treatment
-                        </InputLabel>
                         <Select
                           value={group.treatment || ''}
                           onChange={(e) => updateFurnitureGroup(index, 'treatment', e.target.value)}
@@ -3880,6 +3880,30 @@ const WorkshopPage = () => {
                               {treatment.treatmentKind}
                             </MenuItem>
                           ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={group.unit || 'Yard'}
+                          onChange={(e) => updateFurnitureGroup(index, 'unit', e.target.value)}
+                          displayEmpty
+                          sx={{
+                            '& .MuiOutlinedInput-notchedOutline': {
+                              borderWidth: '2px',
+                              borderColor: 'grey.300',
+                              borderRadius: 2,
+                            },
+                            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                            },
+                            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                              borderColor: 'primary.main',
+                              borderWidth: '2px',
+                            },
+                          }}
+                        >
+                          <MenuItem value="Yard">Yard</MenuItem>
+                          <MenuItem value="SQF">SQF</MenuItem>
                         </Select>
                       </FormControl>
                     </Box>

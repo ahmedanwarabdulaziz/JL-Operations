@@ -1451,7 +1451,7 @@ const InvoicePage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 200px)' }}>
+      <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 120px)' }}>
         {/* Orders List */}
         <Box sx={{ width: 300, flexShrink: 0 }}>
           <Paper elevation={2} sx={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: '2px solid #333333' }}>

@@ -17,7 +17,8 @@ import {
   List,
   ListItem,
   ListItemText,
-  Divider
+  Divider,
+  LinearProgress
 } from '@mui/material';
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -65,6 +66,17 @@ const NewOrderPage = () => {
   const [isUsingExistingCustomer, setIsUsingExistingCustomer] = useState(false);
   const [selectedExistingCustomer, setSelectedExistingCustomer] = useState(null);
   const [sendEmail, setSendEmail] = useState(true);
+  
+  // Email popup state
+  const [emailPopupOpen, setEmailPopupOpen] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState(null);
+  const [emailError, setEmailError] = useState(null);
+  
+  // Order summary popup state
+  const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
+  const [showTotal, setShowTotal] = useState(false);
+  const [orderTotal, setOrderTotal] = useState(0);
   
   // Form data state
   const [personalInfo, setPersonalInfo] = useState({
@@ -536,6 +548,45 @@ const NewOrderPage = () => {
     }
   };
 
+  // Calculate order total
+  const calculateOrderTotal = () => {
+    let total = 0;
+    
+    // Calculate furniture groups total
+    furnitureGroups.forEach(group => {
+      // Material cost
+      const materialPrice = parseFloat(group.materialPrice || 0);
+      const materialQnty = parseFloat(group.materialQnty || 0);
+      const materialTotal = materialPrice * materialQnty;
+      
+      // Labor cost
+      const labourPrice = parseFloat(group.labourPrice || 0);
+      const labourQnty = parseFloat(group.labourQnty || 1);
+      const labourTotal = labourPrice * labourQnty;
+      
+      // Foam cost (if enabled)
+      let foamTotal = 0;
+      if (group.foamEnabled) {
+        const foamPrice = parseFloat(group.foamPrice || 0);
+        const foamQnty = parseFloat(group.foamQnty || 1);
+        foamTotal = foamPrice * foamQnty;
+      }
+      
+      // Painting cost (if enabled)
+      let paintingTotal = 0;
+      if (group.paintingEnabled) {
+        const paintingLabour = parseFloat(group.paintingLabour || 0);
+        const paintingQnty = parseFloat(group.paintingQnty || 1);
+        paintingTotal = paintingLabour * paintingQnty;
+      }
+      
+      total += materialTotal + labourTotal + foamTotal + paintingTotal;
+    });
+    
+    setOrderTotal(total);
+    setShowTotal(true);
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
@@ -665,6 +716,12 @@ const NewOrderPage = () => {
       
       // Send email if enabled (for both new and edit modes)
       if (sendEmail && personalInfo.email) {
+        // Show email popup and start sending process
+        setEmailPopupOpen(true);
+        setEmailSending(true);
+        setEmailResult(null);
+        setEmailError(null);
+        
         try {
           const orderDataForEmail = {
             personalInfo,
@@ -678,26 +735,34 @@ const NewOrderPage = () => {
           // Auto-check and authorize Gmail if needed
           await ensureGmailAuthorized();
           const emailResult = await sendEmailWithConfig(orderDataForEmail, personalInfo.email);
+          setEmailSending(false);
+          
           if (emailResult.success) {
+            setEmailResult({ success: true });
             const action = isEditMode ? 'updated' : 'created';
-            showSuccess(`Order ${action} and email sent successfully!`);
+            showSuccess(`Order ${action} successfully!`);
           } else {
+            setEmailError({ message: emailResult.message });
             const action = isEditMode ? 'updated' : 'created';
-            showError(`Order ${action} but failed to send email: ` + emailResult.message);
+            showSuccess(`Order ${action} successfully!`);
           }
         } catch (emailError) {
           console.error('Error sending email:', emailError);
+          setEmailSending(false);
+          
           if (emailError.message.includes('Not signed in')) {
-            const action = isEditMode ? 'updated' : 'created';
-            showError(`Order ${action} but email not sent: Please sign in with Gmail first`);
+            setEmailError({ message: 'Please sign in with Gmail first' });
           } else {
-            const action = isEditMode ? 'updated' : 'created';
-            showError(`Order ${action} but failed to send email`);
+            setEmailError({ message: emailError.message || 'Failed to send email' });
           }
+          
+          const action = isEditMode ? 'updated' : 'created';
+          showSuccess(`Order ${action} successfully!`);
         }
+      } else {
+        // No email to send, show order summary
+        setOrderSummaryOpen(true);
       }
-      
-              navigate('/admin/orders');
     } catch (error) {
       console.error('Error saving order:', error);
       showError(`Failed to ${isEditMode ? 'update' : 'create'} order`);
@@ -825,6 +890,500 @@ const NewOrderPage = () => {
       </Box>
     );
   }
+
+  // Order Summary Popup Component
+  const OrderSummaryPopup = () => (
+    <Dialog 
+      open={orderSummaryOpen} 
+      onClose={() => {}} 
+      maxWidth="lg" 
+      fullWidth
+      disableEscapeKeyDown
+      PaperProps={{
+        sx: {
+          backgroundColor: '#1a1a1a',
+          borderRadius: 2,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          border: '2px solid #333333'
+        }
+      }}
+    >
+      <DialogTitle sx={{ 
+        textAlign: 'center', 
+        pb: 2,
+        backgroundColor: '#2a2a2a',
+        color: '#b98f33',
+        borderRadius: '8px 8px 0 0',
+        background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)',
+        borderBottom: '2px solid #333333'
+      }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
+          📋 Order Summary
+        </Typography>
+        <Typography variant="h6" sx={{ color: '#ffffff', opacity: 0.9 }}>
+          Order #{orderDetails.billInvoice} - {personalInfo.customerName}
+        </Typography>
+      </DialogTitle>
+      <DialogContent sx={{ py: 4, px: 3, backgroundColor: '#1a1a1a' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Customer Information */}
+          <Paper elevation={2} sx={{ 
+            p: 3, 
+            borderRadius: 2,
+            backgroundColor: '#2a2a2a',
+            border: '1px solid #333333'
+          }}>
+            <Typography variant="h5" sx={{ 
+              fontWeight: 'bold', 
+              mb: 3, 
+              color: '#b98f33',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              👤 Customer Information
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Name:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{personalInfo.customerName}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Phone:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{personalInfo.phone}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Email:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{personalInfo.email}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Address:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{personalInfo.address}</Typography>
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Order Details */}
+          <Paper elevation={2} sx={{ 
+            p: 3, 
+            borderRadius: 2,
+            backgroundColor: '#2a2a2a',
+            border: '1px solid #333333'
+          }}>
+            <Typography variant="h5" sx={{ 
+              fontWeight: 'bold', 
+              mb: 3, 
+              color: '#b98f33',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              📝 Order Details
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Bill Invoice:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{orderDetails.billInvoice}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Platform:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{orderDetails.platform}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Start Date:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{orderDetails.startDate}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Timeline:</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>{orderDetails.timeline}</Typography>
+              </Box>
+            </Box>
+          </Paper>
+
+          {/* Furniture Groups */}
+          <Paper elevation={2} sx={{ 
+            p: 3, 
+            borderRadius: 2,
+            backgroundColor: '#2a2a2a',
+            border: '1px solid #333333'
+          }}>
+            <Typography variant="h5" sx={{ 
+              fontWeight: 'bold', 
+              mb: 3, 
+              color: '#b98f33',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              🪑 Furniture Items ({furnitureGroups.length})
+            </Typography>
+            {furnitureGroups.map((group, index) => (
+              <Box key={index} sx={{ 
+                mb: 3, 
+                p: 3, 
+                border: '2px solid #333333', 
+                borderRadius: 2,
+                backgroundColor: '#1a1a1a'
+              }}>
+                <Typography variant="h6" sx={{ 
+                  fontWeight: 'bold', 
+                  mb: 2, 
+                  color: '#b98f33',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  {index + 1}. {group.furnitureType || `Furniture Group ${index + 1}`}
+                </Typography>
+                
+                {/* Material Information */}
+                {(group.materialCompany || group.materialCode || group.materialQnty || group.materialPrice) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>Material Details:</Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2 }}>
+                      {group.materialCompany && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Company:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.materialCompany}</Typography>
+                        </Box>
+                      )}
+                      {group.materialCode && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Code:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.materialCode}</Typography>
+                        </Box>
+                      )}
+                      {group.materialQnty && parseFloat(group.materialQnty) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Quantity:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.materialQnty} {group.unit || 'Yard'}</Typography>
+                        </Box>
+                      )}
+                      {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Price:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>${parseFloat(group.materialPrice).toFixed(2)}</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Labor Information */}
+                {(group.labourPrice || group.labourQnty || group.labourNote) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>Labor Details:</Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                      {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Price:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>${parseFloat(group.labourPrice).toFixed(2)}</Typography>
+                        </Box>
+                      )}
+                      {group.labourQnty && parseFloat(group.labourQnty) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Quantity:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.labourQnty}</Typography>
+                        </Box>
+                      )}
+                      {group.labourNote && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Note:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.labourNote}</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Foam Information */}
+                {group.foamEnabled && (group.foamPrice || group.foamQnty || group.foamNote) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>Foam Details:</Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                      {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Price:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>${parseFloat(group.foamPrice).toFixed(2)}</Typography>
+                        </Box>
+                      )}
+                      {group.foamQnty && parseFloat(group.foamQnty) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Quantity:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.foamQnty}</Typography>
+                        </Box>
+                      )}
+                      {group.foamNote && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Note:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.foamNote}</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Painting Information */}
+                {group.paintingEnabled && (group.paintingLabour || group.paintingQnty || group.paintingNote) && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>Painting Details:</Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                      {group.paintingLabour && parseFloat(group.paintingLabour) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Labor:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>${parseFloat(group.paintingLabour).toFixed(2)}</Typography>
+                        </Box>
+                      )}
+                      {group.paintingQnty && parseFloat(group.paintingQnty) > 0 && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Quantity:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.paintingQnty}</Typography>
+                        </Box>
+                      )}
+                      {group.paintingNote && (
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Note:</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, color: '#ffffff' }}>{group.paintingNote}</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Customer Note */}
+                {group.customerNote && (
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>Customer Note:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500, fontStyle: 'italic', color: '#ffffff' }}>"{group.customerNote}"</Typography>
+                  </Box>
+                )}
+              </Box>
+            ))}
+          </Paper>
+
+          {/* Payment Information */}
+          <Paper elevation={2} sx={{ 
+            p: 3, 
+            borderRadius: 2,
+            backgroundColor: '#2a2a2a',
+            border: '1px solid #333333'
+          }}>
+            <Typography variant="h5" sx={{ 
+              fontWeight: 'bold', 
+              mb: 3, 
+              color: '#b98f33',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              💰 Payment Information
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
+              {paymentDetails.deposit && parseFloat(paymentDetails.deposit) > 0 && (
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Deposit:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
+                    ${parseFloat(paymentDetails.deposit).toFixed(2)}
+                  </Typography>
+                </Box>
+              )}
+              {paymentDetails.amountPaid && parseFloat(paymentDetails.amountPaid) > 0 && (
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Amount Paid:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
+                    ${parseFloat(paymentDetails.amountPaid).toFixed(2)}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            {paymentDetails.notes && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Notes:</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 500, fontStyle: 'italic', color: '#ffffff' }}>"{paymentDetails.notes}"</Typography>
+              </Box>
+            )}
+          </Paper>
+
+          {/* Order Total */}
+          {showTotal && (
+            <Paper elevation={3} sx={{ 
+              p: 4, 
+              backgroundColor: '#2a2a2a', 
+              border: '3px solid #b98f33',
+              borderRadius: 2
+            }}>
+              <Typography variant="h4" sx={{ 
+                fontWeight: 'bold', 
+                textAlign: 'center', 
+                color: '#b98f33',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2
+              }}>
+                💵 Total Order Value: ${orderTotal.toFixed(2)}
+              </Typography>
+            </Paper>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ 
+        justifyContent: 'center', 
+        pb: 4, 
+        gap: 3,
+        backgroundColor: '#2a2a2a',
+        borderRadius: '0 0 8px 8px',
+        borderTop: '2px solid #333333'
+      }}>
+        <Button 
+          onClick={calculateOrderTotal}
+          sx={{
+            ...buttonStyles.secondaryButton,
+            minWidth: 160,
+            fontSize: '1rem',
+            fontWeight: 'bold'
+          }}
+          disabled={showTotal}
+        >
+          {showTotal ? '✅ Total Calculated' : '🧮 Calculate Total'}
+        </Button>
+        <Button 
+          onClick={() => {
+            setOrderSummaryOpen(false);
+            setShowTotal(false);
+            navigate('/admin/orders');
+          }} 
+          sx={{
+            ...buttonStyles.primaryButton,
+            minWidth: 200,
+            fontSize: '1rem',
+            fontWeight: 'bold'
+          }}
+        >
+          ✅ Finish & Go to Orders
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  // Email Popup Component
+  const EmailPopup = () => (
+    <Dialog 
+      open={emailPopupOpen} 
+      onClose={() => {}} 
+      maxWidth="sm" 
+      fullWidth
+      disableEscapeKeyDown
+    >
+      <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
+        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+          {emailSending ? 'Sending Email...' : emailResult ? 'Email Status' : 'Email Error'}
+        </Typography>
+      </DialogTitle>
+      <DialogContent sx={{ textAlign: 'center', py: 3 }}>
+        {emailSending && (
+          <Box>
+            <CircularProgress size={60} sx={{ mb: 2 }} />
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Sending order details to {personalInfo.email}...
+            </Typography>
+            <LinearProgress sx={{ mt: 2 }} />
+          </Box>
+        )}
+        
+        {emailResult && !emailSending && (
+          <Box>
+            <Alert severity="success" sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                Email Sent Successfully!
+              </Typography>
+              <Typography variant="body2">
+                Order details have been sent to <strong>{personalInfo.email}</strong>
+              </Typography>
+            </Alert>
+          </Box>
+        )}
+        
+        {emailError && !emailSending && (
+          <Box>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                Email Not Sent
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                {emailError.message || 'Failed to send email. Please check your Gmail authentication.'}
+              </Typography>
+            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              You may need to authenticate with Google to send emails.
+            </Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+        {emailResult && (
+          <Button 
+            onClick={() => {
+              setEmailPopupOpen(false);
+              setEmailResult(null);
+              setOrderSummaryOpen(true);
+            }} 
+            variant="contained" 
+            color="primary"
+            sx={{ minWidth: 120 }}
+          >
+            Continue
+          </Button>
+        )}
+        
+        {emailError && (
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button 
+              onClick={() => {
+                setEmailPopupOpen(false);
+                setEmailError(null);
+                setOrderSummaryOpen(true);
+              }} 
+              variant="outlined"
+              sx={{ minWidth: 120 }}
+            >
+              Skip Email
+            </Button>
+            <Button 
+              onClick={async () => {
+                setEmailError(null);
+                setEmailSending(true);
+                try {
+                  await ensureGmailAuthorized();
+                  const orderDataForEmail = {
+                    personalInfo,
+                    orderDetails,
+                    furnitureData: { groups: furnitureGroups },
+                    paymentData: paymentDetails
+                  };
+                  const result = await sendEmailWithConfig(orderDataForEmail, personalInfo.email);
+                  setEmailSending(false);
+                  if (result.success) {
+                    setEmailResult({ success: true });
+                  } else {
+                    setEmailError({ message: result.message });
+                  }
+                } catch (error) {
+                  setEmailSending(false);
+                  setEmailError({ message: error.message });
+                }
+              }} 
+              variant="contained" 
+              color="primary"
+              sx={{ minWidth: 120 }}
+            >
+              Authenticate & Retry
+            </Button>
+          </Box>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -1049,6 +1608,12 @@ const NewOrderPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Order Summary Popup */}
+      <OrderSummaryPopup />
+      
+      {/* Email Popup */}
+      <EmailPopup />
     </Container>
   );
 };
