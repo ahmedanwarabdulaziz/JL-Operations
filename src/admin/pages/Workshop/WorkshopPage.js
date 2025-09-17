@@ -73,7 +73,7 @@ import { usePlatforms } from '../shared/hooks/usePlatforms';
 import { useTreatments } from '../shared/hooks/useTreatments';
 import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData } from '../shared/utils/orderCalculations';
+import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
 import { formatDate, formatDateOnly, formatDateRange } from '../../../utils/dateUtils';
@@ -943,25 +943,38 @@ const WorkshopPage = () => {
 
   // Use consistent calculation functions from orderCalculations
   const calculateInvoiceTotals = (order) => {
-    const revenue = calculateOrderTotal(order); // Includes tax
-    const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
+    // Calculate individual components properly
     const taxAmount = calculateOrderTax(order);
-    
-
-    
     const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
       calculatePickupDeliveryCost(
         parseFloat(order.paymentData.pickupDeliveryCost) || 0,
         order.paymentData.pickupDeliveryServiceType || 'both'
       ) : 0;
+    
+    // Use the existing breakdown function to get accurate totals
+    const breakdown = getOrderCostBreakdown(order);
+    let itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
+    
+    // Add extra expenses to items subtotal (customer-facing)
+    if (order.extraExpenses && order.extraExpenses.length > 0) {
+      const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
+        return sum + (parseFloat(exp.total) || 0);
+      }, 0);
+      itemsSubtotal += extraExpensesTotal;
+    }
+    
+    // Calculate grand total
+    const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
+    
     const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const balanceDue = revenue - amountPaid;
+    const balanceDue = grandTotal - amountPaid;
+    const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
 
     return {
-      itemsSubtotal: revenue - taxAmount - pickupDeliveryCost, // Subtract pickupDeliveryCost from itemsSubtotal
-      taxAmount,
-      pickupDeliveryCost,
-      grandTotal: revenue, // Grand total includes pickup & delivery
+      itemsSubtotal, // Now correctly shows only materials + labour + foam + painting
+      taxAmount, // 13% on materials and foam only
+      pickupDeliveryCost, // Separate line item (1x for pickup/delivery, 2x for both)
+      grandTotal, // itemsSubtotal + taxAmount + pickupDeliveryCost
       amountPaid,
       balanceDue,
       jlGrandTotal: cost,

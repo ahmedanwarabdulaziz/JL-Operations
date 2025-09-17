@@ -709,10 +709,10 @@ const StatusManagementPage = () => {
     let total = 0;
     if (order.furnitureData?.groups) {
       order.furnitureData.groups.forEach(group => {
-        total += (parseFloat(group.materialPrice) || 0) * (parseInt(group.materialQnty) || 0);
-        total += (parseFloat(group.labourPrice) || 0) * (parseInt(group.labourQnty) || 0);
+        total += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
+        total += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
         if (group.foamEnabled || group.foamPrice > 0) {
-          total += (parseFloat(group.foamPrice) || 0) * (parseInt(group.foamQnty) || 0);
+          total += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
         }
       });
     }
