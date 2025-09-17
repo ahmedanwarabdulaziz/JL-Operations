@@ -70,7 +70,6 @@ import {
   Inventory as InventoryIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
-import { useGmailAuth } from '../../contexts/GmailAuthContext';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
 
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
@@ -170,7 +169,6 @@ const WorkshopPage = () => {
   const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
   
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
-  const { gmailSignedIn, gmailUser, signIn } = useGmailAuth();
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
@@ -2933,14 +2931,11 @@ const WorkshopPage = () => {
                   {/* {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && (
                     <Box sx={{ mt: 3 }}>
                       <Alert 
-                        severity={gmailSignedIn ? "success" : "info"}
-                        icon={gmailSignedIn ? <CheckIcon /> : <EmailIcon />}
+                        severity="success"
+                        icon={<CheckIcon />}
                       >
                         <Typography variant="body2">
-                          {gmailSignedIn 
-                            ? `Ready to send emails using ${gmailUser?.email || 'your Google account'}`
-                            : 'Email functionality will be available once you sign in with your Google account'
-                          }
+                          Ready to send emails using your Google account
                         </Typography>
                       </Alert>
                     </Box>

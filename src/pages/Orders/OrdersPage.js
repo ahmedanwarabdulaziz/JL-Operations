@@ -291,41 +291,33 @@ const OrdersPage = () => {
   const getStatusColor = (order) => {
     const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
     const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const depositReceived = order.paymentData?.depositReceived;
     
-    // Ensure amounts are valid numbers
-    const validAmountPaid = isNaN(amountPaid) ? 0 : amountPaid;
-    const validRequiredDeposit = isNaN(requiredDeposit) ? 0 : requiredDeposit;
-    
-    if (validAmountPaid >= validRequiredDeposit && validRequiredDeposit > 0) return 'success';
-    if (validAmountPaid > 0) return 'warning';
+    // If deposit is received or amount paid >= required deposit, show green
+    if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
+      return 'success';
+    }
+    // If some payment made but not enough, show orange
+    if (amountPaid > 0) {
+      return 'warning';
+    }
+    // If no payment made, show red
     return 'error';
   };
 
   // Get status text
   const getStatusText = (order) => {
-    const total = calculateOrderTotal(order);
     const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
     const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const depositReceived = order.paymentData?.depositReceived;
     
-    console.log('Order Status Debug:', {
-      orderId: order.id,
-      customerName: order.personalInfo?.customerName,
-      total: total,
-      requiredDeposit: requiredDeposit,
-      amountPaid: amountPaid,
-      amountPaidType: typeof order.paymentData?.amountPaid,
-      rawAmountPaid: order.paymentData?.amountPaid,
-      isAmountPaidZero: amountPaid === 0,
-      isAmountPaidPositive: amountPaid > 0,
-      isAmountPaidEnough: amountPaid >= requiredDeposit
-    });
-    
-    // Ensure amounts are valid numbers
-    const validAmountPaid = isNaN(amountPaid) ? 0 : amountPaid;
-    const validRequiredDeposit = isNaN(requiredDeposit) ? 0 : requiredDeposit;
-    
-    if (validAmountPaid >= validRequiredDeposit && validRequiredDeposit > 0) return 'Paid';
-    if (validAmountPaid > 0) return 'Partial';
+    // Match the same logic as getStatusColor
+    if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
+      return 'Deposit Received';
+    }
+    if (amountPaid > 0) {
+      return 'Partial';
+    }
     return 'Not Paid';
   };
 
@@ -549,19 +541,29 @@ const OrdersPage = () => {
                       {order.orderDetails?.financialStatus ? (
                         <Chip
                           label={order.orderDetails.financialStatus}
-                          color={
-                            order.orderDetails.financialStatus === 'Deposit Paid' ? 'warning' :
-                            order.orderDetails.financialStatus === 'Deposit Not Paid' ? 'error' : 'default'
-                          }
                           size="small"
-                          sx={{ fontWeight: 'bold' }}
+                          sx={{
+                            backgroundColor: order.orderDetails.financialStatus === 'Deposit Paid' ? '#4CAF50' :
+                                           order.orderDetails.financialStatus === 'Deposit Not Paid' ? '#F44336' : '#757575',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            border: 'none',
+                            outline: 'none'
+                          }}
                         />
                       ) : (
                         <Chip
                           label={getStatusText(order)}
-                          color={getStatusColor(order)}
                           size="small"
-                          sx={{ fontWeight: 'bold' }}
+                          sx={{
+                            backgroundColor: getStatusColor(order) === 'success' ? '#4CAF50' : 
+                                           getStatusColor(order) === 'warning' ? '#FF9800' : 
+                                           getStatusColor(order) === 'error' ? '#F44336' : '#757575',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            border: 'none',
+                            outline: 'none'
+                          }}
                         />
                       )}
                     </TableCell>

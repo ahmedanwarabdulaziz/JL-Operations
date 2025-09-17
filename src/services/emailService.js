@@ -35,55 +35,30 @@ export const saveGmailConfig = (config) => {
   }
 };
 
-// Request Gmail permissions and get access token
-export const requestGmailPermissions = async () => {
+// Get Gmail configuration from login (no separate authentication needed)
+export const getGmailConfig = () => {
   try {
-    const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+    // Get access token from localStorage (set during login)
+    const accessToken = localStorage.getItem('gmailAccessToken');
+    const gmailUser = localStorage.getItem('gmailUser');
     
-    // Create Google provider with Gmail scopes
-    const googleProvider = new GoogleAuthProvider();
-    
-    // Add basic scopes
-    googleProvider.addScope('profile');
-    googleProvider.addScope('email');
-    googleProvider.addScope('openid');
-    
-    // Add Gmail scopes for full email access
-    googleProvider.addScope('https://www.googleapis.com/auth/gmail.send');
-    googleProvider.addScope('https://www.googleapis.com/auth/gmail.compose');
-    googleProvider.addScope('https://www.googleapis.com/auth/gmail.modify');
-    
-    // Force consent to get fresh token
-    googleProvider.setCustomParameters({
-      prompt: 'consent',
-      access_type: 'offline'
-    });
-    
-    console.log('🔄 Requesting Gmail permissions...');
-    
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    const accessToken = credential?.accessToken;
-    
-    if (accessToken) {
-      console.log('✅ Gmail access token obtained successfully');
-      
-      // Save Gmail configuration
+    if (accessToken && gmailUser) {
+      const userData = JSON.parse(gmailUser);
       const config = {
         accessToken: accessToken,
-        userEmail: user.email,
+        userEmail: userData.email,
         isConfigured: true
       };
       
+      // Save to gmailConfig for compatibility
       saveGmailConfig(config);
       return config;
-    } else {
-      throw new Error('No access token received from Google');
     }
+    
+    return { isConfigured: false };
   } catch (error) {
-    console.error('Failed to get Gmail permissions:', error);
-    throw error;
+    console.error('Failed to get Gmail config:', error);
+    return { isConfigured: false };
   }
 };
 
@@ -157,16 +132,10 @@ const sendEmailViaGmail = async (to, subject, htmlContent, config) => {
 
 // Auto-check and authorize Gmail if needed
 export const ensureGmailAuthorized = async () => {
-  const config = loadGmailConfig();
+  const config = getGmailConfig();
   if (!config.isConfigured) {
-    console.log('🔄 Gmail not authorized, requesting permissions...');
-    try {
-      const result = await requestGmailPermissions();
-      return result;
-    } catch (error) {
-      console.error('Failed to authorize Gmail:', error);
-      throw new Error('Gmail authorization required. Please authorize Gmail access first.');
-    }
+    console.log('🔄 Gmail not authorized, please login first...');
+    throw new Error('Gmail authorization required. Please login to the application first.');
   }
   
   // Test the current token to see if it's still valid

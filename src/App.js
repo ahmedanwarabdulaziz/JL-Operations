@@ -6,7 +6,6 @@ import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'r
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './components/Common/NotificationSystem';
 import { FirebaseProvider } from './contexts/FirebaseContext';
-import { GmailAuthProvider } from './contexts/GmailAuthContext';
 import MainLayout from './components/Layout/MainLayout';
 import LoginPage from './components/Auth/LoginPage';
 import DashboardPage from './admin/pages/Dashboard/DashboardPage';
@@ -176,11 +175,9 @@ function App() {
       <AuthProvider>
         <FirebaseProvider>
           <NotificationProvider>
-            <GmailAuthProvider>
-              <Router>
-                <AppContent />
-              </Router>
-            </GmailAuthProvider>
+            <Router>
+              <AppContent />
+            </Router>
           </NotificationProvider>
         </FirebaseProvider>
       </AuthProvider>

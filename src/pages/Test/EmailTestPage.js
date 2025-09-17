@@ -17,7 +17,7 @@ import {
 import {
   sendCompletionEmailWithGmail,
   loadGmailConfig,
-  requestGmailPermissions,
+  getGmailConfig,
   getGmailConfigStatus,
   ensureGmailAuthorized
 } from '../../services/emailService';
@@ -51,15 +51,19 @@ const EmailTestPage = () => {
     setAuthResult(null);
     
     try {
-      const result = await requestGmailPermissions();
-      setGmailConfig({
-        userEmail: result.userEmail,
-        accessToken: 'Set'
-      });
-      setAuthResult({ success: true, message: '✅ Gmail authorization successful!' });
-      setConfigStatus(getGmailConfigStatus());
+      const result = getGmailConfig();
+      if (result.isConfigured) {
+        setGmailConfig({
+          userEmail: result.userEmail,
+          accessToken: 'Set'
+        });
+        setAuthResult({ success: true, message: '✅ Gmail is already configured from login!' });
+        setConfigStatus(getGmailConfigStatus());
+      } else {
+        setAuthResult({ success: false, message: '❌ Gmail not configured. Please login to the application first.' });
+      }
     } catch (error) {
-      setAuthResult({ success: false, message: `❌ Gmail authorization failed: ${error.message}` });
+      setAuthResult({ success: false, message: `❌ Gmail check failed: ${error.message}` });
     } finally {
       setIsAuthorizing(false);
     }

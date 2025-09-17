@@ -11,7 +11,6 @@ import {
   Email as EmailIcon,
   CheckCircle as CheckCircleIcon
 } from '@mui/icons-material';
-import { useGmailAuth } from '../../../shared/contexts/GmailAuthContext';
 
 const Step6Submit = ({ 
   sendEmail, 
@@ -19,7 +18,7 @@ const Step6Submit = ({
   personalInfo, 
   isEditMode = false 
 }) => {
-  const { gmailSignedIn, gmailUser } = useGmailAuth();
+  // Gmail is now automatically configured during login
 
   return (
     <Box>
@@ -43,28 +42,12 @@ const Step6Submit = ({
           </Typography>
         </Box>
         
-        {/* Gmail Sign-in Status */}
-        {!gmailSignedIn ? (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="body2">
-              To send emails, please sign in with Gmail using the button in the header.
-            </Typography>
-          </Alert>
-        ) : (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            <Typography variant="body2">
-              Gmail signed in as <strong>{gmailUser?.email || 'Gmail User'}</strong>
-            </Typography>
-          </Alert>
-        )}
-        
         <FormControlLabel
           control={
             <Switch
               checked={sendEmail}
               onChange={(e) => onSendEmailChange(e.target.checked)}
               color="primary"
-              disabled={!gmailSignedIn}
             />
           }
           label={
@@ -80,15 +63,7 @@ const Step6Submit = ({
           sx={{ mb: 2 }}
         />
         
-        {sendEmail && !gmailSignedIn && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            <Typography variant="body2">
-              Please sign in with Google to enable email sending.
-            </Typography>
-          </Alert>
-        )}
-        
-        {sendEmail && gmailSignedIn && (
+        {sendEmail && (
           <Alert severity="info" sx={{ mt: 2 }}>
             <Typography variant="body2">
               An email with the complete order details and quote will be sent to <strong>{personalInfo.email}</strong> 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -12,14 +12,27 @@ import {
 } from '@mui/material';
 import { useAuth } from '../Auth/AuthContext';
 import { Google as GoogleIcon } from '@mui/icons-material';
-import { isGmailConfigured, getCurrentGmailConfig, requestGmailPermissions, signOutGmail } from '../../services/emailService';
+import { isGmailConfigured, getCurrentGmailConfig } from '../../services/emailService';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const [gmailConfig, setGmailConfig] = useState(getCurrentGmailConfig());
-  const [isAuthorizing, setIsAuthorizing] = useState(false);
 
+  // Update Gmail config when user changes
+  useEffect(() => {
+    const updateGmailConfig = () => {
+      const config = getCurrentGmailConfig();
+      setGmailConfig(config);
+    };
 
+    // Update immediately
+    updateGmailConfig();
+
+    // Update when user changes
+    if (user) {
+      updateGmailConfig();
+    }
+  }, [user]);
   
   // Get user initials for fallback
   const getUserInitials = () => {
@@ -36,22 +49,7 @@ const Header = () => {
     logout();
   };
 
-  const handleGmailSignIn = async () => {
-    setIsAuthorizing(true);
-    try {
-      const result = await requestGmailPermissions();
-      setGmailConfig(result);
-    } catch (error) {
-      console.error('Gmail authorization failed:', error);
-    } finally {
-      setIsAuthorizing(false);
-    }
-  };
-
-  const handleGmailSignOut = () => {
-    signOutGmail();
-    setGmailConfig(getCurrentGmailConfig());
-  };
+  // Gmail is now automatically configured during login
 
   return (
     <AppBar 
@@ -71,26 +69,22 @@ const Header = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* Gmail Sign-in Status */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {gmailConfig.isConfigured ? (
+            {user && (gmailConfig.isConfigured || localStorage.getItem('gmailAccessToken')) ? (
               <Chip
                 icon={<GoogleIcon />}
-                label={`Gmail: ${gmailConfig.userEmail || 'Authorized'}`}
+                label={`Gmail: ${gmailConfig.userEmail || user.email || 'Ready'}`}
                 color="success"
                 size="small"
-                onClick={handleGmailSignOut}
-                sx={{ cursor: 'pointer' }}
+                sx={{ cursor: 'default' }}
               />
             ) : (
-              <Button
-                variant="outlined"
+              <Chip
+                icon={<GoogleIcon />}
+                label="Gmail: Ready"
+                color="info"
                 size="small"
-                startIcon={isAuthorizing ? <CircularProgress size={16} /> : <GoogleIcon />}
-                onClick={handleGmailSignIn}
-                disabled={isAuthorizing}
-                sx={{ textTransform: 'none' }}
-              >
-                {isAuthorizing ? 'Authorizing...' : 'Authorize Gmail'}
-              </Button>
+                sx={{ cursor: 'default' }}
+              />
             )}
           </Box>
           
