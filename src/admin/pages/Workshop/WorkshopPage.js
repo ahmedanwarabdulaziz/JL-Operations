@@ -953,13 +953,8 @@ const WorkshopPage = () => {
     const breakdown = getOrderCostBreakdown(order);
     let itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
     
-    // Add extra expenses to items subtotal (customer-facing)
-    if (order.extraExpenses && order.extraExpenses.length > 0) {
-      const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
-        return sum + (parseFloat(exp.total) || 0);
-      }, 0);
-      itemsSubtotal += extraExpensesTotal;
-    }
+    // Extra expenses should NOT be added to customer-facing items subtotal
+    // They are only included in Internal JL Cost Analysis
     
     // Calculate grand total
     const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;

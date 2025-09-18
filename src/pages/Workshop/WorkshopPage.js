@@ -122,6 +122,22 @@ const WorkshopPage = () => {
   });
   const [expenseList, setExpenseList] = useState([]);
   
+  // Edit Expense Modal State
+  const [editExpenseModalOpen, setEditExpenseModalOpen] = useState(false);
+  const [editingExpenseIndex, setEditingExpenseIndex] = useState(null);
+  const [editExpenseForm, setEditExpenseForm] = useState({
+    description: '',
+    price: '',
+    unit: '',
+    tax: '',
+    taxType: 'fixed',
+    total: '',
+  });
+  
+  // Delete Expense Confirmation State
+  const [deleteExpenseDialogOpen, setDeleteExpenseDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  
   // State for collapsible sections
   const [personalInfoExpanded, setPersonalInfoExpanded] = useState(false);
   const [orderDetailsExpanded, setOrderDetailsExpanded] = useState(false);
@@ -1338,13 +1354,8 @@ const WorkshopPage = () => {
     const breakdown = getOrderCostBreakdown(order);
     let itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
     
-    // Add extra expenses to items subtotal (customer-facing)
-    if (order.extraExpenses && order.extraExpenses.length > 0) {
-      const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
-        return sum + (parseFloat(exp.total) || 0);
-      }, 0);
-      itemsSubtotal += extraExpensesTotal;
-    }
+    // Extra expenses should NOT be added to customer-facing items subtotal
+    // They are only included in Internal JL Cost Analysis
     
     // Calculate grand total
     const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
@@ -2102,6 +2113,94 @@ const WorkshopPage = () => {
       showError('Failed to save extra expenses');
     }
     setExpenseModalOpen(false);
+  };
+
+  // Edit Expense Handler
+  const handleEditExpense = (expense, index) => {
+    setEditingExpenseIndex(index);
+    setEditExpenseForm({
+      description: expense.description || '',
+      price: expense.price || '',
+      unit: expense.unit || '',
+      tax: expense.tax || '',
+      taxType: expense.taxType || 'fixed',
+      total: expense.total || '',
+    });
+    setEditExpenseModalOpen(true);
+  };
+
+  // Save Edited Expense Handler
+  const handleSaveEditedExpense = async () => {
+    if (!selectedOrder || editingExpenseIndex === null) return;
+    
+    try {
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const updatedExpenses = [...selectedOrder.extraExpenses];
+      updatedExpenses[editingExpenseIndex] = { ...editExpenseForm };
+      
+      await updateDoc(orderRef, { extraExpenses: updatedExpenses });
+      showSuccess('Expense updated successfully!');
+      
+      // Update local state
+      setSelectedOrder({ ...selectedOrder, extraExpenses: updatedExpenses });
+      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, extraExpenses: updatedExpenses } : o));
+      
+      setEditExpenseModalOpen(false);
+      setEditingExpenseIndex(null);
+    } catch (err) {
+      showError('Failed to update expense');
+    }
+  };
+
+  // Delete Expense Handler
+  const handleDeleteExpenseItem = (expense, index) => {
+    setExpenseToDelete({ expense, index });
+    setDeleteExpenseDialogOpen(true);
+  };
+
+  // Confirm Delete Expense Handler
+  const handleConfirmDeleteExpense = async () => {
+    if (!selectedOrder || expenseToDelete === null) return;
+    
+    try {
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const updatedExpenses = selectedOrder.extraExpenses.filter((_, index) => index !== expenseToDelete.index);
+      
+      await updateDoc(orderRef, { extraExpenses: updatedExpenses });
+      showSuccess('Expense deleted successfully!');
+      
+      // Update local state
+      setSelectedOrder({ ...selectedOrder, extraExpenses: updatedExpenses });
+      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, extraExpenses: updatedExpenses } : o));
+      
+      setDeleteExpenseDialogOpen(false);
+      setExpenseToDelete(null);
+    } catch (err) {
+      showError('Failed to delete expense');
+    }
+  };
+
+  // Edit Expense Input Change Handler
+  const handleEditExpenseInputChange = (field, value) => {
+    const newForm = { ...editExpenseForm, [field]: value };
+    
+    if (field === 'price' || field === 'unit' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(newForm.price) || 0;
+      const unit = isNaN(Number(newForm.unit)) ? 1 : parseFloat(newForm.unit) || 1;
+      let tax = 0;
+      
+      if (newForm.taxType === 'percent') {
+        const percent = parseFloat(newForm.tax) || 0;
+        tax = price * unit * percent / 100;
+        newForm.taxValue = tax.toFixed(2);
+      } else {
+        tax = parseFloat(newForm.tax) || 0;
+        newForm.taxValue = tax.toFixed(2);
+      }
+      newForm.total = (price * unit + tax).toFixed(2);
+    }
+    
+    setEditExpenseForm(newForm);
   };
 
   // Completion Email Dialog State
@@ -3016,9 +3115,41 @@ const WorkshopPage = () => {
                              </Typography>
                            </Box>
                          </Box>
-                         <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', ml: 2 }}>
-                           ${parseFloat(expense.total || 0).toFixed(2)}
-                         </Typography>
+                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', mr: 2 }}>
+                             ${parseFloat(expense.total || 0).toFixed(2)}
+                           </Typography>
+                           <Tooltip title="Edit Expense">
+                             <IconButton
+                               size="small"
+                               onClick={() => handleEditExpense(expense, index)}
+                               sx={{
+                                 color: '#d4af5a',
+                                 '&:hover': {
+                                   backgroundColor: 'rgba(212, 175, 90, 0.1)',
+                                   color: '#e6c47a'
+                                 }
+                               }}
+                             >
+                               <EditIcon fontSize="small" />
+                             </IconButton>
+                           </Tooltip>
+                           <Tooltip title="Delete Expense">
+                             <IconButton
+                               size="small"
+                               onClick={() => handleDeleteExpenseItem(expense, index)}
+                               sx={{
+                                 color: '#ff6b6b',
+                                 '&:hover': {
+                                   backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                                   color: '#ff5252'
+                                 }
+                               }}
+                             >
+                               <DeleteIcon fontSize="small" />
+                             </IconButton>
+                           </Tooltip>
+                         </Box>
                        </Box>
                      </Card>
                    ))}
@@ -5640,6 +5771,289 @@ const WorkshopPage = () => {
             sx={buttonStyles.primaryButton}
           >
             Save All
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Expense Modal */}
+      <Dialog open={editExpenseModalOpen} onClose={() => setEditExpenseModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
+          Edit Extra Expense
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Expense Description"
+              value={editExpenseForm.description}
+              onChange={(e) => handleEditExpenseInputChange('description', e.target.value)}
+              fullWidth
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': {
+                    borderColor: '#333333',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            />
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Price"
+                value={editExpenseForm.price}
+                onChange={(e) => handleEditExpenseInputChange('price', e.target.value)}
+                type="number"
+                fullWidth
+                required
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+              />
+              <TextField
+                label="Unit"
+                value={editExpenseForm.unit}
+                onChange={(e) => handleEditExpenseInputChange('unit', e.target.value)}
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Tax"
+                value={editExpenseForm.tax}
+                onChange={(e) => handleEditExpenseInputChange('tax', e.target.value)}
+                type="number"
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end" sx={{ p: 0, m: 0 }}>
+                      <Select
+                        value={editExpenseForm.taxType}
+                        onChange={(e) => handleEditExpenseInputChange('taxType', e.target.value)}
+                        variant="standard"
+                        disableUnderline
+                        sx={{ 
+                          minWidth: 48, 
+                          maxWidth: 60, 
+                          background: 'transparent', 
+                          ml: 0.5, 
+                          '& .MuiSelect-select': { 
+                            p: 0, 
+                            pr: 1, 
+                            fontWeight: 'bold', 
+                            color: '#b98f33' 
+                          } 
+                        }}
+                        MenuProps={{
+                          PaperProps: {
+                            sx: { 
+                              minWidth: 80,
+                              backgroundColor: '#2a2a2a',
+                              '& .MuiMenuItem-root': {
+                                color: '#ffffff',
+                                '&:hover': {
+                                  backgroundColor: '#3a3a3a',
+                                },
+                              },
+                            }
+                          }
+                        }}
+                      >
+                        <MenuItem value="fixed">$</MenuItem>
+                        <MenuItem value="percent">%</MenuItem>
+                      </Select>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <TextField
+                label="Total"
+                value={editExpenseForm.total}
+                InputProps={{ readOnly: true }}
+                fullWidth
+                sx={{
+                  backgroundColor: '#2a2a2a',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: '#333333',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#b98f33',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#b98f33',
+                  },
+                  '& .MuiInputBase-input': {
+                    color: '#ffffff',
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={() => setEditExpenseModalOpen(false)}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveEditedExpense} 
+            variant="contained"
+            sx={buttonStyles.primaryButton}
+          >
+            Save Changes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Expense Confirmation Dialog */}
+      <Dialog 
+        open={deleteExpenseDialogOpen} 
+        onClose={() => setDeleteExpenseDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #ff6b6b',
+            borderRadius: '10px',
+            color: '#ffffff'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%)',
+          color: '#ffffff',
+          fontWeight: 'bold',
+          textAlign: 'center'
+        }}>
+          <DeleteIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
+          Delete Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography variant="body1" sx={{ color: '#ffffff', textAlign: 'center', mb: 2 }}>
+            Are you sure you want to delete this expense?
+          </Typography>
+          {expenseToDelete && (
+            <Box sx={{ 
+              backgroundColor: '#2a2a2a', 
+              p: 2, 
+              borderRadius: '8px', 
+              border: '1px solid #ff6b6b',
+              mb: 2
+            }}>
+              <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold', mb: 1 }}>
+                {expenseToDelete.expense.description}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                Amount: ${parseFloat(expenseToDelete.expense.total || 0).toFixed(2)}
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="body2" sx={{ color: '#ffcccb', textAlign: 'center' }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+          <Button 
+            onClick={() => setDeleteExpenseDialogOpen(false)}
+            sx={{
+              backgroundColor: '#666666',
+              color: '#ffffff',
+              '&:hover': {
+                backgroundColor: '#777777'
+              },
+              mr: 2
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmDeleteExpense}
+            variant="contained"
+            sx={{
+              backgroundColor: '#ff6b6b',
+              color: '#ffffff',
+              '&:hover': {
+                backgroundColor: '#ff5252'
+              }
+            }}
+          >
+            Delete Expense
           </Button>
         </DialogActions>
       </Dialog>
