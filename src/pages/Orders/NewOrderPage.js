@@ -26,6 +26,7 @@ import { useNotification } from '../../components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { sendEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';
+import { getOrderCostBreakdown, calculateOrderTax, calculatePickupDeliveryCost } from '../../shared/utils/orderCalculations';
 import Step1PersonalInfo from './steps/Step1PersonalInfo';
 import Step2OrderDetails from './steps/Step2OrderDetails';
 import Step3Furniture from './steps/Step3Furniture';
@@ -549,42 +550,29 @@ const NewOrderPage = () => {
     }
   };
 
-  // Calculate order total
+  // Calculate order total to match invoice Grand Total (Items Subtotal + Tax + Pickup & Delivery)
   const calculateOrderTotal = () => {
-    let total = 0;
+    // Create a temporary order object to use with the shared calculation function
+    const tempOrder = {
+      furnitureData: { groups: furnitureGroups },
+      paymentData: paymentDetails
+    };
     
-    // Calculate furniture groups total
-    furnitureGroups.forEach(group => {
-      // Material cost
-      const materialPrice = parseFloat(group.materialPrice || 0);
-      const materialQnty = parseFloat(group.materialQnty || 0);
-      const materialTotal = materialPrice * materialQnty;
-      
-      // Labor cost
-      const labourPrice = parseFloat(group.labourPrice || 0);
-      const labourQnty = parseFloat(group.labourQnty || 1);
-      const labourTotal = labourPrice * labourQnty;
-      
-      // Foam cost (if enabled)
-      let foamTotal = 0;
-      if (group.foamEnabled) {
-        const foamPrice = parseFloat(group.foamPrice || 0);
-        const foamQnty = parseFloat(group.foamQnty || 1);
-        foamTotal = foamPrice * foamQnty;
-      }
-      
-      // Painting cost (if enabled)
-      let paintingTotal = 0;
-      if (group.paintingEnabled) {
-        const paintingLabour = parseFloat(group.paintingLabour || 0);
-        const paintingQnty = parseFloat(group.paintingQnty || 1);
-        paintingTotal = paintingLabour * paintingQnty;
-      }
-      
-      total += materialTotal + labourTotal + foamTotal + paintingTotal;
-    });
+    // Use the EXACT same calculation logic as the invoice
+    const taxAmount = calculateOrderTax(tempOrder);
+    const pickupDeliveryCost = tempOrder.paymentData?.pickupDeliveryEnabled ? 
+      calculatePickupDeliveryCost(
+        parseFloat(tempOrder.paymentData.pickupDeliveryCost) || 0,
+        tempOrder.paymentData.pickupDeliveryServiceType || 'both'
+      ) : 0;
     
-    setOrderTotal(total);
+    const breakdown = getOrderCostBreakdown(tempOrder);
+    const itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
+    
+    // Grand Total = Items Subtotal + Tax + Pickup & Delivery (exactly like invoice)
+    const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
+    
+    setOrderTotal(grandTotal);
     setShowTotal(true);
   };
 
@@ -1162,48 +1150,52 @@ const NewOrderPage = () => {
             ))}
           </Paper>
 
-          {/* Payment Information */}
-          <Paper elevation={2} sx={{ 
-            p: 3, 
-            borderRadius: 2,
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #333333'
-          }}>
-            <Typography variant="h5" sx={{ 
-              fontWeight: 'bold', 
-              mb: 3, 
-              color: '#b98f33',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
+          {/* Payment Information - Only show if there's payment data */}
+          {(parseFloat(paymentDetails.deposit) > 0 || 
+            parseFloat(paymentDetails.amountPaid) > 0 || 
+            paymentDetails.notes) && (
+            <Paper elevation={2} sx={{ 
+              p: 3, 
+              borderRadius: 2,
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333'
             }}>
-              💰 Payment Information
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
-              {paymentDetails.deposit && parseFloat(paymentDetails.deposit) > 0 && (
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Deposit:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
-                    ${parseFloat(paymentDetails.deposit).toFixed(2)}
-                  </Typography>
-                </Box>
-              )}
-              {paymentDetails.amountPaid && parseFloat(paymentDetails.amountPaid) > 0 && (
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Amount Paid:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
-                    ${parseFloat(paymentDetails.amountPaid).toFixed(2)}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-            {paymentDetails.notes && (
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Notes:</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 500, fontStyle: 'italic', color: '#ffffff' }}>"{paymentDetails.notes}"</Typography>
+              <Typography variant="h5" sx={{ 
+                fontWeight: 'bold', 
+                mb: 3, 
+                color: '#b98f33',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}>
+                💰 Payment Information
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3 }}>
+                {parseFloat(paymentDetails.deposit) > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Deposit:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
+                      ${parseFloat(paymentDetails.deposit).toFixed(2)}
+                    </Typography>
+                  </Box>
+                )}
+                {parseFloat(paymentDetails.amountPaid) > 0 && (
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Amount Paid:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '1.1rem', color: '#ffffff' }}>
+                      ${parseFloat(paymentDetails.amountPaid).toFixed(2)}
+                    </Typography>
+                  </Box>
+                )}
               </Box>
-            )}
-          </Paper>
+              {paymentDetails.notes && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#b98f33' }}>Notes:</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500, fontStyle: 'italic', color: '#ffffff' }}>"{paymentDetails.notes}"</Typography>
+                </Box>
+              )}
+            </Paper>
+          )}
 
           {/* Order Total */}
           {showTotal && (
