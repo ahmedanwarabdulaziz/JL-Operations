@@ -73,30 +73,28 @@ const MaterialRequestPage = () => {
       
       furnitureGroups.forEach(group => {
         if (group.materialCode && group.materialCompany) {
-          // Get quantity from the correct field
-          const quantity = group.materialJLQnty || 
-                          group.materialQnty || 
-                          group.qntyJL || 
-                          group.qnty || 
-                          group.quantity || 
-                          group.jlQuantity || 
-                          1;
+          // Get quantity from the correct field - use the same logic as materialQntyJL
+          const materialQntyJL = group.materialJLQnty || 0;
           
-          materials.push({
-            id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
-            orderId: order.id,
-            invoiceNo: order.orderDetails?.billInvoice || 'N/A',
-            materialCompany: group.materialCompany,
-            materialCode: group.materialCode,
-            materialName: group.materialName || group.materialCode,
-            quantity: quantity,
-            materialQntyJL: group.materialJLQnty || 0,
-            materialStatus: group.materialStatus || null,
-            materialNote: group.materialNote || '',
-            orderDate: order.createdAt,
-            customerName: order.personalInfo?.customerName || 'N/A',
-            orderStatus: orderStatus
-          });
+          // Only add materials with actual quantities (> 0)
+          if (materialQntyJL > 0) {
+            materials.push({
+              id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
+              orderId: order.id,
+              invoiceNo: order.orderDetails?.billInvoice || 'N/A',
+              materialCompany: group.materialCompany,
+              materialCode: group.materialCode,
+              materialName: group.materialName || group.materialCode,
+              quantity: materialQntyJL,
+              materialQntyJL: materialQntyJL,
+              unit: group.unit || 'Yard',
+              materialStatus: group.materialStatus || null,
+              materialNote: group.materialNote || '',
+              orderDate: order.createdAt,
+              customerName: order.personalInfo?.customerName || 'N/A',
+              orderStatus: orderStatus
+            });
+          }
         }
       });
     });
@@ -117,8 +115,9 @@ const MaterialRequestPage = () => {
     return grouped;
   };
 
-  // Filter materials based on search term
+  // Filter materials based on search term (quantity filtering is done at extraction)
   const filterMaterials = (materials, searchValue) => {
+    // No need to filter by quantity here since it's done during extraction
     if (!searchValue.trim()) return materials;
     
     const searchLower = searchValue.toLowerCase();
@@ -353,14 +352,7 @@ const MaterialRequestPage = () => {
             startIcon={<RefreshIcon />}
             onClick={fetchMaterials}
             disabled={updating}
-            sx={{
-              background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
-              color: '#ffffff',
-              fontWeight: 'bold',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #e67e22 0%, #f27921 100%)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Refresh
           </Button>
@@ -422,53 +414,56 @@ const MaterialRequestPage = () => {
                   {materials.map((material) => (
                     <Card key={material.id} sx={{ 
                       mb: 2, 
-                      background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                      border: '2px solid #8b6b1f',
-                      color: '#000000',
+                      backgroundColor: '#000000',
+                      border: '2px solid #b98f33',
+                      color: '#b98f33',
                       '&:hover': {
-                        background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                        backgroundColor: '#1a1a1a',
                         transform: 'translateY(-2px)',
                         boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
                       },
                       transition: 'all 0.3s ease'
                     }}>
                       <CardContent sx={{ p: 2 }}>
-                        {/* Single Row Layout */}
+                        {/* Three Column Layout */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                          {/* Invoice */}
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', minWidth: 80 }}>
-                            {material.invoiceNo}
-                          </Typography>
-                          
-                          {/* Customer Name */}
-                          <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000', flex: 1, textAlign: 'center' }}>
-                            {material.customerName}
-                          </Typography>
-                          
-                          {/* Material Code and Quantity */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
-                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                          {/* Left Column - Material Code and Details */}
+                          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'left' }}>
                               {material.materialCode}
                             </Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              {material.materialQntyJL}
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.75rem', textAlign: 'left' }}>
+                              {material.invoiceNo}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.75rem', textAlign: 'left' }}>
+                              {material.customerName.split(' ')[0]}
                             </Typography>
                           </Box>
                           
-                          {/* Note Toggle Icon */}
-                          <IconButton
+                          {/* Middle Column - Quantity */}
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
+                              {material.materialQntyJL} {material.unit?.toLowerCase() || 'yards'}
+                            </Typography>
+                          </Box>
+                          
+                          {/* Right Column - Button */}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minWidth: 48 }}>
+                            <IconButton
+                            sx={{
+                              ...buttonStyles.secondaryButton,
+                              minWidth: 'auto',
+                              padding: '8px',
+                              borderRadius: '50%',
+                              width: '40px',
+                              height: '40px'
+                            }}
                             size="small"
                             onClick={() => openNoteDialog(material)}
-                            sx={{
-                              color: '#000000',
-                              backgroundColor: 'rgba(255,255,255,0.8)',
-                              '&:hover': {
-                                backgroundColor: 'rgba(255,255,255,0.9)'
-                              }
-                            }}
                           >
                             <NoteIcon sx={{ fontSize: 20 }} />
                           </IconButton>
+                          </Box>
                           
                           {/* Action Button */}
                           <Button
@@ -482,14 +477,9 @@ const MaterialRequestPage = () => {
                             )}
                             disabled={updating}
                             sx={{
-                              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                              color: '#000000',
-                              fontWeight: 'bold',
+                              ...buttonStyles.primaryButton,
                               fontSize: '0.75rem',
-                              padding: '4px 12px',
-                              '&:hover': {
-                                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
-                              }
+                              padding: '4px 12px'
                             }}
                           >
                             Order
@@ -506,7 +496,7 @@ const MaterialRequestPage = () => {
                             border: '1px solid #8b6b1f'
                           }}>
                             <Typography variant="body2" sx={{ 
-                              color: '#000000', 
+                              color: '#b98f33', 
                               fontStyle: 'italic',
                               display: 'flex',
                               alignItems: 'center',
@@ -578,53 +568,56 @@ const MaterialRequestPage = () => {
                   {materials.map((material) => (
                     <Card key={material.id} sx={{ 
                       mb: 2, 
-                      background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                      border: '2px solid #8b6b1f',
-                      color: '#000000',
+                      backgroundColor: '#000000',
+                      border: '2px solid #b98f33',
+                      color: '#b98f33',
                       '&:hover': {
-                        background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                        backgroundColor: '#1a1a1a',
                         transform: 'translateY(-2px)',
                         boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
                       },
                       transition: 'all 0.3s ease'
                     }}>
                       <CardContent sx={{ p: 2 }}>
-                        {/* Single Row Layout */}
+                        {/* Three Column Layout */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                          {/* Invoice */}
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', minWidth: 80 }}>
-                            {material.invoiceNo}
-                          </Typography>
-                          
-                          {/* Customer Name */}
-                          <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000', flex: 1, textAlign: 'center' }}>
-                            {material.customerName}
-                          </Typography>
-                          
-                          {/* Material Code and Quantity */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
-                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                          {/* Left Column - Material Code and Details */}
+                          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'left' }}>
                               {material.materialCode}
                             </Typography>
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                              {material.materialQntyJL}
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.75rem', textAlign: 'left' }}>
+                              {material.invoiceNo}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.75rem', textAlign: 'left' }}>
+                              {material.customerName.split(' ')[0]}
                             </Typography>
                           </Box>
                           
-                          {/* Note Toggle Icon */}
-                          <IconButton
+                          {/* Middle Column - Quantity */}
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
+                              {material.materialQntyJL} {material.unit?.toLowerCase() || 'yards'}
+                            </Typography>
+                          </Box>
+                          
+                          {/* Right Column - Button */}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minWidth: 48 }}>
+                            <IconButton
+                            sx={{
+                              ...buttonStyles.secondaryButton,
+                              minWidth: 'auto',
+                              padding: '8px',
+                              borderRadius: '50%',
+                              width: '40px',
+                              height: '40px'
+                            }}
                             size="small"
                             onClick={() => openNoteDialog(material)}
-                            sx={{
-                              color: '#000000',
-                              backgroundColor: 'rgba(255,255,255,0.8)',
-                              '&:hover': {
-                                backgroundColor: 'rgba(255,255,255,0.9)'
-                              }
-                            }}
                           >
                             <NoteIcon sx={{ fontSize: 20 }} />
                           </IconButton>
+                          </Box>
                           
                           {/* Action Buttons */}
                           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -639,14 +632,9 @@ const MaterialRequestPage = () => {
                               )}
                               disabled={updating}
                               sx={{
-                                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                                color: '#000000',
-                                fontWeight: 'bold',
+                                ...buttonStyles.primaryButton,
                                 fontSize: '0.75rem',
-                                padding: '4px 8px',
-                                '&:hover': {
-                                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
-                                }
+                                padding: '4px 8px'
                               }}
                             >
                               Received
@@ -662,14 +650,9 @@ const MaterialRequestPage = () => {
                               )}
                               disabled={updating}
                               sx={{
-                                borderColor: '#8b6b1f',
-                                color: '#000000',
+                                ...buttonStyles.cancelButton,
                                 fontSize: '0.75rem',
-                                padding: '4px 8px',
-                                '&:hover': {
-                                  borderColor: '#b98f33',
-                                  backgroundColor: 'rgba(185, 143, 51, 0.1)'
-                                }
+                                padding: '4px 8px'
                               }}
                             >
                               Back
@@ -687,7 +670,7 @@ const MaterialRequestPage = () => {
                             border: '1px solid #8b6b1f'
                           }}>
                             <Typography variant="body2" sx={{ 
-                              color: '#000000', 
+                              color: '#b98f33', 
                               fontStyle: 'italic',
                               display: 'flex',
                               alignItems: 'center',
@@ -746,28 +729,14 @@ const MaterialRequestPage = () => {
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button
             onClick={closeNoteDialog}
-            sx={{
-              borderColor: '#8b6b1f',
-              color: '#000000',
-              '&:hover': {
-                borderColor: '#b98f33',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)'
-              }
-            }}
+            sx={buttonStyles.cancelButton}
           >
             Cancel
           </Button>
           <Button
             onClick={saveNote}
             variant="contained"
-            sx={{
-              background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              fontWeight: 'bold',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
-              }
-            }}
+            sx={buttonStyles.primaryButton}
           >
             Save Note
           </Button>

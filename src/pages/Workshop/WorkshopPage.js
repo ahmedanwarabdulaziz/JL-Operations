@@ -48,6 +48,7 @@ import {
   Phone as PhoneIcon,
   Receipt as ReceiptIcon,
   Payment as PaymentIcon,
+  Note as NoteIcon,
   Chair as ChairIcon,
   LocalShipping as ShippingIcon,
   Edit as EditIcon,
@@ -100,6 +101,15 @@ const WorkshopPage = () => {
   const [editFurnitureDialog, setEditFurnitureDialog] = useState(false);
   const [editFurnitureData, setEditFurnitureData] = useState({});
   const [editingFurnitureData, setEditingFurnitureData] = useState(null);
+  const [editAdditionalNotesDialog, setEditAdditionalNotesDialog] = useState(false);
+  const [editAdditionalNotesData, setEditAdditionalNotesData] = useState({});
+  
+  // Auto-save and unsaved changes tracking
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [autoSaveTimeout, setAutoSaveTimeout] = useState(null);
+  const [lastSavedData, setLastSavedData] = useState(null);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
@@ -1296,6 +1306,84 @@ const WorkshopPage = () => {
     };
   }, [fetchOrders, sendingEmail, processingDeposit]);
 
+  // Auto-save and unsaved changes tracking
+  useEffect(() => {
+    // Order changed, resetting editing state
+    
+    // Clear any pending auto-save operations when switching orders
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+      setAutoSaveTimeout(null);
+    }
+    
+    // Reset editing state when switching orders
+    if (selectedOrder?.furnitureData) {
+      setLastSavedData(JSON.stringify(selectedOrder.furnitureData));
+      setHasUnsavedChanges(false);
+      setEditingFurnitureData(null); // Clear any previous editing state
+      setIsAutoSaving(false); // Clear any auto-saving indicator
+      // Reset editing state for order
+    } else {
+      // Clear everything when no order is selected
+      setLastSavedData(null);
+      setHasUnsavedChanges(false);
+      setEditingFurnitureData(null);
+      setIsAutoSaving(false);
+      // Cleared all editing state - no order selected
+    }
+  }, [selectedOrder?.id]); // Reset when order changes
+
+  useEffect(() => {
+    // Track changes in editingFurnitureData
+    if (editingFurnitureData && selectedOrder?.furnitureData) {
+      const currentData = JSON.stringify(editingFurnitureData);
+      const hasChanges = currentData !== lastSavedData;
+      setHasUnsavedChanges(hasChanges);
+      
+      // Clear any existing timeout since we're not using timer-based auto-save
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+        setAutoSaveTimeout(null);
+      }
+    }
+    
+    return () => {
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout);
+      }
+    };
+  }, [editingFurnitureData, lastSavedData]);
+
+  // Auto-save on page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges && selectedOrder && editingFurnitureData) {
+        console.log('Saving changes before page unload for order:', selectedOrder.id);
+        
+        // Use synchronous save for beforeunload
+        const saveChanges = async () => {
+          try {
+            const orderRef = doc(db, 'orders', selectedOrder.id);
+            await updateDoc(orderRef, {
+              furnitureData: editingFurnitureData
+            });
+            console.log('Successfully saved changes before unload');
+          } catch (error) {
+            console.error('Error saving changes before unload:', error);
+          }
+        };
+        
+        // Save synchronously - this is the only way to ensure it completes
+        saveChanges();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges, selectedOrder, editingFurnitureData]);
+
   // Search function
   const handleSearch = (searchValue) => {
     setSearchTerm(searchValue);
@@ -1514,6 +1602,14 @@ const WorkshopPage = () => {
     setEditFurnitureDialog(true);
   };
 
+  // Handle edit additional notes
+  const handleEditAdditionalNotes = () => {
+    setEditAdditionalNotesData({
+      notes: selectedOrder.paymentData?.notes || ''
+    });
+    setEditAdditionalNotesDialog(true);
+  };
+
   // Validation functions
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1682,6 +1778,76 @@ const WorkshopPage = () => {
     }
   };
 
+  // Save additional notes
+  const handleSaveAdditionalNotes = async () => {
+    try {
+      const updatedOrder = {
+        ...selectedOrder,
+        paymentData: {
+          ...selectedOrder.paymentData,
+          notes: editAdditionalNotesData.notes
+        }
+      };
+
+      // Update in Firestore
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      await updateDoc(orderRef, {
+        'paymentData.notes': editAdditionalNotesData.notes
+      });
+
+      setSelectedOrder(updatedOrder);
+      setOrders(orders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
+      setFilteredOrders(filteredOrders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
+      setEditAdditionalNotesDialog(false);
+      showSuccess('Additional notes updated successfully');
+    } catch (error) {
+      console.error('Error updating additional notes:', error);
+      showError('Failed to update additional notes');
+    }
+  };
+
+  // Auto-save function
+  const handleAutoSave = async (showIndicator = true) => {
+    if (!selectedOrder || !editingFurnitureData || !hasUnsavedChanges) {
+      return;
+    }
+
+    try {
+      if (showIndicator) {
+        setIsAutoSaving(true);
+      }
+
+      // Auto-saving furniture data
+
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      await updateDoc(orderRef, {
+        furnitureData: editingFurnitureData
+      });
+
+      // Update local state
+      const updatedOrder = { ...selectedOrder, furnitureData: editingFurnitureData };
+      setSelectedOrder(updatedOrder);
+      setOrders(orders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
+      setFilteredOrders(filteredOrders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
+      
+      // Update last saved data and clear unsaved changes flag
+      setLastSavedData(JSON.stringify(editingFurnitureData));
+      setHasUnsavedChanges(false);
+      
+      // Show subtle notification only for background auto-save
+      if (!showIndicator) {
+        showSuccess('Changes auto-saved successfully');
+      }
+    } catch (error) {
+      console.error('Error auto-saving furniture data:', error);
+      showError('Failed to auto-save changes');
+    } finally {
+      if (showIndicator) {
+        setIsAutoSaving(false);
+      }
+    }
+  };
+
   // Save furniture data for a specific group
   const handleSaveFurnitureGroup = async (groupIndex) => {
     try {
@@ -1705,8 +1871,10 @@ const WorkshopPage = () => {
         order.id === selectedOrder.id ? updatedOrder : order
       ));
       
-      // Clear the editing state
+      // Clear the editing state and update tracking
       setEditingFurnitureData(null);
+      setLastSavedData(JSON.stringify(furnitureDataToSave));
+      setHasUnsavedChanges(false);
       
       showSuccess(`Furniture group ${groupIndex + 1} updated successfully`);
     } catch (error) {
@@ -1717,6 +1885,8 @@ const WorkshopPage = () => {
 
   // Update furniture group data in editing state only
   const updateFurnitureGroup = (groupIndex, fieldName, value) => {
+    // Updating furniture group
+
     const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData;
     const updatedGroups = [...currentFurnitureData.groups];
     updatedGroups[groupIndex] = { ...updatedGroups[groupIndex], [fieldName]: value };
@@ -1727,6 +1897,48 @@ const WorkshopPage = () => {
     };
     
     setEditingFurnitureData(updatedFurnitureData);
+  };
+
+  // Handle navigation with auto-save
+  const handleNavigationWithAutoSave = async (navigationFunction) => {
+    if (hasUnsavedChanges && selectedOrder && editingFurnitureData) {
+      console.log('Auto-saving before navigation');
+      setIsAutoSaving(true);
+      
+      try {
+        await handleAutoSave(false); // Save without showing notification
+        console.log('Successfully auto-saved before navigation');
+      } catch (error) {
+        console.error('Error auto-saving before navigation:', error);
+        showError('Failed to save changes before navigation');
+      } finally {
+        setIsAutoSaving(false);
+      }
+    }
+    navigationFunction();
+  };
+
+  // Check if a specific furniture group has unsaved changes
+  const hasUnsavedChangesInGroup = (groupIndex) => {
+    if (!editingFurnitureData || !selectedOrder?.furnitureData) return false;
+    
+    const originalGroup = selectedOrder.furnitureData.groups[groupIndex];
+    const editingGroup = editingFurnitureData.groups[groupIndex];
+    
+    if (!originalGroup || !editingGroup) return false;
+    
+    // Compare all fields
+    const fieldsToCompare = [
+      'furnitureType', 'materialCompany', 'materialCode', 'treatment', 'unit', 
+      'quantity', 'labourNote', 'foamEnabled', 'foamThickness', 'foamNote', 
+      'foamQnty', 'paintingEnabled', 'paintingNote', 'paintingQnty', 'customerNote'
+    ];
+    
+    return fieldsToCompare.some(field => {
+      const originalValue = originalGroup[field] || '';
+      const editingValue = editingGroup[field] || '';
+      return originalValue !== editingValue;
+    });
   };
 
   // Email sending function
@@ -1899,7 +2111,23 @@ const WorkshopPage = () => {
   };
 
   // Handle order selection - simplified to avoid double loading
-  const handleOrderSelection = (order) => {
+  const handleOrderSelection = async (order) => {
+    // Auto-save any unsaved changes before switching orders
+    if (hasUnsavedChanges && selectedOrder && editingFurnitureData) {
+      console.log('Auto-saving before switching to order:', order.id);
+      setIsAutoSaving(true);
+      
+      try {
+        await handleAutoSave(false); // Save without showing notification
+        console.log('Successfully auto-saved before switching orders');
+      } catch (error) {
+        console.error('Error auto-saving before switching orders:', error);
+        showError('Failed to save changes before switching orders');
+      } finally {
+        setIsAutoSaving(false);
+      }
+    }
+    
     setSelectedOrder(order);
   };
 
@@ -2492,6 +2720,29 @@ const WorkshopPage = () => {
                 </Box>
               </Box>
               
+              {/* Saving Indicator */}
+              {isAutoSaving && (
+                <Box sx={{ 
+                  mb: 2, 
+                  p: 2, 
+                  backgroundColor: '#4caf50', 
+                  borderRadius: 1, 
+                  border: '2px solid #45a049',
+                  boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)'
+                }}>
+                  <Typography variant="body2" sx={{ 
+                    color: '#ffffff', 
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    <CircularProgress size={16} sx={{ color: '#ffffff' }} />
+                    Saving changes...
+                  </Typography>
+                </Box>
+              )}
+
               {/* Top Buttons - Arranged in a single row */}
               <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 3 }}>
                 {/* Send Order Email Button */}
@@ -2538,24 +2789,6 @@ const WorkshopPage = () => {
                   {getStatusInfo(selectedOrder.invoiceStatus).label}
                 </Button>
 
-                {/* Add Extra Expense Button */}
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={handleOpenExpenseModal}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  Add Extra Expense
-                </Button>
 
                 {/* Allocation Button */}
                 <Button
@@ -2746,14 +2979,6 @@ const WorkshopPage = () => {
                   {/* Content */}
                   {orderDetailsExpanded && (
                     <Box sx={{ p: 3 }}>
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                        📝 Description
-                      </Typography>
-                      <Typography variant="body1" sx={{ mb: 2 }}>
-                        {selectedOrder.orderDetails?.description || 'N/A'}
-                      </Typography>
-                    </Box>
                     
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
@@ -3043,140 +3268,6 @@ const WorkshopPage = () => {
               </CardContent>
             </Card>
 
-            {/* Extra Expenses Card */}
-            <Card sx={{ boxShadow: 4, width: '100%', mb: 4, border: '2px solid #e3f2fd' }}>
-              <CardContent sx={{ p: 0 }}>
-                {/* Header */}
-                <Box sx={{
-                  backgroundColor: '#b98f33',
-                  color: '#000000',
-                  p: 2,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <BarChartIcon sx={{ mr: 1, color: '#000000' }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                      Extra Expenses
-                    </Typography>
-                    {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
-                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', ml: 2 }}>
-                        • Total: ${selectedOrder.extraExpenses.reduce((sum, expense) => sum + parseFloat(expense.total || 0), 0).toFixed(2)}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => setExpenseModalOpen(true)}
-                      sx={{
-                        color: '#000000',
-                        borderColor: '#000000',
-                        '&:hover': {
-                          borderColor: '#8b6b1f',
-                          backgroundColor: 'rgba(139, 107, 31, 0.1)'
-                        }
-                      }}
-                    >
-                      Add Expense
-                    </Button>
-                  </Box>
-                </Box>
-
-                             {/* Content */}
-             <Box sx={{ p: 2 }}>
-               {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 ? (
-                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                   {selectedOrder.extraExpenses.map((expense, index) => (
-                     <Card key={index} sx={{ p: 1.5, border: '1px solid #e3f2fd', backgroundColor: '#2a2a2a' }}>
-                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', minWidth: '120px' }}>
-                             {expense.description}
-                           </Typography>
-                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Price:</Typography>
-                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                               ${parseFloat(expense.price || 0).toFixed(2)}
-                             </Typography>
-                           </Box>
-                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Unit:</Typography>
-                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                               {expense.unit || 'N/A'}
-                             </Typography>
-                           </Box>
-                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Tax:</Typography>
-                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
-                               {expense.taxType === 'percent' ? `${expense.tax}%` : `$${parseFloat(expense.tax || 0).toFixed(2)}`}
-                             </Typography>
-                           </Box>
-                         </Box>
-                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', mr: 2 }}>
-                             ${parseFloat(expense.total || 0).toFixed(2)}
-                           </Typography>
-                           <Tooltip title="Edit Expense">
-                             <IconButton
-                               size="small"
-                               onClick={() => handleEditExpense(expense, index)}
-                               sx={{
-                                 color: '#d4af5a',
-                                 '&:hover': {
-                                   backgroundColor: 'rgba(212, 175, 90, 0.1)',
-                                   color: '#e6c47a'
-                                 }
-                               }}
-                             >
-                               <EditIcon fontSize="small" />
-                             </IconButton>
-                           </Tooltip>
-                           <Tooltip title="Delete Expense">
-                             <IconButton
-                               size="small"
-                               onClick={() => handleDeleteExpenseItem(expense, index)}
-                               sx={{
-                                 color: '#ff6b6b',
-                                 '&:hover': {
-                                   backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                                   color: '#ff5252'
-                                 }
-                               }}
-                             >
-                               <DeleteIcon fontSize="small" />
-                             </IconButton>
-                           </Tooltip>
-                         </Box>
-                       </Box>
-                     </Card>
-                   ))}
-                 </Box>
-                  ) : (
-                    <Box sx={{ textAlign: 'center', py: 3 }}>
-                      <Typography variant="body1" sx={{ color: '#b98f33', mb: 2 }}>
-                        No extra expenses added yet
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        onClick={() => setExpenseModalOpen(true)}
-                        sx={{
-                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                          color: '#000000',
-                          '&:hover': {
-                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
-                          }
-                        }}
-                      >
-                        Add First Expense
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
 
             {/* Furniture Details Card */}
             <Card sx={{ boxShadow: 4, width: '100%', mb: 4, border: '2px solid #e3f2fd' }}>
@@ -3215,19 +3306,36 @@ const WorkshopPage = () => {
                         return (
                           <Card key={index} sx={{ p: 2, border: '2px solid #e3f2fd' }}>
                             <Box sx={{ 
-                              backgroundColor: '#d4af5a', 
+                              backgroundColor: hasUnsavedChangesInGroup(index) ? '#f27921' : '#d4af5a', 
                               color: '#000000', 
                               p: 1.5, 
                               borderRadius: 1, 
                               mb: 2,
                               display: 'flex',
                               justifyContent: 'space-between',
-                              alignItems: 'center'
+                              alignItems: 'center',
+                              border: hasUnsavedChangesInGroup(index) ? '2px solid #ff9800' : 'none',
+                              boxShadow: hasUnsavedChangesInGroup(index) ? '0 2px 8px rgba(242, 121, 33, 0.3)' : 'none'
                             }}>
-                              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem', color: '#000000' }}>
-                                {currentGroup.furnitureType || 'Furniture Group ' + (index + 1)}
-                              </Typography>
-                              <Tooltip title={`Save Furniture Group ${index + 1}`}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem', color: '#000000' }}>
+                                  {currentGroup.furnitureType || 'Furniture Group ' + (index + 1)}
+                                </Typography>
+                                {hasUnsavedChangesInGroup(index) && (
+                                  <Typography variant="caption" sx={{ 
+                                    color: '#000000', 
+                                    fontWeight: 'bold',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                    px: 1,
+                                    py: 0.5,
+                                    borderRadius: 1,
+                                    fontSize: '0.7rem'
+                                  }}>
+                                    UNSAVED
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Tooltip title={hasUnsavedChangesInGroup(index) ? `Save Furniture Group ${index + 1}` : `Furniture Group ${index + 1} saved`}>
                                 <IconButton 
                                   onClick={() => handleSaveFurnitureGroup(index)} 
                                   color="inherit" 
@@ -3235,7 +3343,8 @@ const WorkshopPage = () => {
                                   sx={{ 
                                     '&:hover': { 
                                       backgroundColor: 'rgba(255, 255, 255, 0.1)' 
-                                    } 
+                                    },
+                                    backgroundColor: hasUnsavedChangesInGroup(index) ? 'rgba(255, 255, 255, 0.2)' : 'transparent'
                                   }}
                                 >
                                   <SaveIcon />
@@ -3689,6 +3798,203 @@ const WorkshopPage = () => {
                     <Typography variant="body2" color="text.secondary">
                       No furniture items added
                     </Typography>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Additional Notes Card */}
+            <Card sx={{ boxShadow: 4, width: '100%', mb: 4, border: '2px solid #e3f2fd' }}>
+              <CardContent sx={{ p: 0 }}>
+                {/* Header */}
+                <Box sx={{
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
+                  p: 2,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <NoteIcon sx={{ mr: 1, color: '#000000' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      Additional Notes
+                    </Typography>
+                  </Box>
+                  <Tooltip title="Edit Additional Notes">
+                    <IconButton onClick={handleEditAdditionalNotes} sx={{ color: '#000000' }} size="small">
+                      <EditIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+
+                {/* Content */}
+                <Box sx={{ p: 3 }}>
+                  {selectedOrder.paymentData?.notes ? (
+                    <Box sx={{ 
+                      backgroundColor: '#2a2a2a', 
+                      p: 2, 
+                      borderRadius: 1, 
+                      border: '1px solid #e3f2fd'
+                    }}>
+                      <Typography variant="body1" sx={{ 
+                        color: '#ffffff', 
+                        whiteSpace: 'pre-wrap',
+                        fontStyle: 'italic'
+                      }}>
+                        {selectedOrder.paymentData.notes}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ 
+                      backgroundColor: '#2a2a2a', 
+                      p: 2, 
+                      borderRadius: 1, 
+                      border: '1px solid #e3f2fd',
+                      textAlign: 'center'
+                    }}>
+                      <Typography variant="body2" sx={{ 
+                        color: '#cccccc', 
+                        fontStyle: 'italic'
+                      }}>
+                        No additional notes available
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Extra Expenses Card */}
+            <Card sx={{ boxShadow: 4, width: '100%', mb: 4, border: '2px solid #e3f2fd' }}>
+              <CardContent sx={{ p: 0 }}>
+                {/* Header */}
+                <Box sx={{
+                  backgroundColor: '#b98f33',
+                  color: '#000000',
+                  p: 2,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <BarChartIcon sx={{ mr: 1, color: '#000000' }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+                      Extra Expenses
+                    </Typography>
+                    {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000', ml: 2 }}>
+                        • Total: ${selectedOrder.extraExpenses.reduce((sum, expense) => sum + parseFloat(expense.total || 0), 0).toFixed(2)}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setExpenseModalOpen(true)}
+                      sx={{
+                        color: '#000000',
+                        borderColor: '#000000',
+                        '&:hover': {
+                          borderColor: '#8b6b1f',
+                          backgroundColor: 'rgba(139, 107, 31, 0.1)'
+                        }
+                      }}
+                    >
+                      Add Expense
+                    </Button>
+                  </Box>
+                </Box>
+
+                             {/* Content */}
+             <Box sx={{ p: 2 }}>
+               {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 ? (
+                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                   {selectedOrder.extraExpenses.map((expense, index) => (
+                     <Card key={index} sx={{ p: 1.5, border: '1px solid #e3f2fd', backgroundColor: '#2a2a2a' }}>
+                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', minWidth: '120px' }}>
+                             {expense.description}
+                           </Typography>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Price:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               ${parseFloat(expense.price || 0).toFixed(2)}
+                             </Typography>
+                           </Box>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Unit:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               {expense.unit || 'N/A'}
+                             </Typography>
+                           </Box>
+                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                             <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>Tax:</Typography>
+                             <Typography variant="body2" sx={{ color: '#ffffff', fontSize: '0.8rem' }}>
+                               {expense.taxType === 'percent' ? `${expense.tax}%` : `$${parseFloat(expense.tax || 0).toFixed(2)}`}
+                             </Typography>
+                           </Box>
+                         </Box>
+                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                           <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a', fontSize: '0.9rem', mr: 2 }}>
+                             ${parseFloat(expense.total || 0).toFixed(2)}
+                           </Typography>
+                           <Tooltip title="Edit Expense">
+                             <IconButton
+                               size="small"
+                               onClick={() => handleEditExpense(expense, index)}
+                               sx={{
+                                 color: '#d4af5a',
+                                 '&:hover': {
+                                   backgroundColor: 'rgba(212, 175, 90, 0.1)',
+                                   color: '#e6c47a'
+                                 }
+                               }}
+                             >
+                               <EditIcon fontSize="small" />
+                             </IconButton>
+                           </Tooltip>
+                           <Tooltip title="Delete Expense">
+                             <IconButton
+                               size="small"
+                               onClick={() => handleDeleteExpenseItem(expense, index)}
+                               sx={{
+                                 color: '#ff6b6b',
+                                 '&:hover': {
+                                   backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                                   color: '#ff5252'
+                                 }
+                               }}
+                             >
+                               <DeleteIcon fontSize="small" />
+                             </IconButton>
+                           </Tooltip>
+                         </Box>
+                       </Box>
+                     </Card>
+                   ))}
+                 </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', py: 3 }}>
+                      <Typography variant="body1" sx={{ color: '#b98f33', mb: 2 }}>
+                        No extra expenses added yet
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => setExpenseModalOpen(true)}
+                        sx={{
+                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                          color: '#000000',
+                          '&:hover': {
+                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                          }
+                        }}
+                      >
+                        Add First Expense
+                      </Button>
+                    </Box>
                   )}
                 </Box>
               </CardContent>
@@ -4248,6 +4554,44 @@ const WorkshopPage = () => {
         <DialogActions>
           <Button onClick={() => setEditFurnitureDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
           <Button onClick={handleSaveFurnitureGroup} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+
+      {/* Edit Additional Notes Dialog */}
+      <Dialog open={editAdditionalNotesDialog} onClose={() => setEditAdditionalNotesDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Edit Additional Notes</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Additional Notes"
+              multiline
+              rows={6}
+              value={editAdditionalNotesData.notes || ''}
+              onChange={(e) => setEditAdditionalNotesData({ ...editAdditionalNotesData, notes: e.target.value })}
+              onFocus={handleAutoSelect}
+              placeholder="Enter any additional notes or special instructions"
+              sx={{
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderWidth: '2px',
+                  borderColor: 'grey.300',
+                  borderRadius: 2,
+                },
+                '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                },
+                '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'primary.main',
+                  borderWidth: '2px',
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditAdditionalNotesDialog(false)} sx={buttonStyles.cancelButton}>Cancel</Button>
+          <Button onClick={handleSaveAdditionalNotes} variant="contained" sx={buttonStyles.primaryButton}>Save</Button>
         </DialogActions>
       </Dialog>
 

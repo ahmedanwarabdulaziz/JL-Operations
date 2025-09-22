@@ -524,11 +524,11 @@ const InvoicePage = () => {
               <div class="notes-section">
                 <div class="notes-item">
                   <div class="notes-header">Internal Notes</div>
-                  <div class="notes-content">${selectedOrder.paymentData?.generalNotes || ''}</div>
+                  <div class="notes-content">${selectedOrder.paymentData?.notes || ''}</div>
                 </div>
                 <div class="notes-item">
                   <div class="notes-header">Customer's Item Notes</div>
-                  <div class="notes-content">${selectedOrder.paymentData?.customerNotes || ''}</div>
+                  <div class="notes-content">${selectedOrder.furnitureData?.groups?.filter(group => group.customerNote && group.customerNote.trim() !== '').map(group => `<strong>${group.furnitureType || 'Furniture Group'}:</strong><br/>${group.customerNote}`).join('<br/><br/>') || ''}</div>
                 </div>
               </div>
               <div class="totals-section">
@@ -1032,7 +1032,7 @@ const InvoicePage = () => {
                 backgroundColor: '#ffffff',
                 color: '#000000'
               }}>
-                {selectedOrder.paymentData?.generalNotes || ''}
+                {selectedOrder.paymentData?.notes || ''}
               </Box>
             </Box>
             {/* Customer Notes */}
@@ -1056,7 +1056,16 @@ const InvoicePage = () => {
                 backgroundColor: '#ffffff',
                 color: '#000000'
               }}>
-                {selectedOrder.paymentData?.customerNotes || ''}
+                {selectedOrder.furnitureData?.groups?.filter(group => group.customerNote && group.customerNote.trim() !== '').map(group => (
+                  <Box key={group.id || Math.random()} sx={{ mb: 1 }}>
+                    <Box sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                      {group.furnitureType || 'Furniture Group'}:
+                    </Box>
+                    <Box sx={{ ml: 1 }}>
+                      {group.customerNote}
+                    </Box>
+                  </Box>
+                )) || ''}
               </Box>
             </Box>
           </Box>
@@ -1481,15 +1490,18 @@ const InvoicePage = () => {
                         selected={selectedOrder?.id === order.id}
                         onClick={() => handleSelectOrder(order)}
                         sx={{
-                          '&.Mui-selected': {
-                            backgroundColor: '#3a3a3a',
-                            borderLeft: '4px solid #b98f33',
-                            '&:hover': {
-                              backgroundColor: '#3a3a3a',
-                            },
+                          backgroundColor: selectedOrder?.id === order.id ? '#ffffff' : 'transparent',
+                          borderLeft: selectedOrder?.id === order.id ? '4px solid #274290' : '4px solid transparent',
+                          color: selectedOrder?.id === order.id ? '#000000' : 'inherit',
+                          '& .MuiTypography-root': {
+                            color: selectedOrder?.id === order.id ? '#000000 !important' : 'inherit',
+                          },
+                          '& .MuiChip-root': {
+                            backgroundColor: selectedOrder?.id === order.id ? '#274290' : 'inherit',
+                            color: selectedOrder?.id === order.id ? '#ffffff' : 'inherit',
                           },
                           '&:hover': {
-                            backgroundColor: '#2a2a2a',
+                            backgroundColor: selectedOrder?.id === order.id ? '#ffffff' : '#2a2a2a',
                           }
                         }}
                       >
