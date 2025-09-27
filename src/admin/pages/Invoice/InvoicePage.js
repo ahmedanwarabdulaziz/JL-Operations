@@ -80,6 +80,8 @@ const InvoicePage = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      
+      // Fetch orders
       const ordersRef = collection(db, 'orders');
       const q = query(ordersRef, orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
@@ -87,7 +89,26 @@ const InvoicePage = () => {
         id: doc.id,
         ...doc.data()
       }));
-      setOrders(ordersData);
+
+      // Get invoice statuses to identify end states
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const statusesSnapshot = await getDocs(statusesRef);
+      const statusesData = statusesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Filter out cancelled and pending orders, include all other orders (including done)
+      const excludedStatuses = statusesData.filter(status => 
+        status.isEndState && (status.endStateType === 'cancelled' || status.endStateType === 'pending')
+      );
+      const excludedValues = excludedStatuses.map(status => status.value);
+
+      const activeOrders = ordersData.filter(order => 
+        !excludedValues.includes(order.invoiceStatus)
+      );
+      
+      setOrders(activeOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showNotification('Error fetching orders', 'error');

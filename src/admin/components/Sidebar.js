@@ -34,6 +34,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import WebIcon from '@mui/icons-material/Web';
 import GroupIcon from '@mui/icons-material/Group';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -54,6 +55,7 @@ const menuItems = [
   { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
+  { text: 'Pending Orders', path: '/admin/pending-orders', icon: <AccessTimeIcon /> },
 ];
 
 const settingsItems = [

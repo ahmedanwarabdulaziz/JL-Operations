@@ -42,6 +42,7 @@ import {
   Settings as SettingsIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  AccessTime as AccessTimeIcon,
   PlayArrow as PlayArrowIcon,
   Stop as StopIcon,
   Flag as FlagIcon,
@@ -215,6 +216,11 @@ const StatusManagementPage = () => {
   const [selectedOrderForStatusChange, setSelectedOrderForStatusChange] = useState(null);
   const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  const [pendingForm, setPendingForm] = useState({
+    expectedResumeDate: '',
+    pendingNotes: ''
+  });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState('');
   
@@ -541,6 +547,18 @@ const StatusManagementPage = () => {
     if (newStatus.isEndState && newStatus.endStateType === 'cancelled') {
       setCancellationReason('');
       setStatusChangeDialogOpen(true);
+    } else if (newStatus.isEndState && newStatus.endStateType === 'pending') {
+      // If changing to pending end state, ask for expected date and notes
+      // Set default date to same day next month
+      const today = new Date();
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+      const defaultDate = nextMonth.toISOString().split('T')[0];
+      
+      setPendingForm({
+        expectedResumeDate: defaultDate,
+        pendingNotes: ''
+      });
+      setPendingDialogOpen(true);
     } else {
       // Apply status change immediately
       await applyStatusChange(order, newStatus, '');
@@ -569,6 +587,19 @@ const StatusManagementPage = () => {
           const totalAmount = calculateOrderTotal(order);
           updateData['paymentData.amountPaid'] = totalAmount;
           updateData.completedAt = new Date();
+        } else if (newStatus.endStateType === 'pending') {
+          // Pending orders: set paid amount to 0
+          updateData['paymentData.amountPaid'] = 0;
+          updateData.pendingAt = new Date();
+          // Add pending-specific fields if provided
+          if (reason && typeof reason === 'object') {
+            if (reason.expectedResumeDate) {
+              updateData.expectedResumeDate = reason.expectedResumeDate;
+            }
+            if (reason.pendingNotes) {
+              updateData.pendingNotes = reason.pendingNotes;
+            }
+          }
         }
       }
 
@@ -576,6 +607,7 @@ const StatusManagementPage = () => {
       
       showSuccess(`Order status updated to "${newStatus.label}"`);
       setStatusChangeDialogOpen(false);
+      setPendingDialogOpen(false);
       setValidationDialogOpen(false);
       fetchOrders();
     } catch (error) {
@@ -670,6 +702,36 @@ const StatusManagementPage = () => {
     } catch (error) {
       console.error('Error updating payment:', error);
       showError('Failed to update payment');
+    }
+  };
+
+  const handlePendingSubmit = async () => {
+    // Validate expected date is not in the past
+    const expectedDate = new Date(pendingForm.expectedResumeDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
+    if (expectedDate < today) {
+      showError('Expected resume date cannot be in the past');
+      return;
+    }
+
+    if (!pendingForm.expectedResumeDate) {
+      showError('Please select an expected resume date');
+      return;
+    }
+
+    try {
+      const order = selectedOrderForStatusChange;
+      const newStatus = statuses.find(s => s.value === order.newStatus);
+      
+      await applyStatusChange(order, newStatus, {
+        expectedResumeDate: pendingForm.expectedResumeDate,
+        pendingNotes: pendingForm.pendingNotes
+      });
+    } catch (error) {
+      console.error('Error setting order to pending:', error);
+      showError('Failed to set order to pending');
     }
   };
 
@@ -1097,6 +1159,12 @@ const StatusManagementPage = () => {
                         Cancelled (Auto-set paid=0)
                       </Box>
                     </MenuItem>
+                    <MenuItem value="pending">
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AccessTimeIcon sx={{ color: '#ff9800', mr: 1 }} />
+                        Pending (Auto-set paid=0)
+                      </Box>
+                    </MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
@@ -1393,6 +1461,117 @@ const StatusManagementPage = () => {
             }}
           >
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Pending Status Dialog */}
+      <Dialog open={pendingDialogOpen} onClose={() => setPendingDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AccessTimeIcon sx={{ mr: 1, color: '#ff9800' }} />
+            Set Order to Pending
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedOrderForStatusChange && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Order #{selectedOrderForStatusChange.orderDetails?.billInvoice}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Customer: {selectedOrderForStatusChange.personalInfo?.name}
+              </Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                This will set the order to pending status and clear any payment amounts. Please provide the expected resume date and any notes.
+              </Alert>
+
+              <TextField
+                fullWidth
+                label="Expected Resume Date"
+                type="date"
+                value={pendingForm.expectedResumeDate}
+                onChange={(e) => setPendingForm({ ...pendingForm, expectedResumeDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                required
+                sx={{ mb: 2 }}
+                inputProps={{
+                  min: new Date().toISOString().split('T')[0] // Prevent past dates
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Pending Notes"
+                multiline
+                rows={3}
+                value={pendingForm.pendingNotes}
+                onChange={(e) => setPendingForm({ ...pendingForm, pendingNotes: e.target.value })}
+                placeholder="Enter any notes about why the order is being postponed..."
+                sx={{ mb: 2 }}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setPendingDialogOpen(false)}
+            sx={{
+              backgroundColor: '#e6e7e8',
+              color: '#000000',
+              border: '3px solid #c0c0c0',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                backgroundColor: '#d0d1d2',
+                border: '3px solid #a0a0a0',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePendingSubmit}
+            variant="contained"
+            startIcon={<AccessTimeIcon />}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            Set to Pending
           </Button>
         </DialogActions>
       </Dialog>

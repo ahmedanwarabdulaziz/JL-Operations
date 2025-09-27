@@ -27,12 +27,19 @@ import DataManagementPage from './pages/DataManagement/DataManagementPage';
 import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
 import EndDonePage from './pages/EndDone/EndDonePage';
 import EndCancelledPage from './pages/EndCancelled/EndCancelledPage';
+import PendingOrdersPage from './pages/PendingOrders/PendingOrdersPage';
 import LeadFormPage from './pages/LeadFormPage/LeadFormPage';
 import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
+
+// Customer Invoices imports
+import CustomerInvoicesPage from './admin/pages/CustomerInvoices/CustomerInvoicesPage';
+import CreateInvoicePage from './admin/pages/CustomerInvoices/CreateInvoicePage';
+import EditInvoicePage from './admin/pages/CustomerInvoices/EditInvoicePage';
+import PrintInvoicePage from './admin/pages/CustomerInvoices/PrintInvoicePage';
 
 // Website imports
 import WebsiteLayout from './website/layouts/WebsiteLayout';
@@ -85,6 +92,7 @@ const AppContent = () => {
                       location.pathname === '/material-companies' ||
                       location.pathname === '/platforms' ||
                       location.pathname === '/invoices' ||
+                      location.pathname === '/customer-invoices' ||
                       location.pathname === '/finance' ||
                       location.pathname === '/pl' ||
                       location.pathname === '/status-management' ||
@@ -141,6 +149,13 @@ const AppContent = () => {
           <Route path="/admin/platforms" element={<PlatformsPage />} />
           <Route path="/invoices" element={<Navigate to="/admin/invoices" replace />} />
           <Route path="/admin/invoices" element={<InvoicePage />} />
+          
+          {/* Customer Invoices Routes */}
+          <Route path="/customer-invoices" element={<Navigate to="/admin/customer-invoices" replace />} />
+          <Route path="/admin/customer-invoices" element={<CustomerInvoicesPage />} />
+          <Route path="/admin/customer-invoices/create" element={<CreateInvoicePage />} />
+          <Route path="/admin/customer-invoices/edit" element={<EditInvoicePage />} />
+          <Route path="/admin/customer-invoices/print" element={<PrintInvoicePage />} />
 
           <Route path="/finance" element={<Navigate to="/admin/finance" replace />} />
           <Route path="/admin/finance" element={<FinancePage />} />
@@ -156,6 +171,8 @@ const AppContent = () => {
           <Route path="/admin/end-done" element={<EndDonePage />} />
           <Route path="/end-cancelled" element={<Navigate to="/admin/end-cancelled" replace />} />
           <Route path="/admin/end-cancelled" element={<EndCancelledPage />} />
+          <Route path="/pending-orders" element={<Navigate to="/admin/pending-orders" replace />} />
+          <Route path="/admin/pending-orders" element={<PendingOrdersPage />} />
           <Route path="/leads" element={<Navigate to="/admin/leads" replace />} />
           <Route path="/admin/leads" element={<LeadsManagement />} />
           <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />

@@ -152,14 +152,14 @@ const FinancePage = () => {
         ...doc.data()
       }));
 
-      // Filter out ONLY cancelled orders, include all other orders (including done)
-      const cancelledStatuses = statusesData.filter(status => 
-        status.isEndState && status.endStateType === 'cancelled'
+      // Filter out cancelled and pending orders, include all other orders (including done)
+      const excludedStatuses = statusesData.filter(status => 
+        status.isEndState && (status.endStateType === 'cancelled' || status.endStateType === 'pending')
       );
-      const cancelledValues = cancelledStatuses.map(status => status.value);
+      const excludedValues = excludedStatuses.map(status => status.value);
 
       const activeOrders = ordersData.filter(order => 
-        !cancelledValues.includes(order.invoiceStatus)
+        !excludedValues.includes(order.invoiceStatus)
       );
       
       setOrders(activeOrders);

@@ -68,7 +68,8 @@ import {
   Delete as DeleteIcon,
   BarChart as BarChartIcon,
   RestartAlt as RestartAltIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
@@ -172,6 +173,14 @@ const WorkshopPage = () => {
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
   const [allocationDialogHidden, setAllocationDialogHidden] = useState(false);
   const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
+  
+  // Pending dialog state
+  const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  const [selectedOrderForPending, setSelectedOrderForPending] = useState(null);
+  const [pendingForm, setPendingForm] = useState({
+    expectedResumeDate: '',
+    pendingNotes: ''
+  });
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [monthlyAllocations, setMonthlyAllocations] = useState([]);
@@ -1180,6 +1189,22 @@ const WorkshopPage = () => {
             setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
             return;
           }
+        } else if (newStatusObj.endStateType === 'pending') {
+          // For "pending" - show pending dialog
+          setSelectedOrderForPending(order);
+          
+          // Set default date to same day next month
+          const today = new Date();
+          const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+          const defaultDate = nextMonth.toISOString().split('T')[0];
+          
+          setPendingForm({
+            expectedResumeDate: defaultDate,
+            pendingNotes: ''
+          });
+          setPendingDialogOpen(true);
+          setStatusDialogOpen(false);
+          return;
         }
       }
 
@@ -1205,6 +1230,49 @@ const WorkshopPage = () => {
     } catch (error) {
       console.error('Error updating invoice status:', error);
       showError('Failed to update invoice status');
+    }
+  };
+
+  const handlePendingSubmit = async () => {
+    // Validate expected date is not in the past
+    const expectedDate = new Date(pendingForm.expectedResumeDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
+    if (expectedDate < today) {
+      showError('Expected resume date cannot be in the past');
+      return;
+    }
+
+    if (!pendingForm.expectedResumeDate) {
+      showError('Please select an expected resume date');
+      return;
+    }
+
+    try {
+      const order = selectedOrderForPending;
+      const orderRef = doc(db, 'orders', order.id);
+      
+      await updateDoc(orderRef, {
+        invoiceStatus: 'pending',
+        statusUpdatedAt: new Date(),
+        'paymentData.amountPaid': 0,
+        pendingAt: new Date(),
+        expectedResumeDate: pendingForm.expectedResumeDate,
+        pendingNotes: pendingForm.pendingNotes
+      });
+
+      showSuccess('Order set to pending successfully');
+      setPendingDialogOpen(false);
+      setSelectedOrderForPending(null);
+      setPendingForm({
+        expectedResumeDate: '',
+        pendingNotes: ''
+      });
+      fetchOrders();
+    } catch (error) {
+      console.error('Error setting order to pending:', error);
+      showError('Failed to set order to pending');
     }
   };
 
@@ -6690,6 +6758,73 @@ const WorkshopPage = () => {
             sx={buttonStyles.primaryButton}
           >
             Send Email
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Pending Status Dialog */}
+      <Dialog open={pendingDialogOpen} onClose={() => setPendingDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <AccessTimeIcon sx={{ mr: 1, color: '#ff9800' }} />
+            Set Order to Pending
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {selectedOrderForPending && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Order #{selectedOrderForPending.orderDetails?.billInvoice}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Customer: {selectedOrderForPending.personalInfo?.name}
+              </Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                This will set the order to pending status and clear any payment amounts. Please provide the expected resume date and any notes.
+              </Alert>
+
+              <TextField
+                fullWidth
+                label="Expected Resume Date"
+                type="date"
+                value={pendingForm.expectedResumeDate}
+                onChange={(e) => setPendingForm({ ...pendingForm, expectedResumeDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                required
+                sx={{ mb: 2 }}
+                inputProps={{
+                  min: new Date().toISOString().split('T')[0] // Prevent past dates
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Pending Notes"
+                multiline
+                rows={3}
+                value={pendingForm.pendingNotes}
+                onChange={(e) => setPendingForm({ ...pendingForm, pendingNotes: e.target.value })}
+                placeholder="Enter any notes about why the order is being postponed..."
+                sx={{ mb: 2 }}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setPendingDialogOpen(false)}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handlePendingSubmit}
+            variant="contained"
+            startIcon={<AccessTimeIcon />}
+            sx={buttonStyles.primaryButton}
+          >
+            Set to Pending
           </Button>
         </DialogActions>
       </Dialog>

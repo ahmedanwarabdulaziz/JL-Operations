@@ -34,6 +34,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import WebIcon from '@mui/icons-material/Web';
 import GroupIcon from '@mui/icons-material/Group';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -50,10 +51,12 @@ const menuItems = [
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
   { text: 'Material Request', path: '/admin/material-request', icon: <InventoryIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
+  { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
   { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
+  { text: 'Pending Orders', path: '/admin/pending-orders', icon: <AccessTimeIcon /> },
 ];
 
 const settingsItems = [

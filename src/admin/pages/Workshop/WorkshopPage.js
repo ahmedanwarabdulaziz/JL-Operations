@@ -62,7 +62,8 @@ import {
   ExpandLess as ExpandLessIcon,
   Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
+  Cancel as CancelIcon,
+  AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../shared/services/emailService';
@@ -126,6 +127,14 @@ const WorkshopPage = () => {
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
   const [allocationDialogHidden, setAllocationDialogHidden] = useState(false);
   const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
+  
+  // Pending dialog state
+  const [pendingDialogOpen, setPendingDialogOpen] = useState(false);
+  const [selectedOrderForPending, setSelectedOrderForPending] = useState(null);
+  const [pendingForm, setPendingForm] = useState({
+    expectedResumeDate: '',
+    pendingNotes: ''
+  });
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [monthlyAllocations, setMonthlyAllocations] = useState([]);
