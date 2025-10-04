@@ -19,7 +19,8 @@ import {
   FormControlLabel,
   Switch,
   Alert,
-  CircularProgress
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -48,6 +49,7 @@ const CreateInvoicePage = () => {
   const [taxPercentage, setTaxPercentage] = useState(13);
   const [creditCardFeeEnabled, setCreditCardFeeEnabled] = useState(false);
   const [creditCardFeePercentage, setCreditCardFeePercentage] = useState(2.5);
+  const [paidAmount, setPaidAmount] = useState(0);
   
   // Invoice data (copied from order but editable)
   const [customerInfo, setCustomerInfo] = useState({
@@ -64,8 +66,7 @@ const CreateInvoicePage = () => {
       const order = location.state.orderData;
       setOrderData(order);
       
-      // Set default invoice number (sequential)
-      setInvoiceNumber('');
+      // Keep existing invoice number or let the default be set by useEffect
       
       // Copy customer info from order
       setCustomerInfo({
@@ -93,9 +94,18 @@ const CreateInvoicePage = () => {
           
           // Add material item if it exists
           if (group.materialCompany || group.materialPrice || group.materialQuantity) {
+            // Create material name with company and code
+            let materialName = 'Material';
+            if (group.materialCompany) {
+              materialName += ` - ${group.materialCompany}`;
+            }
+            if (group.materialCode) {
+              materialName += ` (${group.materialCode})`;
+            }
+            
             invoiceItems.push({
               id: `item-${index}-material`,
-              name: 'Material',
+              name: materialName,
               quantity: parseFloat(group.materialQnty || group.materialQuantity) || 1,
               price: parseFloat(group.materialPrice) || 0,
               type: 'material',
@@ -212,7 +222,8 @@ const CreateInvoicePage = () => {
   // Set default invoice number when component mounts
   useEffect(() => {
     const setDefaultInvoiceNumber = async () => {
-      if (!invoiceNumber) {
+      // Only set default if invoice number is empty or just whitespace
+      if (!invoiceNumber || !invoiceNumber.trim()) {
         const nextNumber = await getNextInvoiceNumber();
         setInvoiceNumber(nextNumber);
       }
@@ -222,8 +233,12 @@ const CreateInvoicePage = () => {
 
   // Add new item
   const addItem = () => {
+    // Find the last furniture group index to assign the new item to it
+    const furnitureGroups = items.filter(item => item.isGroup);
+    const lastGroupIndex = furnitureGroups.length > 0 ? furnitureGroups.length - 1 : 0;
+    
     const newItem = {
-      id: `item-${Date.now()}`,
+      id: `item-${lastGroupIndex}-${Date.now()}`,
       name: 'New Item',
       quantity: 1,
       price: 0,
@@ -231,6 +246,58 @@ const CreateInvoicePage = () => {
       isGroup: false
     };
     setItems([...items, newItem]);
+  };
+
+  // Add new furniture group
+  const addFurnitureGroup = () => {
+    const newGroup = {
+      id: `group-${Date.now()}`,
+      name: '',
+      quantity: 1,
+      price: 0,
+      type: 'group',
+      isGroup: true
+    };
+    setItems([...items, newGroup]);
+  };
+
+  // Add item to specific group
+  const addItemToGroup = (groupIndex) => {
+    const newItem = {
+      id: `item-${groupIndex}-${Date.now()}`,
+      name: 'New Item',
+      quantity: 1,
+      price: 0,
+      type: 'material',
+      isGroup: false
+    };
+    
+    // Find the position to insert the item (after the group and its existing items)
+    let insertIndex = -1;
+    let groupFound = false;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].isGroup && items[i].id === `group-${groupIndex}`) {
+        groupFound = true;
+        insertIndex = i + 1;
+      } else if (groupFound && items[i].isGroup) {
+        // Found the next group, stop here
+        break;
+      } else if (groupFound && !items[i].isGroup) {
+        // This is an item in the current group, move insert index
+        insertIndex = i + 1;
+      }
+    }
+    
+    if (insertIndex === -1) {
+      // Group not found, just add at the end
+      setItems([...items, newItem]);
+    } else {
+      // Insert at the correct position
+      const newItems = [...items];
+      newItems.splice(insertIndex, 0, newItem);
+      setItems(newItems);
+    }
   };
 
   // Update item
@@ -268,6 +335,10 @@ const CreateInvoicePage = () => {
 
   const calculateTotal = () => {
     return calculateSubtotal() + calculateTax() + calculateCreditCardFee();
+  };
+
+  const calculateBalance = () => {
+    return calculateTotal() - paidAmount;
   };
 
   // Validate form
@@ -318,12 +389,19 @@ const CreateInvoicePage = () => {
         invoiceNumber,
         originalOrderId: orderData.id,
         originalOrderNumber: orderData.orderDetails?.billInvoice || 'N/A',
+        originalCustomerInfo: {
+          customerName: orderData.personalInfo?.customerName || '',
+          email: orderData.personalInfo?.email || '',
+          phone: orderData.personalInfo?.phone || '',
+          address: orderData.personalInfo?.address || ''
+        },
         headerSettings: {
           taxPercentage,
           creditCardFeeEnabled,
           creditCardFeePercentage
         },
         customerInfo,
+        paidAmount: parseFloat(paidAmount) || 0,
         items: items.filter(item => !item.isGroup).map(item => ({
           ...item,
           quantity: parseFloat(item.quantity),
@@ -336,7 +414,9 @@ const CreateInvoicePage = () => {
           subtotal: calculateSubtotal(),
           taxAmount: calculateTax(),
           creditCardFeeAmount: calculateCreditCardFee(),
-          total: calculateTotal()
+          total: calculateTotal(),
+          paidAmount: parseFloat(paidAmount) || 0,
+          balance: calculateBalance()
         },
         createdAt: new Date(),
         updatedAt: new Date()
@@ -463,6 +543,21 @@ const CreateInvoicePage = () => {
                 inputProps={{ min: 0, max: 100, step: 0.1 }}
                 disabled={!creditCardFeeEnabled}
                 helperText="Credit card processing fee percentage"
+                sx={{ mb: 2 }}
+              />
+              
+              <TextField
+                fullWidth
+                label="Paid Amount ($)"
+                type="number"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText="Amount already paid by customer"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                }}
               />
             </CardContent>
           </Card>
@@ -526,13 +621,13 @@ const CreateInvoicePage = () => {
                   Invoice Items
                 </Typography>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   startIcon={<AddIcon />}
-                  onClick={addItem}
-                  sx={buttonStyles.primaryButton}
+                  onClick={addFurnitureGroup}
+                  sx={buttonStyles.secondaryButton}
                   size="small"
                 >
-                  Add Item
+                  Add Group
                 </Button>
               </Box>
               
@@ -557,22 +652,45 @@ const CreateInvoicePage = () => {
                         }
                       }}>
                         <TableCell>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            value={item.name}
-                            onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                            onFocus={(e) => e.target.select()}
-                            placeholder={item.isGroup ? "Furniture name (e.g., Sofa)" : "Item name"}
-                            required
-                            sx={{
-                              '& .MuiInputBase-input': {
-                                fontWeight: item.isGroup ? 'bold' : 'normal'
-                              }
-                            }}
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={item.name}
+                              onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                              onFocus={(e) => e.target.select()}
+                              placeholder={item.isGroup ? "Furniture Group Name (e.g., Sofa)" : "Item name"}
+                              required
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontWeight: item.isGroup ? 'bold' : 'normal'
+                                }
+                              }}
+                            />
+                            {item.isGroup && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={() => {
+                                  const groupIndex = parseInt(item.id.replace('group-', ''));
+                                  addItemToGroup(groupIndex);
+                                }}
+                                sx={{ 
+                                  ...buttonStyles.secondaryButton,
+                                  minWidth: 'auto', 
+                                  px: 2,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                Add Item
+                              </Button>
+                            )}
+                          </Box>
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <TextField
                             size="small"
                             type="number"
@@ -581,10 +699,9 @@ const CreateInvoicePage = () => {
                             onFocus={(e) => e.target.select()}
                             inputProps={{ min: 0.01, step: 0.01 }}
                             sx={{ width: { xs: '100%', sm: 80 }, minWidth: 60 }}
-                            disabled={item.isGroup} // Groups don't need quantity
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <TextField
                             size="small"
                             type="number"
@@ -593,15 +710,14 @@ const CreateInvoicePage = () => {
                             onFocus={(e) => e.target.select()}
                             inputProps={{ min: 0, step: 0.01 }}
                             sx={{ width: { xs: '100%', sm: 100 }, minWidth: 80 }}
-                            disabled={item.isGroup} // Groups don't need price
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                            {item.isGroup ? '—' : `$${((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toFixed(2)}`}
+                            ${((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toFixed(2)}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" colSpan={item.isGroup ? 3 : 1}>
                           <IconButton
                             size="small"
                             color="error"
@@ -656,12 +772,32 @@ const CreateInvoicePage = () => {
                   
                   <Divider sx={{ my: 2 }} />
                   
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#274290' }}>
                       Total:
                     </Typography>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                       ${calculateTotal().toFixed(2)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1">
+                      Paid Amount:
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                      ${paidAmount.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  
+                  <Divider sx={{ my: 1 }} />
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance() >= 0 ? '#f27921' : '#4CAF50' }}>
+                      Balance:
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance() >= 0 ? '#f27921' : '#4CAF50' }}>
+                      ${calculateBalance().toFixed(2)}
                     </Typography>
                   </Box>
                 </Box>

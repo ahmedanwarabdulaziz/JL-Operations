@@ -19,7 +19,8 @@ import {
   FormControlLabel,
   Switch,
   Alert,
-  CircularProgress
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -46,6 +47,7 @@ const EditInvoicePage = () => {
   const [taxPercentage, setTaxPercentage] = useState(13);
   const [creditCardFeeEnabled, setCreditCardFeeEnabled] = useState(false);
   const [creditCardFeePercentage, setCreditCardFeePercentage] = useState(2.5);
+  const [paidAmount, setPaidAmount] = useState(0);
   
   // Invoice data (editable)
   const [customerInfo, setCustomerInfo] = useState({
@@ -67,6 +69,7 @@ const EditInvoicePage = () => {
       setTaxPercentage(invoice.headerSettings?.taxPercentage || 13);
       setCreditCardFeeEnabled(invoice.headerSettings?.creditCardFeeEnabled || false);
       setCreditCardFeePercentage(invoice.headerSettings?.creditCardFeePercentage || 2.5);
+      setPaidAmount(invoice.paidAmount || invoice.calculations?.paidAmount || 0);
       
       // Set customer info
       setCustomerInfo({
@@ -76,8 +79,66 @@ const EditInvoicePage = () => {
         address: invoice.customerInfo?.address || ''
       });
       
-      // Set items
-      setItems(invoice.items || []);
+      // Reconstruct items from saved invoice data
+      // Organize items under their furniture groups
+      const reconstructedItems = [];
+      
+      // Group items by their furniture group index
+      const itemsByGroup = {};
+      if (invoice.items) {
+        invoice.items.forEach(item => {
+          // Extract group index from item ID (e.g., "item-0-material" -> 0)
+          const match = item.id?.match(/item-(\d+)-/);
+          const groupIndex = match ? parseInt(match[1]) : -1;
+          
+          if (groupIndex >= 0) {
+            if (!itemsByGroup[groupIndex]) {
+              itemsByGroup[groupIndex] = [];
+            }
+            itemsByGroup[groupIndex].push(item);
+          }
+        });
+      }
+      
+      // Add furniture groups with their items in order
+      if (invoice.furnitureGroups) {
+        invoice.furnitureGroups.forEach((group, index) => {
+          // Add the furniture group header
+          reconstructedItems.push({
+            id: `group-${index}`,
+            name: group.name,
+            quantity: 1,
+            price: 0,
+            type: 'group',
+            isGroup: true
+          });
+          
+          // Add items that belong to this group
+          const groupItems = itemsByGroup[index] || [];
+          groupItems.forEach(item => {
+            reconstructedItems.push({
+              ...item,
+              isGroup: false
+            });
+          });
+        });
+      }
+      
+      // Add any ungrouped items at the end
+      const ungroupedItems = (invoice.items || []).filter(item => {
+        const match = item.id?.match(/item-(\d+)-/);
+        const groupIndex = match ? parseInt(match[1]) : -1;
+        return groupIndex >= (invoice.furnitureGroups || []).length;
+      });
+      
+      ungroupedItems.forEach(item => {
+        reconstructedItems.push({
+          ...item,
+          isGroup: false
+        });
+      });
+      
+      setItems(reconstructedItems);
     } else {
       // Redirect back if no invoice data
       navigate('/admin/customer-invoices');
@@ -86,15 +147,73 @@ const EditInvoicePage = () => {
 
   // Add new item
   const addItem = () => {
+    // Find the last furniture group index to assign the new item to it
+    const furnitureGroups = items.filter(item => item.isGroup);
+    const lastGroupIndex = furnitureGroups.length > 0 ? furnitureGroups.length - 1 : 0;
+    
     const newItem = {
-      id: `item-${Date.now()}`,
+      id: `item-${lastGroupIndex}-${Date.now()}`,
       name: '',
       description: '',
       quantity: 1,
       price: 0,
-      type: 'furniture'
+      type: 'furniture',
+      isGroup: false
     };
     setItems([...items, newItem]);
+  };
+
+  // Add new furniture group
+  const addFurnitureGroup = () => {
+    const newGroup = {
+      id: `group-${Date.now()}`,
+      name: '',
+      quantity: 1,
+      price: 0,
+      type: 'group',
+      isGroup: true
+    };
+    setItems([...items, newGroup]);
+  };
+
+  // Add item to specific group
+  const addItemToGroup = (groupIndex) => {
+    const newItem = {
+      id: `item-${groupIndex}-${Date.now()}`,
+      name: '',
+      description: '',
+      quantity: 1,
+      price: 0,
+      type: 'furniture',
+      isGroup: false
+    };
+    
+    // Find the position to insert the item (after the group and its existing items)
+    let insertIndex = -1;
+    let groupFound = false;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].isGroup && items[i].id === `group-${groupIndex}`) {
+        groupFound = true;
+        insertIndex = i + 1;
+      } else if (groupFound && items[i].isGroup) {
+        // Found the next group, stop here
+        break;
+      } else if (groupFound && !items[i].isGroup) {
+        // This is an item in the current group, move insert index
+        insertIndex = i + 1;
+      }
+    }
+    
+    if (insertIndex === -1) {
+      // Group not found, just add at the end
+      setItems([...items, newItem]);
+    } else {
+      // Insert at the correct position
+      const newItems = [...items];
+      newItems.splice(insertIndex, 0, newItem);
+      setItems(newItems);
+    }
   };
 
   // Update item
@@ -112,6 +231,9 @@ const EditInvoicePage = () => {
   // Calculate totals
   const calculateSubtotal = () => {
     return items.reduce((sum, item) => {
+      // Skip group items in calculations
+      if (item.isGroup) return sum;
+      
       const quantity = parseFloat(item.quantity) || 0;
       const price = parseFloat(item.price) || 0;
       return sum + (quantity * price);
@@ -131,6 +253,10 @@ const EditInvoicePage = () => {
 
   const calculateTotal = () => {
     return calculateSubtotal() + calculateTax() + calculateCreditCardFee();
+  };
+
+  const calculateBalance = () => {
+    return calculateTotal() - paidAmount;
   };
 
   // Validate form
@@ -155,6 +281,10 @@ const EditInvoicePage = () => {
         showError('Item name is required for all items');
         return false;
       }
+      
+      // Skip validation for group items (they don't need quantity/price)
+      if (item.isGroup) continue;
+      
       if (parseFloat(item.quantity) <= 0) {
         showError('Item quantity must be greater than 0');
         return false;
@@ -183,16 +313,24 @@ const EditInvoicePage = () => {
           creditCardFeePercentage
         },
         customerInfo,
-        items: items.map(item => ({
+        paidAmount: parseFloat(paidAmount) || 0,
+        // Preserve original customer info if it exists
+        ...(invoiceData.originalCustomerInfo && { originalCustomerInfo: invoiceData.originalCustomerInfo }),
+        items: items.filter(item => !item.isGroup).map(item => ({
           ...item,
           quantity: parseFloat(item.quantity),
           price: parseFloat(item.price)
+        })),
+        furnitureGroups: items.filter(item => item.isGroup).map((item, index) => ({
+          name: item.name
         })),
         calculations: {
           subtotal: calculateSubtotal(),
           taxAmount: calculateTax(),
           creditCardFeeAmount: calculateCreditCardFee(),
-          total: calculateTotal()
+          total: calculateTotal(),
+          paidAmount: parseFloat(paidAmount) || 0,
+          balance: calculateBalance()
         },
         updatedAt: new Date()
       };
@@ -316,6 +454,20 @@ const EditInvoicePage = () => {
                 inputProps={{ min: 0, max: 100, step: 0.1 }}
                 disabled={!creditCardFeeEnabled}
                 helperText="Credit card processing fee percentage"
+                sx={{ mb: 2 }}
+              />
+              
+              <TextField
+                fullWidth
+                label="Paid Amount ($)"
+                type="number"
+                value={paidAmount}
+                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText="Amount already paid by customer"
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                }}
               />
             </CardContent>
           </Card>
@@ -375,13 +527,13 @@ const EditInvoicePage = () => {
                   Invoice Items
                 </Typography>
                 <Button
-                  variant="contained"
+                  variant="outlined"
                   startIcon={<AddIcon />}
-                  onClick={addItem}
-                  sx={buttonStyles.primaryButton}
+                  onClick={addFurnitureGroup}
+                  sx={buttonStyles.secondaryButton}
                   size="small"
                 >
-                  Add Item
+                  Add Group
                 </Button>
               </Box>
               
@@ -399,27 +551,65 @@ const EditInvoicePage = () => {
                   </TableHead>
                   <TableBody>
                     {items.map((item) => (
-                      <TableRow key={item.id}>
+                      <TableRow 
+                        key={item.id} 
+                        sx={{ 
+                          backgroundColor: item.isGroup ? '#f5f5f5' : 'inherit',
+                          '& .MuiTableCell-root': {
+                            fontWeight: item.isGroup ? 'bold' : 'normal',
+                            color: item.isGroup ? '#274290' : 'inherit',
+                            paddingLeft: item.isGroup ? '16px' : '32px' // Indent items under groups
+                          }
+                        }}
+                      >
                         <TableCell>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            value={item.name}
-                            onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                            placeholder="Item name"
-                            required
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={item.name}
+                              onChange={(e) => updateItem(item.id, 'name', e.target.value)}
+                              placeholder={item.isGroup ? "Furniture Group Name (e.g., Sofa)" : "Item name"}
+                              required
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontWeight: item.isGroup ? 'bold' : 'normal'
+                                }
+                              }}
+                            />
+                            {item.isGroup && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={() => {
+                                  const groupIndex = parseInt(item.id.replace('group-', ''));
+                                  addItemToGroup(groupIndex);
+                                }}
+                                sx={{ 
+                                  ...buttonStyles.secondaryButton,
+                                  minWidth: 'auto', 
+                                  px: 2,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 'bold'
+                                }}
+                              >
+                                Add Item
+                              </Button>
+                            )}
+                          </Box>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <TextField
                             fullWidth
                             size="small"
-                            value={item.description}
+                            value={item.description || ''}
                             onChange={(e) => updateItem(item.id, 'description', e.target.value)}
                             placeholder="Description"
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <TextField
                             size="small"
                             type="number"
@@ -429,7 +619,7 @@ const EditInvoicePage = () => {
                             sx={{ width: 80 }}
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <TextField
                             size="small"
                             type="number"
@@ -439,12 +629,12 @@ const EditInvoicePage = () => {
                             sx={{ width: 100 }}
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ display: item.isGroup ? 'none' : 'table-cell' }}>
                           <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                             ${((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toFixed(2)}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" colSpan={item.isGroup ? 4 : 1}>
                           <IconButton
                             size="small"
                             color="error"
@@ -497,12 +687,32 @@ const EditInvoicePage = () => {
               
               <Divider sx={{ my: 2 }} />
               
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                   Total:
                 </Typography>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                   ${calculateTotal().toFixed(2)}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body1">
+                  Paid Amount:
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                  ${paidAmount.toFixed(2)}
+                </Typography>
+              </Box>
+              
+              <Divider sx={{ my: 1 }} />
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance() >= 0 ? '#f27921' : '#4CAF50' }}>
+                  Balance:
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance() >= 0 ? '#f27921' : '#4CAF50' }}>
+                  ${calculateBalance().toFixed(2)}
                 </Typography>
               </Box>
             </CardContent>
@@ -514,3 +724,4 @@ const EditInvoicePage = () => {
 };
 
 export default EditInvoicePage;
+

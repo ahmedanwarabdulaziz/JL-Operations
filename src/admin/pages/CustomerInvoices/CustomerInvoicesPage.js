@@ -215,8 +215,12 @@ const CustomerInvoicesPage = () => {
         return true;
       }
 
-      // Search in customer info
+      // Search in customer info (original and current)
       if (
+        invoice.originalCustomerInfo?.customerName?.toLowerCase().includes(searchLower) ||
+        invoice.originalCustomerInfo?.email?.toLowerCase().includes(searchLower) ||
+        invoice.originalCustomerInfo?.phone?.toLowerCase().includes(searchLower) ||
+        invoice.originalCustomerInfo?.address?.toLowerCase().includes(searchLower) ||
         invoice.customerInfo?.customerName?.toLowerCase().includes(searchLower) ||
         invoice.customerInfo?.email?.toLowerCase().includes(searchLower) ||
         invoice.customerInfo?.phone?.toLowerCase().includes(searchLower) ||
@@ -264,6 +268,12 @@ const CustomerInvoicesPage = () => {
 
   // Calculate invoice total
   const calculateInvoiceTotal = (invoice) => {
+    // Use the saved total from invoice calculations if available
+    if (invoice.calculations?.total !== undefined) {
+      return invoice.calculations.total;
+    }
+
+    // Fallback: calculate manually if saved total is not available
     const subtotal = invoice.items?.reduce((sum, item) => {
       const quantity = parseFloat(item.quantity) || 0;
       const price = parseFloat(item.price) || 0;
@@ -278,6 +288,23 @@ const CustomerInvoicesPage = () => {
     const ccFeeAmount = ccFeeEnabled ? (subtotal * ccFeeRate) / 100 : 0;
 
     return subtotal + taxAmount + ccFeeAmount;
+  };
+
+  // Calculate paid amount
+  const getPaidAmount = (invoice) => {
+    // Check multiple possible locations for paid amount
+    return invoice.paidAmount || 
+           invoice.calculations?.paidAmount || 
+           invoice.paymentInfo?.paidAmount ||
+           invoice.paymentData?.paidAmount ||
+           0;
+  };
+
+  // Calculate balance
+  const calculateBalance = (invoice) => {
+    const total = calculateInvoiceTotal(invoice);
+    const paid = getPaidAmount(invoice);
+    return total - paid;
   };
 
   // Handle create invoice from order
@@ -414,6 +441,8 @@ const CustomerInvoicesPage = () => {
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Customer</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Order Reference</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Total Amount</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Paid Amount</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Balance</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Tax</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>CC Fee</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Date</TableCell>
@@ -470,10 +499,10 @@ const CustomerInvoicesPage = () => {
                       </Avatar>
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                          {invoice.customerInfo?.customerName || 'N/A'}
+                          {invoice.originalCustomerInfo?.customerName || invoice.customerInfo?.customerName || 'N/A'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {invoice.customerInfo?.email || 'No email'}
+                          {invoice.originalCustomerInfo?.email || invoice.customerInfo?.email || 'No email'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {invoice.customerInfo?.phone || 'No phone'}
@@ -495,6 +524,19 @@ const CustomerInvoicesPage = () => {
                   <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                       ${calculateInvoiceTotal(invoice).toFixed(2)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                      ${getPaidAmount(invoice).toFixed(2)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                    <Typography variant="subtitle1" sx={{ 
+                      fontWeight: 'bold', 
+                      color: calculateBalance(invoice) >= 0 ? '#f27921' : '#4CAF50'
+                    }}>
+                      ${calculateBalance(invoice).toFixed(2)}
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
@@ -745,16 +787,251 @@ const CustomerInvoicesPage = () => {
         <DialogContent>
           {selectedInvoice && (
             <Box sx={{ mt: 2 }}>
-              {/* Invoice Preview Component will be added here */}
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Invoice #{selectedInvoice.invoiceNumber}
+              {/* Invoice Header Information */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', color: '#274290' }}>
+                  Invoice #{selectedInvoice.invoiceNumber}
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>Customer:</strong> {selectedInvoice.originalCustomerInfo?.customerName || selectedInvoice.customerInfo?.customerName}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>Email:</strong> {selectedInvoice.originalCustomerInfo?.email || selectedInvoice.customerInfo?.email || 'N/A'}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>Phone:</strong> {selectedInvoice.originalCustomerInfo?.phone || selectedInvoice.customerInfo?.phone || 'N/A'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>Date:</strong> {formatDateOnly(selectedInvoice.createdAt)}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>Order Ref:</strong> #{selectedInvoice.originalOrderNumber || selectedInvoice.originalOrderId}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1, fontWeight: 'bold', color: '#f27921' }}>
+                      <strong>Total:</strong> ${calculateInvoiceTotal(selectedInvoice).toFixed(2)}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1, fontWeight: 'bold', color: '#4CAF50' }}>
+                      <strong>Paid:</strong> ${getPaidAmount(selectedInvoice).toFixed(2)}
+                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 1, fontWeight: 'bold', color: calculateBalance(selectedInvoice) >= 0 ? '#f27921' : '#4CAF50' }}>
+                      <strong>Balance:</strong> ${calculateBalance(selectedInvoice).toFixed(2)}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Invoice Items Grouped by Furniture Group */}
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: '#274290' }}>
+                Invoice Items
               </Typography>
-              <Typography variant="body1">
-                Customer: {selectedInvoice.customerInfo?.customerName}
-              </Typography>
-              <Typography variant="body1">
-                Total: ${calculateInvoiceTotal(selectedInvoice).toFixed(2)}
-              </Typography>
+              
+              <Box sx={{ 
+                border: '1px solid #ddd',
+                borderRadius: 1,
+                overflow: 'hidden'
+              }}>
+                <TableContainer>
+                  <Table>
+                    <TableHead sx={{ backgroundColor: '#f5f5f5' }}>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#333333' }}>Description</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#333333', textAlign: 'center' }}>Price</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#333333', textAlign: 'center' }}>Unit</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', color: '#333333', textAlign: 'right' }}>Amount</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {(() => {
+                        const furnitureGroups = selectedInvoice.furnitureGroups || [];
+                        const items = selectedInvoice.items || [];
+                        
+                        
+                        const rows = [];
+                        
+                        // If no items, show a message
+                        if (furnitureGroups.length === 0 && items.length === 0) {
+                          rows.push(
+                            <TableRow key="no-items">
+                              <TableCell colSpan="4" sx={{ textAlign: 'center', color: '#666666', fontStyle: 'italic' }}>
+                                No items found
+                              </TableCell>
+                            </TableRow>
+                          );
+                        } else {
+                          // Try to group items by their furniture group index
+                          const itemsByGroup = {};
+                          let hasValidGrouping = false;
+                          
+                          items.forEach(item => {
+                            // Extract group index from item ID (e.g., "item-0-material" -> 0)
+                            const match = item.id?.match(/item-(\d+)-/);
+                            const groupIndex = match ? parseInt(match[1]) : -1;
+                            
+                            if (groupIndex >= 0 && groupIndex < furnitureGroups.length) {
+                              hasValidGrouping = true;
+                              if (!itemsByGroup[groupIndex]) {
+                                itemsByGroup[groupIndex] = [];
+                              }
+                              itemsByGroup[groupIndex].push(item);
+                            }
+                          });
+                          
+                          // If we have valid grouping, use it
+                          if (hasValidGrouping && furnitureGroups.length > 0) {
+                            // Render each furniture group with its items
+                            furnitureGroups.forEach((group, groupIndex) => {
+                              // Add furniture group header
+                              rows.push(
+                                <TableRow key={`group-${groupIndex}`} sx={{ backgroundColor: '#f8f9fa' }}>
+                                  <TableCell 
+                                    colSpan="4" 
+                                    sx={{ 
+                                      fontWeight: 'bold',
+                                      color: '#274290',
+                                      fontSize: '14px',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.5px',
+                                      py: 1
+                                    }}
+                                  >
+                                    {group.name}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                              
+                              // Add items that belong to this group
+                              const groupItems = itemsByGroup[groupIndex] || [];
+                              groupItems.forEach((item, itemIndex) => {
+                                rows.push(
+                                  <TableRow key={item.id || `item-${groupIndex}-${itemIndex}`}>
+                                    <TableCell sx={{ color: '#333333' }}>
+                                      {item.name}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                      ${parseFloat(item.price || 0).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                      {item.quantity || 0}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'right', fontWeight: 'bold', color: '#333333' }}>
+                                      ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              });
+                            });
+                            
+                            // Add any items that don't belong to any group (fallback)
+                            const ungroupedItems = items.filter(item => {
+                              const match = item.id?.match(/item-(\d+)-/);
+                              const groupIndex = match ? parseInt(match[1]) : -1;
+                              return groupIndex >= furnitureGroups.length;
+                            });
+                            
+                            if (ungroupedItems.length > 0) {
+                              ungroupedItems.forEach((item, itemIndex) => {
+                                rows.push(
+                                  <TableRow key={item.id || `ungrouped-${itemIndex}`}>
+                                    <TableCell sx={{ color: '#333333' }}>
+                                      {item.name}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                      ${parseFloat(item.price || 0).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                      {item.quantity || 0}
+                                    </TableCell>
+                                    <TableCell sx={{ textAlign: 'right', fontWeight: 'bold', color: '#333333' }}>
+                                      ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              });
+                            }
+                          } else {
+                            // Fallback: Show items without grouping
+                            items.forEach((item, index) => {
+                              rows.push(
+                                <TableRow key={item.id || `item-${index}`}>
+                                  <TableCell sx={{ color: '#333333' }}>
+                                    {item.name}
+                                  </TableCell>
+                                  <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                    ${parseFloat(item.price || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell sx={{ textAlign: 'center', color: '#333333' }}>
+                                    {item.quantity || 0}
+                                  </TableCell>
+                                  <TableCell sx={{ textAlign: 'right', fontWeight: 'bold', color: '#333333' }}>
+                                    ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                          }
+                        }
+
+                        return rows;
+                      })()}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+
+              {/* Invoice Summary */}
+              <Box sx={{ mt: 3, p: 2, backgroundColor: '#f8f9fa', borderRadius: 1 }}>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: '#274290' }}>
+                  Invoice Summary
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body1">Subtotal:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                    ${(selectedInvoice.calculations?.subtotal || 0).toFixed(2)}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body1">Tax:</Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                    ${(selectedInvoice.calculations?.taxAmount || 0).toFixed(2)}
+                  </Typography>
+                </Box>
+                {selectedInvoice.headerSettings?.creditCardFeeEnabled && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1">Credit Card Fee:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                      ${(selectedInvoice.calculations?.creditCardFeeAmount || 0).toFixed(2)}
+                    </Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                    Total:
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#274290' }}>
+                    ${calculateInvoiceTotal(selectedInvoice).toFixed(2)}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body1">
+                    Paid Amount:
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4CAF50' }}>
+                    ${getPaidAmount(selectedInvoice).toFixed(2)}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #ddd', pt: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance(selectedInvoice) >= 0 ? '#f27921' : '#4CAF50' }}>
+                    Balance:
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: calculateBalance(selectedInvoice) >= 0 ? '#f27921' : '#4CAF50' }}>
+                    ${calculateBalance(selectedInvoice).toFixed(2)}
+                  </Typography>
+                </Box>
+              </Box>
             </Box>
           )}
         </DialogContent>
@@ -780,7 +1057,7 @@ const CustomerInvoicesPage = () => {
           <Typography>
             Are you sure you want to delete invoice #{' '}
             <strong>{invoiceToDelete?.invoiceNumber}</strong> for{' '}
-            <strong>{invoiceToDelete?.customerInfo?.customerName}</strong>?
+            <strong>{invoiceToDelete?.originalCustomerInfo?.customerName || invoiceToDelete?.customerInfo?.customerName}</strong>?
           </Typography>
         </DialogContent>
         <DialogActions>

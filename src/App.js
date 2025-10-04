@@ -34,6 +34,7 @@ import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
+import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
 
 // Customer Invoices imports
 import CustomerInvoicesPage from './admin/pages/CustomerInvoices/CustomerInvoicesPage';
@@ -100,7 +101,8 @@ const AppContent = () => {
                       location.pathname === '/email-settings' ||
                       location.pathname === '/end-done' ||
                       location.pathname === '/end-cancelled' ||
-                      location.pathname === '/leads';
+                      location.pathname === '/leads' ||
+                      location.pathname === '/extra-expenses';
 
   if (loading) {
     return (
@@ -175,6 +177,8 @@ const AppContent = () => {
           <Route path="/admin/pending-orders" element={<PendingOrdersPage />} />
           <Route path="/leads" element={<Navigate to="/admin/leads" replace />} />
           <Route path="/admin/leads" element={<LeadsManagement />} />
+          <Route path="/extra-expenses" element={<Navigate to="/admin/extra-expenses" replace />} />
+          <Route path="/admin/extra-expenses" element={<ExtraExpensesPage />} />
           <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />
         </Routes>
       </MainLayout>

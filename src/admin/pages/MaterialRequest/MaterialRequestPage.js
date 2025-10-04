@@ -28,7 +28,7 @@ import {
   LocalShipping as LocalShippingIcon,
   Note as NoteIcon
 } from '@mui/icons-material';
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
@@ -44,8 +44,30 @@ const MaterialRequestPage = () => {
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [selectedMaterialForNote, setSelectedMaterialForNote] = useState(null);
   const [currentNoteText, setCurrentNoteText] = useState('');
+  const [materialCompanies, setMaterialCompanies] = useState([]);
 
   const { showSuccess, showError } = useNotification();
+
+  // Fetch material companies to get their order
+  const fetchMaterialCompanies = useCallback(async () => {
+    try {
+      const companiesRef = collection(db, 'materialCompanies');
+      const q = query(companiesRef, orderBy('createdAt', 'asc'));
+      const querySnapshot = await getDocs(q);
+      const companiesData = querySnapshot.docs.map((doc, index) => ({
+        id: doc.id,
+        order: doc.data().order ?? index,
+        ...doc.data()
+      }));
+      
+      // Sort by order field to respect the manual drag-and-drop order from Material Companies page
+      companiesData.sort((a, b) => a.order - b.order);
+      
+      setMaterialCompanies(companiesData);
+    } catch (error) {
+      console.error('Error fetching material companies:', error);
+    }
+  }, []);
 
   // Extract materials from orders (excluding completed/canceled orders)
   const extractMaterialsFromOrders = useCallback((ordersList) => {
@@ -103,7 +125,7 @@ const MaterialRequestPage = () => {
     return materials;
   }, []);
 
-  // Group materials by company
+  // Group materials by company with proper sorting
   const groupMaterialsByCompany = (materials) => {
     const grouped = {};
     materials.forEach(material => {
@@ -112,7 +134,41 @@ const MaterialRequestPage = () => {
       }
       grouped[material.materialCompany].push(material);
     });
+    
+    // Sort materials within each company by material code (alphabetical)
+    Object.keys(grouped).forEach(company => {
+      grouped[company].sort((a, b) => {
+        const codeA = a.materialCode.toLowerCase();
+        const codeB = b.materialCode.toLowerCase();
+        if (codeA < codeB) return -1;
+        if (codeA > codeB) return 1;
+        return 0;
+      });
+    });
+    
     return grouped;
+  };
+
+  // Sort companies by their order from Material Companies page
+  const sortCompaniesByOrder = (groupedMaterials) => {
+    const sortedEntries = Object.entries(groupedMaterials).sort(([companyA], [companyB]) => {
+      const companyA_data = materialCompanies.find(c => c.name === companyA);
+      const companyB_data = materialCompanies.find(c => c.name === companyB);
+      
+      // If both companies are found in materialCompanies, sort by their order
+      if (companyA_data && companyB_data) {
+        return companyA_data.order - companyB_data.order;
+      }
+      
+      // If only one is found, prioritize the one that exists
+      if (companyA_data && !companyB_data) return -1;
+      if (!companyA_data && companyB_data) return 1;
+      
+      // If neither is found, sort alphabetically as fallback
+      return companyA.toLowerCase().localeCompare(companyB.toLowerCase());
+    });
+    
+    return Object.fromEntries(sortedEntries);
   };
 
   // Filter materials based on search term (quantity filtering is done at extraction)
@@ -135,11 +191,24 @@ const MaterialRequestPage = () => {
     try {
       setLoading(true);
       
-      const ordersCollection = collection(db, 'orders');
-      const ordersSnapshot = await getDocs(ordersCollection);
+      // Fetch both orders and material companies
+      const [ordersSnapshot, companiesSnapshot] = await Promise.all([
+        getDocs(collection(db, 'orders')),
+        getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')))
+      ]);
+      
       const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const companiesData = companiesSnapshot.docs.map((doc, index) => ({
+        id: doc.id,
+        order: doc.data().order ?? index,
+        ...doc.data()
+      }));
+      
+      // Sort companies by order field
+      companiesData.sort((a, b) => a.order - b.order);
       
       setOrders(ordersData);
+      setMaterialCompanies(companiesData);
       
       const allMaterials = extractMaterialsFromOrders(ordersData);
       const requiredMaterials = allMaterials.filter(m => !m.materialStatus || m.materialStatus === null);
@@ -272,9 +341,9 @@ const MaterialRequestPage = () => {
   const filteredRequiredMaterials = filterMaterials(materialsRequired, searchTerm);
   const filteredOrderedMaterials = filterMaterials(materialsOrdered, searchTerm);
 
-  // Group filtered materials
-  const groupedRequiredMaterials = groupMaterialsByCompany(filteredRequiredMaterials);
-  const groupedOrderedMaterials = groupMaterialsByCompany(filteredOrderedMaterials);
+  // Group filtered materials and sort by company order
+  const groupedRequiredMaterials = sortCompaniesByOrder(groupMaterialsByCompany(filteredRequiredMaterials));
+  const groupedOrderedMaterials = sortCompaniesByOrder(groupMaterialsByCompany(filteredOrderedMaterials));
 
   const formatDate = (date) => {
     if (!date) return 'N/A';

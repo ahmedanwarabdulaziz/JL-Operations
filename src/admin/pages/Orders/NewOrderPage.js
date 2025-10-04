@@ -339,19 +339,13 @@ const NewOrderPage = () => {
     const hasPhone = phone && phone.trim().length > 0;
     const hasEmail = email && email.trim().length > 0;
     
-    // Need at least name and email to check for duplicates
-    if (!hasName || !hasEmail) {
+    // Need at least phone or email to check for duplicates
+    if (!hasPhone && !hasEmail) {
       return false;
     }
 
     const duplicates = customers.filter(customer => {
       let hasMatch = false;
-      
-      // Check name match only if we have a name
-      if (hasName && customer.name) {
-        const nameMatch = customer.name.toLowerCase().trim() === customerName.toLowerCase().trim();
-        if (nameMatch) hasMatch = true;
-      }
       
       // Check phone match only if BOTH have a non-empty value and are equal
       const phoneMatch =

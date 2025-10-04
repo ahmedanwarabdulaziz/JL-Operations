@@ -374,135 +374,129 @@ const CustomersPage = () => {
 
   return (
     <Box sx={{ height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-      {/* Professional Header */}
-      <Card sx={{ 
-        mb: 3,
-        backgroundColor: 'background.paper',
-        color: 'text.primary',
-        borderRadius: 2,
-        border: '1px solid #333333'
+      {/* Thin Header */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        py: 1.5,
+        px: 2,
+        borderBottom: '1px solid #333333',
+        backgroundColor: '#2a2a2a'
       }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 2
-          }}>
-            <Box>
-              <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', mb: 1 }}>
-                Customer Management
-              </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                Manage your customer database and contact information
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAdd}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+            Customer Management
+          </Typography>
+          <Chip
+            label={`${filteredCustomers.length} customer${filteredCustomers.length !== 1 ? 's' : ''}`}
+            variant="outlined"
+            size="small"
+            sx={{ 
+              color: '#ffffff', 
+              borderColor: '#b98f33',
+              '& .MuiChip-label': { color: '#ffffff' }
+            }}
+          />
+          {searchTerm && (
+            <Chip
+              label="Filtered"
+              variant="outlined"
+              size="small"
               sx={{ 
-                backgroundColor: 'primary.main',
-                color: 'primary.contrastText',
-                '&:hover': {
-                  backgroundColor: 'primary.light',
-                }
-              }}
-            >
-              Add Customer
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* Search and Stats Section */}
-      <Card sx={{ mb: 3, borderRadius: 2 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            flexDirection: { xs: 'column', sm: 'row' },
-            gap: 3,
-            alignItems: { xs: 'stretch', sm: 'center' }
-          }}>
-            {/* Search Bar */}
-            <TextField
-              fullWidth
-              placeholder="Search customers by name, email, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-                endAdornment: searchTerm && (
-                  <InputAdornment position="end">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => setSearchTerm('')}
-                      sx={{ color: 'text.secondary' }}
-                    >
-                      <RefreshIcon />
-                    </IconButton>
-                  </InputAdornment>
-                )
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 2,
-                  backgroundColor: 'background.paper'
-                }
+                color: '#ffffff', 
+                borderColor: '#f27921',
+                '& .MuiChip-label': { color: '#ffffff' }
               }}
             />
-            
-            {/* Stats */}
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 2,
-              flexShrink: 0
-            }}>
-              <Chip
-                label={`${filteredCustomers.length} customer${filteredCustomers.length !== 1 ? 's' : ''}`}
-                color="primary"
-                variant="outlined"
-                sx={{ fontWeight: 'bold' }}
-              />
-              {searchTerm && (
-                <Chip
-                  label="Filtered"
-                  color="secondary"
-                  size="small"
-                />
-              )}
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+          )}
+        </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* Search Bar */}
+          <TextField
+            size="small"
+            placeholder="Search customers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              endAdornment: searchTerm && (
+                <InputAdornment position="end">
+                  <IconButton 
+                    size="small" 
+                    onClick={() => setSearchTerm('')}
+                    sx={{ color: 'text.secondary', p: 0.5 }}
+                  >
+                    <RefreshIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+            sx={{
+              width: 300,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 1,
+                fontSize: '0.875rem',
+                backgroundColor: '#3a3a3a',
+                color: '#ffffff',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#555555'
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33'
+                }
+              },
+              '& .MuiInputBase-input': {
+                color: '#ffffff',
+                '&::placeholder': {
+                  color: '#cccccc',
+                  opacity: 1
+                }
+              }
+            }}
+          />
+          
+          {/* Add Customer Button */}
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={handleAdd}
+            sx={buttonStyles.primaryButton}
+          >
+            Add Customer
+          </Button>
+        </Box>
+      </Box>
 
       {/* Data Grid */}
-      <Card sx={{ 
+      <Box sx={{ 
         flex: 1, 
         minHeight: 0,
         display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 2
+        flexDirection: 'column'
       }}>
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <DataGrid
-            rows={filteredCustomers}
-            columns={columns}
-            pageSize={10}
-            rowsPerPageOptions={[10, 25, 50]}
-            disableSelectionOnClick
-            loading={initialLoading}
-            autoHeight={false}
-            density="comfortable"
-            disableColumnMenu={false}
-            disableColumnFilter={false}
-            disableColumnSelector={false}
+        <DataGrid
+          rows={filteredCustomers}
+          columns={columns}
+          pageSize={10}
+          rowsPerPageOptions={[10, 25, 50]}
+          disableSelectionOnClick
+          loading={initialLoading}
+          autoHeight={false}
+          density="compact"
+          disableColumnMenu={false}
+          disableColumnFilter={false}
+          disableColumnSelector={false}
+          rowHeight={48}
             components={{
               LoadingOverlay: () => (
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -536,46 +530,51 @@ const CustomersPage = () => {
                 </Box>
               )
             }}
-            sx={{
-              '& .MuiDataGrid-cell': {
-                borderBottom: '1px solid #e0e0e0',
-                display: 'flex',
-                alignItems: 'center',
-                padding: '8px 16px'
-              },
-              '& .MuiDataGrid-columnHeaders': {
-                backgroundColor: 'background.paper',
-                borderBottom: '2px solid #333333',
-                fontWeight: 'bold'
-              },
-              '& .MuiDataGrid-root': {
-                border: 'none'
-              },
-              '& .MuiDataGrid-main': {
-                width: '100%'
-              },
-              '& .MuiDataGrid-virtualScroller': {
-                width: '100% !important'
-              },
-              '& .MuiDataGrid-virtualScrollerContent': {
-                width: '100% !important'
-              },
-              '& .MuiDataGrid-virtualScrollerRenderZone': {
-                width: '100% !important'
-              },
-              '& .MuiDataGrid-row:hover': {
-                backgroundColor: '#3a3a3a'
-              },
-              '& .MuiDataGrid-cell:focus': {
-                outline: 'none'
-              },
-              '& .MuiDataGrid-cell:focus-within': {
-                outline: 'none'
-              }
-            }}
-          />
-        </Box>
-      </Card>
+          sx={{
+            '& .MuiDataGrid-cell': {
+              borderBottom: '1px solid #e0e0e0',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px 8px',
+              fontSize: '0.875rem'
+            },
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: '#f5f5f5',
+              borderBottom: '1px solid #d0d0d0',
+              fontWeight: 'bold',
+              fontSize: '0.875rem',
+              minHeight: '40px !important'
+            },
+            '& .MuiDataGrid-root': {
+              border: 'none'
+            },
+            '& .MuiDataGrid-main': {
+              width: '100%'
+            },
+            '& .MuiDataGrid-virtualScroller': {
+              width: '100% !important'
+            },
+            '& .MuiDataGrid-virtualScrollerContent': {
+              width: '100% !important'
+            },
+            '& .MuiDataGrid-virtualScrollerRenderZone': {
+              width: '100% !important'
+            },
+            '& .MuiDataGrid-row:hover': {
+              backgroundColor: '#f0f0f0'
+            },
+            '& .MuiDataGrid-row': {
+              minHeight: '48px !important'
+            },
+            '& .MuiDataGrid-cell:focus': {
+              outline: 'none'
+            },
+            '& .MuiDataGrid-cell:focus-within': {
+              outline: 'none'
+            }
+          }}
+        />
+      </Box>
 
       {/* Add/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCancel} maxWidth="md" fullWidth>

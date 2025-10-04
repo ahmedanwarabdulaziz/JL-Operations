@@ -18,12 +18,15 @@ import {
 import {
   Print as PrintIcon,
   ArrowBack as ArrowBackIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  Phone as PhoneIcon,
+  Email as EmailIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
-import { formatDate } from '../../../utils/dateUtils';
+import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 
 const PrintInvoicePage = () => {
   const navigate = useNavigate();
@@ -55,6 +58,18 @@ const PrintInvoicePage = () => {
     }, 1000);
   };
 
+  // Calculate paid amount
+  const getPaidAmount = (invoice) => {
+    return invoice.paidAmount || invoice.calculations?.paidAmount || 0;
+  };
+
+  // Calculate balance
+  const calculateBalance = (invoice) => {
+    const total = invoice.calculations?.total || 0;
+    const paid = getPaidAmount(invoice);
+    return total - paid;
+  };
+
   if (!invoiceData) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -77,18 +92,118 @@ const PrintInvoicePage = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <>
+      {/* Print Styles */}
+      <style>
+        {`
+          @media print {
+            @page {
+              margin: 0.5in;
+              size: A4;
+            }
+            
+            body {
+              -webkit-print-color-adjust: exact;
+              color-adjust: exact;
+              background: white !important;
+            }
+            
+            /* Hide main app header and sidebar */
+            header, nav, .MuiAppBar-root, .MuiDrawer-root, .MuiDrawer-paper {
+              display: none !important;
+            }
+            
+            /* Hide common navigation elements */
+            .navbar, .sidebar, .header, .navigation, .nav-bar, .main-header {
+              display: none !important;
+            }
+            
+            /* Hide screen-only elements */
+            .screen-only {
+              display: none !important;
+            }
+            
+            /* Show only the invoice content */
+            body > div, body > div > div {
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            
+            /* Preserve original invoice styling */
+            .MuiPaper-root {
+              background: white !important;
+              box-shadow: none !important;
+              margin: 0 !important;
+              padding: 20px !important;
+            }
+            
+            /* Preserve color styling for totals sections */
+            .MuiBox-root {
+              background-color: inherit !important;
+            }
+            
+            /* Preserve table styling */
+            table {
+              border-collapse: collapse !important;
+              width: 100% !important;
+            }
+            
+            th {
+              background-color: #f5f5f5 !important;
+              color: #333333 !important;
+              border: 2px solid #333333 !important;
+              border-right: 1px solid #ddd !important;
+            }
+            
+            td {
+              border-bottom: 1px solid #ddd !important;
+              border-right: 1px solid #eee !important;
+              color: #333333 !important;
+            }
+            
+            /* Preserve colored sections in totals */
+            .MuiTypography-root[style*="background-color: #4CAF50"] {
+              background-color: #4CAF50 !important;
+              color: white !important;
+            }
+            
+            .MuiTypography-root[style*="background-color: #f27921"] {
+              background-color: #f27921 !important;
+              color: white !important;
+            }
+            
+            .MuiTypography-root[style*="background-color: #2c2c2c"] {
+              background-color: #2c2c2c !important;
+              color: white !important;
+            }
+            
+            /* Hide browser print headers and footers */
+            @page :first {
+              margin-top: 0.5in;
+            }
+            
+            @page :left {
+              margin-left: 0.5in;
+              margin-right: 0.5in;
+            }
+            
+            @page :right {
+              margin-left: 0.5in;
+              margin-right: 0.5in;
+            }
+          }
+        `}
+      </style>
+      
+      <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header - Only visible on screen, hidden when printing */}
-      <Box sx={{ 
+      <Box className="screen-only" sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
         mb: 3,
         flexWrap: 'wrap',
-        gap: 2,
-        '@media print': {
-          display: 'none'
-        }
+        gap: 2
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton 
@@ -131,15 +246,17 @@ const PrintInvoicePage = () => {
         elevation={3} 
         sx={{ 
           p: 4, 
-          maxWidth: '210mm', // A4 width
+          width: '100%', // Full width
           mx: 'auto',
           backgroundColor: 'white',
           '@media print': {
             boxShadow: 'none',
             elevation: 0,
-            maxWidth: 'none',
+            width: '100%',
             mx: 0,
-            p: 3
+            p: 3,
+            margin: 0,
+            padding: '20px'
           },
           '& .MuiTableHead-root': {
             backgroundColor: '#ffffff !important'
@@ -152,269 +269,372 @@ const PrintInvoicePage = () => {
           }
         }}
       >
-        {/* Professional Invoice Header */}
+        {/* Professional Invoice Header - Image Only */}
         <Box sx={{ 
           mb: 4,
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
-          {/* Header Background with Diagonal Stripes */}
-          <Box sx={{
-            backgroundColor: '#2c2c2c',
-            position: 'relative',
-            p: 3,
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: '60%',
-              height: '100%',
-              background: 'linear-gradient(45deg, #b98f33 0%, #b98f33 25%, transparent 25%, transparent 50%, #b98f33 50%, #b98f33 75%, transparent 75%, transparent 100%)',
-              backgroundSize: '20px 20px',
-              opacity: 0.8
-            },
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '40%',
-              height: '100%',
-              background: 'linear-gradient(-45deg, #666 0%, #666 25%, transparent 25%, transparent 50%, #666 50%, #666 75%, transparent 75%, transparent 100%)',
-              backgroundSize: '20px 20px',
-              opacity: 0.6
-            }
-          }}>
-            <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
-              <Grid item xs={12} md={6}>
-                {/* INVOICE Title */}
-                <Typography variant="h2" sx={{ 
-                  fontWeight: 'bold', 
-                  color: 'white',
-                  fontSize: '3rem',
-                  letterSpacing: '0.1em',
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
-                }}>
-                  INVOICE
+          {/* Header Image Only */}
+          <img 
+            src="/assets/images/invoice-headers/Invoice Header.png" 
+            alt="Invoice Header" 
+            style={{ 
+              width: '100%',
+              height: 'auto',
+              maxWidth: '100%',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+          />
+        </Box>
+
+        {/* Invoice Information Row - Left: Customer Info, Right: Date/Invoice/Tax */}
+        <Box sx={{ 
+          mb: 4,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          {/* Left Side - Customer Information */}
+          <Box sx={{ flex: 1, mr: 4 }}>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 'bold', 
+              color: 'black',
+              mb: 2
+            }}>
+              Invoice to:
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'black' }}>
+              {invoiceData.customerInfo.customerName}
+            </Typography>
+            {invoiceData.customerInfo.phone && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <PhoneIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                <Typography variant="body1" sx={{ color: 'black' }}>
+                  {invoiceData.customerInfo.phone}
                 </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                {/* Company Logo and Info */}
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-                  <Box sx={{ textAlign: 'right' }}>
-                    {/* Logo */}
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-                      <Typography variant="h3" sx={{ 
-                        fontWeight: 'bold', 
-                        color: '#b98f33',
-                        fontSize: '2.5rem',
-                        mr: 1,
-                        textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-                      }}>
-                        {companyInfo.logo}
-                      </Typography>
-                    </Box>
-                    <Typography variant="h6" sx={{ 
-                      color: '#b98f33',
-                      fontStyle: 'italic',
-                      fontSize: '1.2rem',
-                      mb: 0.5,
-                      textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
-                    }}>
-                      {companyInfo.tagline}
-                    </Typography>
-                    <Box sx={{ 
-                      backgroundColor: 'white', 
-                      px: 2, 
-                      py: 0.5, 
-                      borderRadius: 1,
-                      display: 'inline-block'
-                    }}>
-                      <Typography variant="body1" sx={{ 
-                        fontWeight: 'bold', 
-                        color: '#2c2c2c',
-                        fontSize: '0.9rem',
-                        letterSpacing: '0.05em'
-                      }}>
-                        {companyInfo.fullName}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </Grid>
-            </Grid>
+              </Box>
+            )}
+            {invoiceData.customerInfo.email && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <EmailIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                <Typography variant="body1" sx={{ color: 'black' }}>
+                  {invoiceData.customerInfo.email}
+                </Typography>
+              </Box>
+            )}
+            {invoiceData.customerInfo.address && (
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5 }}>
+                <LocationIcon sx={{ mr: 1, fontSize: '16px', color: '#666666', mt: 0.2 }} />
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-line', color: 'black' }}>
+                  {invoiceData.customerInfo.address}
+                </Typography>
+              </Box>
+            )}
           </Box>
 
-          {/* Invoice Details */}
+          {/* Right Side - Invoice Details */}
           <Box sx={{ 
-            mt: 3,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start'
+            minWidth: '250px',
+            flexShrink: 0
           }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="body1" sx={{ color: 'black', mb: 0.5 }}>
-                Date: {formatDate(invoiceData.createdAt)}
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'black', mb: 0.5 }}>
-                Invoice #: {invoiceData.invoiceNumber}
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'black', mb: 0.5 }}>
-                Tax #: {companyInfo.taxNumber}
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="body1" sx={{ color: 'black', mb: 0.5 }}>
-                Order Ref: #{invoiceData.originalOrderNumber || invoiceData.originalOrderId}
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'black', mb: 0.5 }}>
-                Phone: {companyInfo.phone}
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'black' }}>
-                Email: {companyInfo.email}
-              </Typography>
-            </Box>
+            <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+              <strong>Date:</strong> {formatDateOnly(invoiceData.createdAt)}
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+              <strong>Invoice #</strong> {invoiceData.invoiceNumber}
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+              <strong>Tax #</strong> {companyInfo.taxNumber}
+            </Typography>
           </Box>
         </Box>
 
-        <Divider sx={{ mb: 4, borderColor: 'black' }} />
-
-        {/* Customer Information */}
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h6" sx={{ 
-            fontWeight: 'bold', 
-            color: 'black',
-            mb: 2
-          }}>
-            Invoice to:
-          </Typography>
-          <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1, color: 'black' }}>
-            {invoiceData.customerInfo.customerName}
-          </Typography>
-          <Box sx={{ 
-            width: '100%', 
-            height: '2px', 
-            backgroundColor: 'black',
-            mb: 2
-          }} />
-          {invoiceData.customerInfo.email && (
-            <Typography variant="body1" sx={{ mb: 0.5, color: 'black' }}>
-              {invoiceData.customerInfo.email}
-            </Typography>
-          )}
-          {invoiceData.customerInfo.phone && (
-            <Typography variant="body1" sx={{ mb: 0.5, color: 'black' }}>
-              {invoiceData.customerInfo.phone}
-            </Typography>
-          )}
-          {invoiceData.customerInfo.address && (
-            <Typography variant="body1" sx={{ whiteSpace: 'pre-line', color: 'black' }}>
-              {invoiceData.customerInfo.address}
-            </Typography>
-          )}
-        </Box>
-
-        {/* Items Table - Custom HTML Table */}
+        {/* Items Table and Totals - Professional Layout */}
         <Box sx={{ mb: 4 }}>
           <Box sx={{ 
-            border: '1px solid #ddd',
-            borderRadius: 1,
-            overflow: 'hidden'
+            border: '2px solid #333333',
+            borderRadius: 0,
+            overflow: 'hidden',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}>
             <table style={{ 
               width: '100%', 
               borderCollapse: 'collapse',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
+              tableLayout: 'fixed'
             }}>
-              <thead style={{ backgroundColor: 'white' }}>
-                <tr style={{ backgroundColor: 'white' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f5f5f5' }}>
                   <th style={{ 
-                    padding: '12px 16px',
+                    width: '66.67%',
+                    padding: '8px 16px',
                     textAlign: 'left',
                     fontWeight: 'bold',
-                    color: 'black',
-                    backgroundColor: 'white',
+                    color: '#333333',
+                    backgroundColor: '#f5f5f5',
                     border: 'none',
-                    borderBottom: '1px solid #ddd'
+                    borderBottom: '2px solid #333333',
+                    borderRight: '1px solid #ddd',
+                    fontSize: '14px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>Description</th>
                   <th style={{ 
-                    padding: '12px 16px',
+                    width: '11.11%',
+                    padding: '8px 16px',
                     textAlign: 'center',
                     fontWeight: 'bold',
-                    color: 'black',
-                    backgroundColor: 'white',
+                    color: '#333333',
+                    backgroundColor: '#f5f5f5',
                     border: 'none',
-                    borderBottom: '1px solid #ddd'
+                    borderBottom: '2px solid #333333',
+                    borderRight: '1px solid #ddd',
+                    fontSize: '14px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>Price</th>
                   <th style={{ 
-                    padding: '12px 16px',
+                    width: '11.11%',
+                    padding: '8px 16px',
                     textAlign: 'center',
                     fontWeight: 'bold',
-                    color: 'black',
-                    backgroundColor: 'white',
+                    color: '#333333',
+                    backgroundColor: '#f5f5f5',
                     border: 'none',
-                    borderBottom: '1px solid #ddd'
+                    borderBottom: '2px solid #333333',
+                    borderRight: '1px solid #ddd',
+                    fontSize: '14px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>Unit</th>
                   <th style={{ 
-                    padding: '12px 16px',
+                    width: '11.11%',
+                    padding: '8px 16px',
                     textAlign: 'right',
                     fontWeight: 'bold',
-                    color: 'black',
-                    backgroundColor: 'white',
+                    color: '#333333',
+                    backgroundColor: '#f5f5f5',
                     border: 'none',
-                    borderBottom: '1px solid #ddd'
+                    borderBottom: '2px solid #333333',
+                    fontSize: '14px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {invoiceData.items.map((item, index) => (
-                  <tr key={item.id || index} style={{ borderBottom: '1px solid #ddd' }}>
-                    <td style={{ 
-                      padding: '16px',
-                      color: 'black',
-                      border: 'none'
-                    }}>
-                      {item.name}
-                    </td>
-                    <td style={{ 
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: 'black',
-                      border: 'none'
-                    }}>
-                      ${parseFloat(item.price).toFixed(2)}
-                    </td>
-                    <td style={{ 
-                      padding: '16px',
-                      textAlign: 'center',
-                      color: 'black',
-                      border: 'none'
-                    }}>
-                      {item.quantity}
-                    </td>
-                    <td style={{ 
-                      padding: '16px',
-                      textAlign: 'right',
-                      fontWeight: 'bold',
-                      color: 'black',
-                      border: 'none'
-                    }}>
-                      ${((parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0)).toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  const furnitureGroups = invoiceData.furnitureGroups || [];
+                  const items = invoiceData.items || [];
+                  
+                  const rows = [];
+                  
+                  // If no items, show a message
+                  if (furnitureGroups.length === 0 && items.length === 0) {
+                    rows.push(
+                      <tr key="no-items">
+                        <td colSpan="4" style={{ 
+                          padding: '16px',
+                          textAlign: 'center',
+                          color: '#666666',
+                          fontStyle: 'italic',
+                          border: 'none'
+                        }}>
+                          No items found
+                        </td>
+                      </tr>
+                    );
+                  } else {
+                    // Group items by their furniture group index
+                    const itemsByGroup = {};
+                    items.forEach(item => {
+                      // Extract group index from item ID (e.g., "item-0-material" -> 0)
+                      const match = item.id?.match(/item-(\d+)-/);
+                      const groupIndex = match ? parseInt(match[1]) : 0;
+                      
+                      if (!itemsByGroup[groupIndex]) {
+                        itemsByGroup[groupIndex] = [];
+                      }
+                      itemsByGroup[groupIndex].push(item);
+                    });
+                    
+                    // Render each furniture group with its items
+                    furnitureGroups.forEach((group, groupIndex) => {
+                      // Add furniture group header
+                      rows.push(
+                        <tr key={`group-${groupIndex}`} style={{ backgroundColor: '#f8f9fa' }}>
+                          <td colSpan="4" style={{ 
+                            padding: '10px 16px',
+                            fontWeight: 'bold',
+                            color: '#274290',
+                            border: 'none',
+                            borderBottom: '1px solid #ddd',
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {group.name}
+                          </td>
+                        </tr>
+                      );
+                      
+                      // Add items that belong to this group
+                      const groupItems = itemsByGroup[groupIndex] || [];
+                      groupItems.forEach((item, itemIndex) => {
+                        rows.push(
+                          <tr key={item.id || `item-${groupIndex}-${itemIndex}`} style={{ 
+                            borderBottom: '1px solid #ddd'
+                          }}>
+                            <td style={{ 
+                              width: '66.67%',
+                              padding: '8px 16px',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px'
+                            }}>
+                              {item.name}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'center',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}>
+                              ${parseFloat(item.price || 0).toFixed(2)}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'center',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}>
+                              {item.quantity || 0}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'right',
+                              fontWeight: 'bold',
+                              color: '#333333',
+                              border: 'none',
+                              fontSize: '14px'
+                            }}>
+                              ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    });
+                    
+                    // Add any items that don't belong to any group (fallback)
+                    const ungroupedItems = items.filter(item => {
+                      const match = item.id?.match(/item-(\d+)-/);
+                      const groupIndex = match ? parseInt(match[1]) : -1;
+                      return groupIndex >= furnitureGroups.length;
+                    });
+                    
+                    if (ungroupedItems.length > 0) {
+                      ungroupedItems.forEach((item, itemIndex) => {
+                        rows.push(
+                          <tr key={item.id || `ungrouped-${itemIndex}`} style={{ 
+                            borderBottom: '1px solid #ddd'
+                          }}>
+                            <td style={{ 
+                              width: '66.67%',
+                              padding: '8px 16px',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px'
+                            }}>
+                              {item.name}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'center',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}>
+                              ${parseFloat(item.price || 0).toFixed(2)}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'center',
+                              color: '#333333',
+                              border: 'none',
+                              borderRight: '1px solid #eee',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}>
+                              {item.quantity || 0}
+                            </td>
+                            <td style={{ 
+                              width: '11.11%',
+                              padding: '8px 16px',
+                              textAlign: 'right',
+                              fontWeight: 'bold',
+                              color: '#333333',
+                              border: 'none',
+                              fontSize: '14px'
+                            }}>
+                              ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    }
+                  }
+
+                  return rows;
+                })()}
                 {/* Add empty rows to match the design */}
                 {Array.from({ length: Math.max(0, 8 - invoiceData.items.length) }).map((_, index) => (
                   <tr key={`empty-${index}`} style={{ borderBottom: '1px solid #ddd' }}>
-                    <td style={{ padding: '16px', border: 'none' }}></td>
-                    <td style={{ padding: '16px', border: 'none' }}></td>
-                    <td style={{ padding: '16px', border: 'none' }}></td>
                     <td style={{ 
-                      padding: '16px', 
+                      width: '66.67%',
+                      padding: '8px 16px', 
+                      border: 'none',
+                      borderRight: '1px solid #eee'
+                    }}></td>
+                    <td style={{ 
+                      width: '11.11%',
+                      padding: '8px 16px', 
+                      border: 'none',
+                      borderRight: '1px solid #eee'
+                    }}></td>
+                    <td style={{ 
+                      width: '11.11%',
+                      padding: '8px 16px', 
+                      border: 'none',
+                      borderRight: '1px solid #eee'
+                    }}></td>
+                    <td style={{ 
+                      width: '11.11%',
+                      padding: '8px 16px', 
                       textAlign: 'right',
-                      color: 'black',
-                      border: 'none'
+                      color: '#333333',
+                      border: 'none',
+                      fontSize: '14px'
                     }}>
                       $0.00
                     </td>
@@ -423,202 +643,217 @@ const PrintInvoicePage = () => {
               </tbody>
             </table>
           </Box>
-        </Box>
-
-        {/* Totals and Payment Information */}
-        <Grid container spacing={4} sx={{ mb: 4 }}>
-          {/* Totals Section */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Box sx={{ minWidth: 250 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1" sx={{ color: 'black' }}>Subtotal:</Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                    ${invoiceData.calculations?.subtotal?.toFixed(2) || '0.00'}
+          
+          {/* Terms and Conditions + Totals Section - Side by side */}
+          <Box sx={{ mt: 2 }}>
+            {/* Left Side - Terms and Conditions */}
+            <Box sx={{ 
+              display: 'flex',
+              width: '100%',
+              gap: 4
+            }}>
+              <Box sx={{ 
+                flex: '0 0 50%',
+                maxWidth: '50%'
+              }}>
+                <Box sx={{ 
+                  backgroundColor: '#f27921',
+                  color: 'white',
+                  p: 1,
+                  mb: 2
+                }}>
+                  <Typography variant="h6" sx={{ 
+                    fontWeight: 'bold', 
+                    color: 'white',
+                    textAlign: 'center',
+                    textTransform: 'uppercase'
+                  }}>
+                    Terms and Conditions
                   </Typography>
                 </Box>
                 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1" sx={{ color: 'black' }}>
-                    Tax Rate :
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                    ${(invoiceData.headerSettings?.taxPercentage || 0) / 100}
-                  </Typography>
-                </Box>
-                
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1" sx={{ color: 'black' }}>
-                    Tax Due :
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                    ${invoiceData.calculations?.taxAmount?.toFixed(2) || '0.00'}
-                  </Typography>
-                </Box>
-                
-                {invoiceData.headerSettings?.creditCardFeeEnabled && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body1" sx={{ color: 'black' }}>
-                      Credit Card Fee:
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by Cheque:
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                      ${invoiceData.calculations?.creditCardFeeAmount?.toFixed(2) || '0.00'}
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Mail to: {companyInfo.address}
                     </Typography>
                   </Box>
-                )}
-                
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  mb: 1,
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  p: 1,
-                  borderRadius: 1
-                }}>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
-                    Paid:
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
-                    $0.00
-                  </Typography>
+                  
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by direct deposit:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Transit Number: 07232
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Institution Number: 010
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Account Number: 1090712
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by e-transfer:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      {companyInfo.email}
+                    </Typography>
+                  </Box>
                 </Box>
-                
+              </Box>
+
+              {/* Right Side - Totals Section - Far Right */}
+              <Box sx={{ 
+                flex: '1',
+                display: 'flex', 
+                justifyContent: 'flex-end', 
+                alignItems: 'flex-start'
+              }}>
                 <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  backgroundColor: '#2c2c2c',
-                  color: 'white',
-                  p: 1,
-                  borderRadius: 1
+                  minWidth: '300px',
+                  maxWidth: '400px'
                 }}>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
-                    Total:
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
-                    ${invoiceData.calculations?.total?.toFixed(2) || '0.00'}
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Subtotal:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      ${invoiceData.calculations?.subtotal?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      ${(invoiceData.headerSettings?.taxPercentage || 0) / 100}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Tax Due:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      ${invoiceData.calculations?.taxAmount?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                  
+                  {invoiceData.headerSettings?.creditCardFeeEnabled && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body1" sx={{ color: 'black' }}>Credit Card Fee:</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                        ${invoiceData.calculations?.creditCardFeeAmount?.toFixed(2) || '0.00'}
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    mb: 1,
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    p: 1,
+                    borderRadius: 1
+                  }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      Paid:
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${getPaidAmount(invoiceData).toFixed(2)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    backgroundColor: calculateBalance(invoiceData) >= 0 ? '#f27921' : '#4CAF50',
+                    color: 'white',
+                    p: 1,
+                    borderRadius: 1,
+                    mb: 1
+                  }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      Balance:
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${calculateBalance(invoiceData).toFixed(2)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between',
+                    backgroundColor: '#2c2c2c',
+                    color: 'white',
+                    p: 1,
+                    borderRadius: 1
+                  }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      Total:
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${invoiceData.calculations?.total?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
-          </Grid>
-
-          {/* Signature Section */}
-          <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: 'black', mb: 2 }}>
-                  Signature
-                </Typography>
-                <Box sx={{ 
-                  width: 200, 
-                  height: 1, 
-                  backgroundColor: 'black',
-                  mb: 1
-                }} />
-                <Typography variant="body2" sx={{ color: 'black', fontStyle: 'italic' }}>
-                  Ahmed Albaghdadi
-                </Typography>
-              </Box>
-            </Box>
-          </Grid>
-        </Grid>
-
-        {/* Terms and Conditions */}
-        <Box sx={{ mb: 4 }}>
-          <Box sx={{ 
-            backgroundColor: '#f27921',
-            color: 'white',
-            p: 1,
-            mb: 2
-          }}>
-            <Typography variant="h6" sx={{ 
-              fontWeight: 'bold', 
-              color: 'white',
-              textAlign: 'center',
-              textTransform: 'uppercase'
-            }}>
-              Terms and Conditions
-            </Typography>
           </Box>
-          
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
-                Payment by Cheque:
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'black' }}>
-                Mail to: {companyInfo.address}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
-                Payment by direct deposit:
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'black' }}>
-                Transit Number: 07232
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'black' }}>
-                Institution Number: 010
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'black' }}>
-                Account Number: 1090712
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
-                Payment by e-transfer:
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'black' }}>
-                {companyInfo.email}
-              </Typography>
-            </Grid>
-          </Grid>
         </Box>
 
-        {/* Professional Footer */}
+        {/* Signature Section - Right Aligned */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', mt: 4, mb: 4 }}>
+          <Box sx={{ textAlign: 'center', minWidth: 300, mr: 8 }}>
+            <Typography variant="body2" sx={{ color: 'black', mb: 2 }}>
+              Signature
+            </Typography>
+            <Box sx={{ 
+              width: 250, 
+              height: 1, 
+              backgroundColor: 'black',
+              mb: 1,
+              margin: '0 auto'
+            }} />
+            <Typography variant="h6" sx={{ 
+              color: 'black',
+              fontFamily: '"Brush Script MT", "Lucida Handwriting", "Kalam", cursive',
+              fontSize: '1.5rem',
+              fontWeight: 'normal',
+              fontStyle: 'normal',
+              letterSpacing: '0.1em',
+              textAlign: 'center'
+            }}>
+              Ahmed Albaghdadi
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Invoice Footer Image */}
         <Box sx={{ 
-          backgroundColor: '#2c2c2c',
-          position: 'relative',
-          p: 3,
           mt: 6,
-          overflow: 'hidden',
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: '60%',
-            height: '100%',
-            background: 'linear-gradient(45deg, #b98f33 0%, #b98f33 25%, transparent 25%, transparent 50%, #b98f33 50%, #b98f33 75%, transparent 75%, transparent 100%)',
-            backgroundSize: '20px 20px',
-            opacity: 0.8
-          },
-          '&::after': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '40%',
-            height: '100%',
-            background: 'linear-gradient(-45deg, #666 0%, #666 25%, transparent 25%, transparent 50%, #666 50%, #666 75%, transparent 75%, transparent 100%)',
-            backgroundSize: '20px 20px',
-            opacity: 0.6
-          }
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
-          <Typography variant="h6" sx={{ 
-            fontWeight: 'bold', 
-            color: 'white',
-            textAlign: 'center',
-            position: 'relative',
-            zIndex: 1,
-            letterSpacing: '0.1em'
-          }}>
-            {companyInfo.website}
-          </Typography>
+          <img 
+            src="/assets/images/invoice-headers/invoice Footer.png" 
+            alt="Invoice Footer" 
+            style={{ 
+              width: '100%',
+              height: 'auto',
+              maxWidth: '100%',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+          />
         </Box>
       </Paper>
     </Box>
+    </>
   );
 };
 
