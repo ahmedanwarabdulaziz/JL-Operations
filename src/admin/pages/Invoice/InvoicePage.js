@@ -682,6 +682,536 @@ const InvoicePage = () => {
     }
   };
 
+  const handlePrintWorkOrder = async () => {
+    if (!selectedOrder) {
+      showNotification('Please select an order first', 'warning');
+      return;
+    }
+
+    try {
+      showNotification('Generating work order...', 'info');
+      
+      const printWindow = window.open('', '_blank', 'width=900,height=1200');
+      
+      // Generate HTML content for work order with separate pages for each furniture group
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Work Order - ${selectedOrder.orderDetails?.billInvoice || 'N/A'}</title>
+          <style>
+            body {
+              font-family: 'Arial', sans-serif;
+              margin: 0;
+              padding: 0;
+              background-color: #ffffff;
+              color: #000000;
+              zoom: 0.8;
+            }
+            
+            .work-order-page {
+              width: 210mm;
+              height: 297mm;
+              margin: 0 auto 20px auto;
+              padding: 15mm;
+              background-color: #ffffff;
+              color: #000000;
+              box-shadow: 0 0 10px rgba(0,0,0,0.1);
+              page-break-after: always;
+              display: flex;
+              flex-direction: column;
+              box-sizing: border-box;
+            }
+            
+            .work-order-page:last-child {
+              page-break-after: avoid;
+            }
+            
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 20px;
+              padding-bottom: 15px;
+              border-bottom: 3px solid #274290;
+            }
+            
+            .logo-section {
+              display: flex;
+              align-items: center;
+              flex: 1;
+            }
+            
+            .logo {
+              height: 50px;
+              width: auto;
+            }
+            
+            .furniture-group-title {
+              flex: 2;
+              text-align: center;
+            }
+            
+            .furniture-group-title h2 {
+              font-size: 2.2rem;
+              font-weight: bold;
+              color: #274290;
+              margin: 0;
+              text-transform: uppercase;
+            }
+            
+            .order-details {
+              flex: 1;
+              text-align: right;
+            }
+            
+            .order-details .invoice-number {
+              font-size: 1.2rem;
+              font-weight: bold;
+              color: #274290;
+              margin: 0 0 5px 0;
+            }
+            
+            .order-details .order-date {
+              font-size: 1rem;
+              color: #666666;
+              margin: 0;
+            }
+            
+            
+            .furniture-section {
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              text-align: center;
+            }
+            
+            
+            .work-area {
+              width: 100%;
+              flex: 1;
+              background-color: #ffffff;
+              margin-top: 15px;
+            }
+            
+            
+            
+            .upholstery-type-section {
+              margin-bottom: 20px;
+              padding: 15px;
+              background-color: #f8f9fa;
+              border: 2px solid #274290;
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              gap: 30px;
+            }
+            
+            .upholstery-type-title {
+              font-size: 1.1rem;
+              font-weight: bold;
+              color: #274290;
+              white-space: nowrap;
+            }
+            
+            .upholstery-options {
+              display: flex;
+              justify-content: space-around;
+              gap: 20px;
+              flex: 1;
+            }
+            
+            .upholstery-option {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              flex: 1;
+              justify-content: center;
+            }
+            
+            .check-box {
+              width: 20px;
+              height: 20px;
+              border: 2px solid #274290;
+              border-radius: 3px;
+              background-color: #ffffff;
+              position: relative;
+            }
+            
+            .option-text {
+              font-size: 0.9rem;
+              color: #333333;
+              font-weight: 500;
+              text-align: center;
+              line-height: 1.2;
+            }
+            
+            .measurement-section {
+              margin-bottom: 20px;
+              padding: 15px;
+              background-color: #f8f9fa;
+              border: 2px solid #274290;
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              gap: 20px;
+            }
+            
+            .measurement-notes {
+              flex: 1;
+              height: 100px;
+              border: 1px solid #274290;
+              border-radius: 4px;
+              background-color: #ffffff;
+              padding: 10px;
+              font-size: 0.9rem;
+              color: #333333;
+            }
+            
+            .measurement-title {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #274290;
+              text-align: right;
+              white-space: nowrap;
+            }
+            
+            .measurement-table {
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              margin-bottom: 20px;
+              border: 2px solid #274290;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            .measurement-table th {
+              background-color: #f0f0f0;
+              border-right: 1px solid #274290;
+              border-bottom: 1px solid #274290;
+              padding: 8px;
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #274290;
+              text-align: center;
+              font-family: Arial, sans-serif;
+            }
+            
+            .measurement-table th:first-child {
+              border-left: 2px solid #274290;
+            }
+            
+            .measurement-table th:last-child {
+              border-right: 2px solid #274290;
+            }
+            
+            .measurement-table td {
+              border-right: 1px solid #274290;
+              border-bottom: 1px solid #274290;
+              padding: 8px;
+              font-size: 0.9rem;
+              color: #333333;
+              text-align: center;
+              height: 40px;
+              font-family: Arial, sans-serif;
+            }
+            
+            .measurement-table td:first-child {
+              border-left: 2px solid #274290;
+            }
+            
+            .measurement-table td:last-child {
+              border-right: 2px solid #274290;
+            }
+            
+            .measurement-table tr:first-child th {
+              border-top: 2px solid #274290;
+            }
+            
+            .measurement-table tr:first-child th:first-child {
+              border-top-left-radius: 6px;
+            }
+            
+            .measurement-table tr:first-child th:last-child {
+              border-top-right-radius: 6px;
+            }
+            
+            .measurement-table tr:last-child td {
+              border-bottom: 2px solid #274290;
+            }
+            
+            .measurement-table tr:last-child td:first-child {
+              border-bottom-left-radius: 6px;
+            }
+            
+            .measurement-table tr:last-child td:last-child {
+              border-bottom-right-radius: 6px;
+            }
+            
+            .notes-table {
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              margin-bottom: 20px;
+              border: 2px solid #274290;
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            .notes-table th {
+              background-color: #f0f0f0;
+              border-right: 1px solid #274290;
+              border-bottom: 1px solid #274290;
+              padding: 8px;
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #274290;
+              text-align: center;
+              font-family: Arial, sans-serif;
+            }
+            
+            .notes-table th:first-child {
+              border-left: 2px solid #274290;
+            }
+            
+            .notes-table th:last-child {
+              border-right: 2px solid #274290;
+            }
+            
+            .notes-table td {
+              border-right: 1px solid #274290;
+              padding: 8px;
+              font-size: 0.9rem;
+              color: #333333;
+              text-align: left;
+              height: 400px;
+              font-family: Arial, sans-serif;
+              background-color: #ffffff;
+              vertical-align: top;
+            }
+            
+            .notes-table td:first-child {
+              border-left: 2px solid #274290;
+              width: 50%;
+            }
+            
+            .notes-table td:last-child {
+              border-right: 2px solid #274290;
+              width: 50%;
+            }
+            
+            .notes-table tr:first-child th {
+              border-top: 2px solid #274290;
+            }
+            
+            .notes-table tr:first-child th:first-child {
+              border-top-left-radius: 6px;
+            }
+            
+            .notes-table tr:first-child th:last-child {
+              border-top-right-radius: 6px;
+            }
+            
+            .notes-table tr:last-child td {
+              border-bottom: 2px solid #274290;
+            }
+            
+            .notes-table tr:last-child td:first-child {
+              border-bottom-left-radius: 6px;
+            }
+            
+            .notes-table tr:last-child td:last-child {
+              border-bottom-right-radius: 6px;
+            }
+            
+            .cushion-note-item {
+              display: flex;
+              align-items: flex-start;
+              gap: 8px;
+            }
+            
+            .cushion-checkbox {
+              width: 16px;
+              height: 16px;
+              border: 1px solid #274290;
+              border-radius: 2px;
+              background-color: #ffffff;
+              flex-shrink: 0;
+              margin-top: 2px;
+            }
+            
+            .cushion-note-text {
+              font-size: 0.9rem;
+              color: #333333;
+              line-height: 1.4;
+            }
+            
+            .measurement-table td:first-child,
+            .measurement-table td:nth-child(2) {
+              background-color: #ffffff;
+            }
+            
+            .measurement-table td:last-child {
+              background-color: #f8f9fa;
+              font-weight: 600;
+              font-size: 1rem;
+            }
+            
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+                zoom: 1;
+              }
+              
+              .work-order-page {
+                box-shadow: none;
+                margin: 0;
+                padding: 15mm;
+                width: 210mm;
+                height: 297mm;
+              }
+              
+              @page {
+                margin: 0;
+                size: A4;
+              }
+            }
+            
+            @media screen {
+              body {
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              
+              .work-order-page {
+                transform: scale(0.75);
+                transform-origin: top center;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${selectedOrder.furnitureData?.groups?.map((group, index) => `
+            <div class="work-order-page">
+              <div class="header">
+                <div class="logo-section">
+                  <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo">
+                </div>
+                <div class="furniture-group-title">
+                  <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                </div>
+                <div class="order-details">
+                  <div class="invoice-number">${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                  <div class="order-date">${formatDate(selectedOrder.createdAt)}</div>
+                </div>
+              </div>
+              
+              <div class="upholstery-type-section">
+                <div class="upholstery-type-title">Upholstery Type<br/>نوع الخياطة</div>
+                <div class="upholstery-options">
+                  <div class="upholstery-option">
+                    <div class="check-box"></div>
+                    <div class="option-text">Plain<br/>ساده</div>
+                  </div>
+                  <div class="upholstery-option">
+                    <div class="check-box"></div>
+                    <div class="option-text">Top Stitch<br/>سلفنة</div>
+                  </div>
+                  <div class="upholstery-option">
+                    <div class="check-box"></div>
+                    <div class="option-text">Piping<br/>بايبنغ</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="measurement-section">
+                <div class="measurement-notes"></div>
+                <div class="measurement-title">Sofa Inner Measurement<br/>قياس الكنبة الداخلي</div>
+              </div>
+              
+              <table class="measurement-table">
+                <thead>
+                  <tr>
+                    <th>Quantity<br/>الكمية</th>
+                    <th>Measurements<br/>القياس</th>
+                    <th>Details<br/>تفاصيل الكنبة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>قاعدة</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>يد</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>جنب</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>ظهر</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>خلفية</td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <table class="notes-table">
+                <thead>
+                  <tr>
+                    <th>Cushions Notes<br/>ملاحظات الفرشات</th>
+                    <th>General Note<br/>ملاحظات عامة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div class="cushion-note-item">
+                        <div class="cushion-checkbox"></div>
+                        <div class="cushion-note-text">- التأكد من اتجاه قماش الفرشات</div>
+                      </div>
+                    </td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              
+            </div>
+          `).join('') || '<div class="work-order-page"><div class="furniture-section"><div class="furniture-title">No Furniture Groups Found</div></div></div>'}
+        </body>
+        </html>
+      `;
+      
+      // Write the HTML content to the new window
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait for the content to load, then print
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+      
+      showNotification('Work order generated successfully', 'success');
+    } catch (error) {
+      console.error('Error generating work order:', error);
+      showNotification('Error generating work order', 'error');
+    }
+  };
+
   const handleOpenExpenseModal = () => {
     setExpenseModalOpen(true);
     setExpenseForm({ description: '', price: '', unit: '', tax: '', taxType: 'fixed', total: '' });
@@ -1453,6 +1983,43 @@ const InvoicePage = () => {
             }}
           >
             Review & Print
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PrintIcon sx={{ color: '#000000' }} />}
+            onClick={handlePrintWorkOrder}
+            disabled={!selectedOrder}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #274290',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #1a2d5a',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            Print Work Order
           </Button>
           {selectedOrder && (
             <Button
