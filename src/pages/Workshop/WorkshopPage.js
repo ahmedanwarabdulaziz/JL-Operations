@@ -3960,7 +3960,7 @@ const WorkshopPage = () => {
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={() => setExpenseModalOpen(true)}
+                      onClick={handleOpenExpenseModal}
                       sx={{
                         color: '#000000',
                         borderColor: '#000000',
@@ -4051,7 +4051,7 @@ const WorkshopPage = () => {
                       </Typography>
                       <Button
                         variant="contained"
-                        onClick={() => setExpenseModalOpen(true)}
+                        onClick={handleOpenExpenseModal}
                         sx={{
                           background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                           color: '#000000',

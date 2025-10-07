@@ -70,6 +70,8 @@ const InvoicePage = () => {
   });
   const [expenseList, setExpenseList] = useState([]);
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  const [workOrderDialogOpen, setWorkOrderDialogOpen] = useState(false);
+  const [workOrderSelections, setWorkOrderSelections] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -682,7 +684,40 @@ const InvoicePage = () => {
     }
   };
 
-  const handlePrintWorkOrder = async () => {
+  const handlePrintWorkOrder = () => {
+    if (!selectedOrder) {
+      showNotification('Please select an order first', 'warning');
+      return;
+    }
+
+    if (!selectedOrder.furnitureData || !selectedOrder.furnitureData.groups) {
+      showNotification('No furniture data available', 'error');
+      return;
+    }
+
+    const furnitureGroups = selectedOrder.furnitureData.groups || [];
+    if (furnitureGroups.length === 0) {
+      showNotification('No furniture groups found', 'error');
+      return;
+    }
+
+    // Initialize selections with default "Furniture Form"
+    const initialSelections = {};
+    furnitureGroups.forEach((group, index) => {
+      initialSelections[index] = 'furniture';
+    });
+    setWorkOrderSelections(initialSelections);
+    setWorkOrderDialogOpen(true);
+  };
+
+  const handleWorkOrderFormTypeChange = (groupIndex, formType) => {
+    setWorkOrderSelections(prev => ({
+      ...prev,
+      [groupIndex]: formType
+    }));
+  };
+
+  const handleGenerateWorkOrder = async () => {
     if (!selectedOrder) {
       showNotification('Please select an order first', 'warning');
       return;
@@ -692,6 +727,8 @@ const InvoicePage = () => {
       showNotification('Generating work order...', 'info');
       
       const printWindow = window.open('', '_blank', 'width=900,height=1200');
+      
+      const furnitureGroups = selectedOrder.furnitureData.groups || [];
       
       // Generate HTML content for work order with separate pages for each furniture group
       const htmlContent = `
@@ -710,10 +747,10 @@ const InvoicePage = () => {
             }
             
             .work-order-page {
-              width: 210mm;
-              height: 297mm;
-              margin: 0 auto 20px auto;
-              padding: 15mm;
+              width: 100%;
+              min-height: 100vh;
+              margin: 0;
+              padding: 10mm;
               background-color: #ffffff;
               color: #000000;
               box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -731,9 +768,10 @@ const InvoicePage = () => {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              margin-bottom: 20px;
-              padding-bottom: 15px;
+              margin-bottom: 15px;
+              padding-bottom: 10px;
               border-bottom: 3px solid #274290;
+              flex-shrink: 0;
             }
             
             .logo-section {
@@ -743,7 +781,7 @@ const InvoicePage = () => {
             }
             
             .logo {
-              height: 50px;
+              height: 40px;
               width: auto;
             }
             
@@ -753,11 +791,29 @@ const InvoicePage = () => {
             }
             
             .furniture-group-title h2 {
-              font-size: 2.2rem;
+              font-size: 1.8rem;
               font-weight: bold;
               color: #274290;
               margin: 0;
               text-transform: uppercase;
+            }
+            
+            .furniture-details {
+              font-size: 0.9rem;
+              color: #666666;
+              margin-top: 5px;
+              text-align: center;
+            }
+            
+            .material-code {
+              font-weight: 600;
+              color: #274290;
+            }
+            
+            .foam-details {
+              font-size: 0.8rem;
+              color: #888888;
+              margin-top: 2px;
             }
             
             .order-details {
@@ -766,14 +822,21 @@ const InvoicePage = () => {
             }
             
             .order-details .invoice-number {
-              font-size: 1.2rem;
+              font-size: 1rem;
               font-weight: bold;
               color: #274290;
-              margin: 0 0 5px 0;
+              margin: 0 0 3px 0;
+            }
+            
+            .order-details .customer-name {
+              font-size: 0.9rem;
+              color: #274290;
+              margin: 0 0 3px 0;
+              font-weight: 500;
             }
             
             .order-details .order-date {
-              font-size: 1rem;
+              font-size: 0.9rem;
               color: #666666;
               margin: 0;
             }
@@ -799,36 +862,135 @@ const InvoicePage = () => {
             
             
             .upholstery-type-section {
-              margin-bottom: 20px;
-              padding: 15px;
+              margin-bottom: 15px;
+              padding: 10px;
               background-color: #f8f9fa;
-              border: 2px solid #274290;
               border-radius: 8px;
               display: flex;
-              align-items: center;
-              gap: 30px;
+              align-items: stretch;
+              gap: 20px;
+              flex-shrink: 0;
             }
             
-            .upholstery-type-title {
-              font-size: 1.1rem;
+            .upholstery-box {
+              background-color: #ffffff;
+              border: 1px solid #274290;
+              border-radius: 4px;
+              padding: 8px;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              min-height: 120px;
+            }
+            
+            .upholstery-content {
+              display: flex;
+              align-items: flex-start;
+              gap: 15px;
+            }
+            
+            .section-title {
+              font-size: 1rem;
               font-weight: bold;
               color: #274290;
               white-space: nowrap;
             }
             
+            .right-column {
+              display: flex;
+              flex-direction: column;
+              gap: 15px;
+              flex: 1;
+            }
+            
+            .section-titles-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              gap: 20px;
+            }
+            
+            .measurement-title-section {
+              background-color: #ffffff;
+              border: 1px solid #274290;
+              border-radius: 4px;
+              padding: 8px;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: flex-start;
+              min-height: 120px;
+            }
+            
+            .measurement-section-title {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #274290;
+              margin-bottom: 5px;
+            }
+            
+            .notes-section {
+              margin-bottom: 15px;
+              padding: 0;
+              display: flex;
+              flex-direction: row;
+              gap: 20px;
+              flex-shrink: 0;
+              width: 100%;
+            }
+            
+            .note-box {
+              background-color: transparent;
+              border: none;
+              padding: 0;
+              min-height: auto;
+              flex: 1;
+              width: 50%;
+            }
+            
+            .note-title {
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #274290;
+              margin-bottom: 3px;
+              border-bottom: 1px solid #274290;
+              padding-bottom: 3px;
+            }
+            
+            .note-content {
+              font-size: 0.8rem;
+              color: #333333;
+              line-height: 1.3;
+              min-height: auto;
+              white-space: pre-wrap;
+              margin-bottom: 10px;
+            }
+            
             .upholstery-options {
               display: flex;
-              justify-content: space-around;
-              gap: 20px;
-              flex: 1;
+              flex-direction: column;
+              gap: 8px;
             }
             
             .upholstery-option {
               display: flex;
               align-items: center;
               gap: 8px;
-              flex: 1;
-              justify-content: center;
+            }
+            
+            .measurement-box {
+              padding: 8px;
+              background-color: #ffffff;
+              border: 1px solid #274290;
+              border-radius: 4px;
+              min-height: 60px;
+            }
+            
+            .measurement-box-title {
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #274290;
+              margin-bottom: 5px;
             }
             
             .check-box {
@@ -844,28 +1006,28 @@ const InvoicePage = () => {
               font-size: 0.9rem;
               color: #333333;
               font-weight: 500;
-              text-align: center;
               line-height: 1.2;
             }
             
             .measurement-section {
-              margin-bottom: 20px;
-              padding: 15px;
+              margin-bottom: 15px;
+              padding: 10px;
               background-color: #f8f9fa;
               border: 2px solid #274290;
               border-radius: 8px;
               display: flex;
               align-items: center;
-              gap: 20px;
+              gap: 15px;
+              flex-shrink: 0;
             }
             
             .measurement-notes {
               flex: 1;
-              height: 100px;
+              height: 80px;
               border: 1px solid #274290;
               border-radius: 4px;
               background-color: #ffffff;
-              padding: 10px;
+              padding: 8px;
               font-size: 0.9rem;
               color: #333333;
             }
@@ -882,10 +1044,11 @@ const InvoicePage = () => {
               width: 100%;
               border-collapse: separate;
               border-spacing: 0;
-              margin-bottom: 20px;
+              margin-bottom: 15px;
               border: 2px solid #274290;
               border-radius: 8px;
               overflow: hidden;
+              flex-shrink: 0;
             }
             
             .measurement-table th {
@@ -911,11 +1074,11 @@ const InvoicePage = () => {
             .measurement-table td {
               border-right: 1px solid #274290;
               border-bottom: 1px solid #274290;
-              padding: 8px;
-              font-size: 0.9rem;
+              padding: 4px;
+              font-size: 0.8rem;
               color: #333333;
               text-align: center;
-              height: 40px;
+              height: 25px;
               font-family: Arial, sans-serif;
             }
             
@@ -955,10 +1118,11 @@ const InvoicePage = () => {
               width: 100%;
               border-collapse: separate;
               border-spacing: 0;
-              margin-bottom: 20px;
+              margin-bottom: 0;
               border: 2px solid #274290;
               border-radius: 8px;
               overflow: hidden;
+              flex: 1;
             }
             
             .notes-table th {
@@ -987,7 +1151,6 @@ const InvoicePage = () => {
               font-size: 0.9rem;
               color: #333333;
               text-align: left;
-              height: 400px;
               font-family: Arial, sans-serif;
               background-color: #ffffff;
               vertical-align: top;
@@ -1070,14 +1233,15 @@ const InvoicePage = () => {
               .work-order-page {
                 box-shadow: none;
                 margin: 0;
-                padding: 15mm;
-                width: 210mm;
-                height: 297mm;
+                padding: 10mm;
+                width: 100%;
+                min-height: 100vh;
+                height: auto;
               }
               
               @page {
                 margin: 0;
-                size: A4;
+                size: auto;
               }
             }
             
@@ -1095,7 +1259,68 @@ const InvoicePage = () => {
           </style>
         </head>
         <body>
-          ${selectedOrder.furnitureData?.groups?.map((group, index) => `
+          ${furnitureGroups.map((group, index) => {
+            const formType = workOrderSelections[index] || 'furniture';
+            const workOrderId = `WO-${selectedOrder.id}-${index + 1}`;
+            
+                            if (formType === 'cushion') {
+                                return `
+                                    <div class="work-order-page">
+                                        <div class="header">
+                                            <div class="logo-section">
+                                                <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo">
+                                            </div>
+                                            <div class="furniture-group-title">
+                                                <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                                                <div class="furniture-details">
+                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}</div>` : ''}
+                                                    ${(group.foamThickness || group.foamNote) ? `
+                                                        <div class="foam-details">
+                                                            Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                            <div class="order-details">
+                                                <div class="invoice-number">${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                                                <div class="customer-name">${selectedOrder.personalInfo?.customerName || 'N/A'}</div>
+                                                <div class="order-date">${formatDate(selectedOrder.createdAt)}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="notes-section">
+                                            <div class="note-box">
+                                                <div class="note-title">General Note</div>
+                                                <div class="note-content">${selectedOrder.paymentData?.notes || ''}</div>
+                                            </div>
+                                            <div class="note-box">
+                                                <div class="note-title">Furniture Note</div>
+                                                <div class="note-content">${group.customerNote || ''}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <table class="notes-table" style="width: 100%; height: calc(100vh - 300px); margin-top: 20px;">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cushions Notes<br/>ملاحظات الفرشات</th>
+                                                    <th>General Note<br/>ملاحظات عامة</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>
+                                                        <div class="cushion-note-item">
+                                                            <div class="cushion-checkbox"></div>
+                                                            <div class="cushion-note-text">- التأكد من اتجاه قماش الفرشات</div>
+                                                        </div>
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>`;
+            } else {
+              return `
             <div class="work-order-page">
               <div class="header">
                 <div class="logo-section">
@@ -1103,34 +1328,56 @@ const InvoicePage = () => {
                 </div>
                 <div class="furniture-group-title">
                   <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                  <div class="furniture-details">
+                    ${group.materialCode ? `<div class="material-code">${group.materialCode}</div>` : ''}
+                    ${(group.foamThickness || group.foamNote) ? `
+                      <div class="foam-details">
+                        Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
+                      </div>
+                    ` : ''}
+                  </div>
                 </div>
                 <div class="order-details">
                   <div class="invoice-number">${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                  <div class="customer-name">${selectedOrder.personalInfo?.customerName || 'N/A'}</div>
                   <div class="order-date">${formatDate(selectedOrder.createdAt)}</div>
                 </div>
               </div>
               
-              <div class="upholstery-type-section">
-                <div class="upholstery-type-title">Upholstery Type<br/>نوع الخياطة</div>
-                <div class="upholstery-options">
-                  <div class="upholstery-option">
-                    <div class="check-box"></div>
-                    <div class="option-text">Plain<br/>ساده</div>
-                  </div>
-                  <div class="upholstery-option">
-                    <div class="check-box"></div>
-                    <div class="option-text">Top Stitch<br/>سلفنة</div>
-                  </div>
-                  <div class="upholstery-option">
-                    <div class="check-box"></div>
-                    <div class="option-text">Piping<br/>بايبنغ</div>
-                  </div>
+              <div class="notes-section">
+                <div class="note-box">
+                  <div class="note-title">General Note</div>
+                  <div class="note-content">${selectedOrder.paymentData?.notes || ''}</div>
+                </div>
+                <div class="note-box">
+                  <div class="note-title">Furniture Note</div>
+                  <div class="note-content">${group.customerNote || ''}</div>
                 </div>
               </div>
               
-              <div class="measurement-section">
-                <div class="measurement-notes"></div>
-                <div class="measurement-title">Sofa Inner Measurement<br/>قياس الكنبة الداخلي</div>
+              <div class="upholstery-type-section">
+                <div class="upholstery-box">
+                  <div class="upholstery-content">
+                    <div class="section-title">Upholstery Type<br/>نوع الخياطة</div>
+                    <div class="upholstery-options">
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Plain ساده</div>
+                      </div>
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Top Stitch سلفنة</div>
+                      </div>
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Piping بايبنغ</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="measurement-title-section">
+                  <div class="measurement-section-title">Inner Measurement<br/>قياس الداخلي</div>
+                </div>
               </div>
               
               <table class="measurement-table">
@@ -1190,8 +1437,9 @@ const InvoicePage = () => {
                 </tbody>
               </table>
               
-            </div>
-          `).join('') || '<div class="work-order-page"><div class="furniture-section"><div class="furniture-title">No Furniture Groups Found</div></div></div>'}
+            </div>`;
+            }
+          }).join('') || '<div class="work-order-page"><div class="furniture-section"><div class="furniture-title">No Furniture Groups Found</div></div></div>'}
         </body>
         </html>
       `;
@@ -2500,6 +2748,161 @@ const InvoicePage = () => {
             }}
           >
             Save All
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Work Order Form Type Dialog */}
+      <Dialog 
+        open={workOrderDialogOpen} 
+        onClose={() => setWorkOrderDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            backgroundColor: '#1a1a1a',
+            border: '2px solid #333333',
+            borderRadius: 2,
+            boxShadow: 4
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+          color: '#000000', 
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '1.2rem',
+          borderBottom: '3px solid #4CAF50',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2)'
+        }}>
+          Select Form Type for Each Furniture Group
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, backgroundColor: '#1a1a1a' }}>
+          {selectedOrder?.furnitureData?.groups?.map((group, index) => (
+            <Box key={index} sx={{ 
+              mb: 2, 
+              p: 2, 
+              border: '2px solid #333333', 
+              borderRadius: 2,
+              backgroundColor: '#2a2a2a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              boxShadow: 2,
+              '&:hover': {
+                boxShadow: 4,
+                borderColor: '#d4af5a',
+                backgroundColor: '#3a3a3a'
+              }
+            }}>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: '#d4af5a', 
+                minWidth: '200px',
+                textTransform: 'uppercase'
+              }}>
+                {group.furnitureType || `Furniture Group ${index + 1}`}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 1, flex: 1 }}>
+                <Button
+                  variant={workOrderSelections[index] === 'furniture' ? 'contained' : 'outlined'}
+                  onClick={() => handleWorkOrderFormTypeChange(index, 'furniture')}
+                  sx={{
+                    background: workOrderSelections[index] === 'furniture' 
+                      ? 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)'
+                      : 'transparent',
+                    color: workOrderSelections[index] === 'furniture' ? '#000000' : '#d4af5a',
+                    borderColor: '#d4af5a',
+                    border: workOrderSelections[index] === 'furniture' ? '3px solid #4CAF50' : '2px solid #d4af5a',
+                    fontWeight: 'bold',
+                    px: 2,
+                    boxShadow: workOrderSelections[index] === 'furniture' 
+                      ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)'
+                      : 'none',
+                    '&:hover': {
+                      background: workOrderSelections[index] === 'furniture' 
+                        ? 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                        : 'linear-gradient(145deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      borderColor: workOrderSelections[index] === 'furniture' ? '#45a049' : '#b98f33',
+                      boxShadow: workOrderSelections[index] === 'furniture' 
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        : '0 2px 4px rgba(0,0,0,0.2)'
+                    }
+                  }}
+                >
+                  Furniture Form
+                </Button>
+                
+                <Button
+                  variant={workOrderSelections[index] === 'cushion' ? 'contained' : 'outlined'}
+                  onClick={() => handleWorkOrderFormTypeChange(index, 'cushion')}
+                  sx={{
+                    background: workOrderSelections[index] === 'cushion' 
+                      ? 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)'
+                      : 'transparent',
+                    color: workOrderSelections[index] === 'cushion' ? '#000000' : '#d4af5a',
+                    borderColor: '#d4af5a',
+                    border: workOrderSelections[index] === 'cushion' ? '3px solid #4CAF50' : '2px solid #d4af5a',
+                    fontWeight: 'bold',
+                    px: 2,
+                    boxShadow: workOrderSelections[index] === 'cushion' 
+                      ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)'
+                      : 'none',
+                    '&:hover': {
+                      background: workOrderSelections[index] === 'cushion' 
+                        ? 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                        : 'linear-gradient(145deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      borderColor: workOrderSelections[index] === 'cushion' ? '#45a049' : '#b98f33',
+                      boxShadow: workOrderSelections[index] === 'cushion' 
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        : '0 2px 4px rgba(0,0,0,0.2)'
+                    }
+                  }}
+                >
+                  Cushion Form
+                </Button>
+              </Box>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, backgroundColor: '#1a1a1a', borderTop: '1px solid #333333' }}>
+          <Button
+            onClick={() => setWorkOrderDialogOpen(false)}
+            sx={{
+              color: '#ffffff',
+              fontWeight: 'bold',
+              border: '2px solid #333333',
+              backgroundColor: '#2a2a2a',
+              '&:hover': {
+                backgroundColor: '#3a3a3a',
+                borderColor: '#d4af5a'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              setWorkOrderDialogOpen(false);
+              handleGenerateWorkOrder();
+            }}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              fontWeight: 'bold',
+              px: 3,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            Generate Work Order
           </Button>
         </DialogActions>
       </Dialog>
