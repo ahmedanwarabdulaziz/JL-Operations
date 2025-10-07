@@ -48,9 +48,12 @@ import {
   AttachMoney as AttachMoneyIcon,
   Category as CategoryIcon,
   CalendarToday as CalendarIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Delete as DeleteIcon,
+  Save as SaveIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -70,6 +73,26 @@ const ExtraExpensesPage = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expenseTypeFilter, setExpenseTypeFilter] = useState('all');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [expenseToEdit, setExpenseToEdit] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [materialCompanies, setMaterialCompanies] = useState([]);
+  
+  // Business expenses dialog state
+  const [businessExpenseDialogOpen, setBusinessExpenseDialogOpen] = useState(false);
+  const [businessExpenseForm, setBusinessExpenseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    quantity: '',
+    price: '',
+    taxType: 'percent',
+    tax: '',
+    total: 0
+  });
+  const [savingBusinessExpense, setSavingBusinessExpense] = useState(false);
   
   // Summary statistics
   const [summaryStats, setSummaryStats] = useState({
@@ -87,13 +110,19 @@ const ExtraExpensesPage = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const ordersRef = collection(db, 'orders');
-      const ordersQuery = query(ordersRef, orderBy('createdAt', 'desc'));
-      const ordersSnapshot = await getDocs(ordersQuery);
+      
+      // Fetch orders, general expenses, business expenses, and material companies
+      const [ordersSnapshot, generalExpensesSnapshot, businessExpensesSnapshot, companiesSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'businessExpenses'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')))
+      ]);
       
       const ordersData = [];
       const allExpenses = [];
       
+      // Extract order-based extra expenses
       ordersSnapshot.forEach((doc) => {
         const orderData = { id: doc.id, ...doc.data() };
         ordersData.push(orderData);
@@ -115,11 +144,79 @@ const ExtraExpensesPage = () => {
               tax: parseFloat(expense.tax) || 0,
               taxType: expense.taxType || 'fixed',
               total: parseFloat(expense.total) || 0,
-              originalExpense: expense
+              originalExpense: expense,
+              expenseType: 'order-specific'
             });
           });
         }
       });
+      
+      // Extract general expenses
+      generalExpensesSnapshot.forEach((doc) => {
+        const generalExpense = { id: doc.id, ...doc.data() };
+        allExpenses.push({
+          id: `general_${generalExpense.id}`,
+          orderId: 'general',
+          orderBillNumber: 'GENERAL',
+          customerName: 'General Expense',
+          customerEmail: '',
+          orderDate: generalExpense.createdAt || generalExpense.date || '',
+          orderStatus: 'General',
+          description: generalExpense.description || `${generalExpense.materialCode} - ${generalExpense.materialCompany}`,
+          price: parseFloat(generalExpense.price) || 0,
+          unit: `${generalExpense.quantity}`,
+          tax: parseFloat(generalExpense.tax) || 0,
+          taxType: generalExpense.taxType || 'percent',
+          total: parseFloat(generalExpense.total) || 0,
+          originalExpense: generalExpense,
+          expenseType: 'general',
+          materialCompany: generalExpense.materialCompany,
+          materialCode: generalExpense.materialCode,
+          quantity: generalExpense.quantity,
+          // Include all fields needed for editing
+          date: generalExpense.date,
+          createdAt: generalExpense.createdAt,
+          updatedAt: generalExpense.updatedAt
+        });
+      });
+      
+      // Extract business expenses
+      businessExpensesSnapshot.forEach((doc) => {
+        const businessExpense = { id: doc.id, ...doc.data() };
+        allExpenses.push({
+          id: `business_${businessExpense.id}`,
+          orderId: 'business',
+          orderBillNumber: 'BUSINESS',
+          customerName: 'Business Expense',
+          customerEmail: '',
+          orderDate: businessExpense.createdAt || businessExpense.date || '',
+          orderStatus: 'Business',
+          description: businessExpense.description || 'Business Expense',
+          price: parseFloat(businessExpense.price) || 0,
+          unit: `${businessExpense.quantity}`,
+          tax: parseFloat(businessExpense.tax) || 0,
+          taxType: businessExpense.taxType || 'percent',
+          total: parseFloat(businessExpense.total) || 0,
+          originalExpense: businessExpense,
+          expenseType: 'business',
+          quantity: businessExpense.quantity,
+          // Include all fields needed for editing
+          date: businessExpense.date,
+          createdAt: businessExpense.createdAt,
+          updatedAt: businessExpense.updatedAt
+        });
+      });
+      
+      // Process material companies
+      const companiesData = companiesSnapshot.docs.map((doc, index) => ({
+        id: doc.id,
+        order: doc.data().order ?? index,
+        ...doc.data()
+      }));
+      
+      // Sort companies by order field
+      companiesData.sort((a, b) => a.order - b.order);
+      setMaterialCompanies(companiesData);
       
       setOrders(ordersData);
       setExtraExpenses(allExpenses);
@@ -224,10 +321,15 @@ const ExtraExpensesPage = () => {
       });
     }
     
-    // Expense type filter (could be enhanced with categorization)
+    // Expense type filter
     if (expenseTypeFilter !== 'all') {
-      // For now, we'll filter by tax type
-      if (expenseTypeFilter === 'taxed') {
+      if (expenseTypeFilter === 'general') {
+        filtered = filtered.filter(expense => expense.expenseType === 'general');
+      } else if (expenseTypeFilter === 'business') {
+        filtered = filtered.filter(expense => expense.expenseType === 'business');
+      } else if (expenseTypeFilter === 'order-specific') {
+        filtered = filtered.filter(expense => expense.expenseType === 'order-specific');
+      } else if (expenseTypeFilter === 'taxed') {
         filtered = filtered.filter(expense => expense.tax > 0);
       } else if (expenseTypeFilter === 'no_tax') {
         filtered = filtered.filter(expense => expense.tax === 0);
@@ -246,9 +348,305 @@ const ExtraExpensesPage = () => {
     fetchOrders();
   }, []);
 
+  // Fetch material companies when edit dialog opens
+  useEffect(() => {
+    if (editDialogOpen && materialCompanies.length === 0) {
+      const fetchMaterialCompanies = async () => {
+        try {
+          const companiesSnapshot = await getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')));
+          const companiesData = companiesSnapshot.docs.map((doc, index) => ({
+            id: doc.id,
+            order: doc.data().order ?? index,
+            ...doc.data()
+          }));
+          companiesData.sort((a, b) => a.order - b.order);
+          setMaterialCompanies(companiesData);
+          console.log('Fetched material companies:', companiesData);
+        } catch (error) {
+          console.error('Error fetching material companies:', error);
+        }
+      };
+      fetchMaterialCompanies();
+    }
+  }, [editDialogOpen, materialCompanies.length]);
+
   const handleViewOrder = (orderId) => {
-    navigate(`/workshop`);
-    // Could add logic to select the specific order
+    if (orderId === 'general') {
+      navigate('/material-request');
+    } else if (orderId === 'business') {
+      // Business expenses don't have a separate page, do nothing or show a message
+      showError('Business expenses can only be managed from this page');
+    } else {
+      navigate(`/workshop`);
+      // Could add logic to select the specific order
+    }
+  };
+
+  const openDeleteDialog = (expense) => {
+    setExpenseToDelete(expense);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setExpenseToDelete(null);
+  };
+
+  const deleteExpense = async () => {
+    if (!expenseToDelete) return;
+    
+    try {
+      setDeleting(true);
+      
+      if (expenseToDelete.expenseType === 'general') {
+        // Delete from generalExpenses collection
+        const expenseRef = doc(db, 'generalExpenses', expenseToDelete.id.replace('general_', ''));
+        await deleteDoc(expenseRef);
+        showSuccess('General expense deleted successfully');
+      } else if (expenseToDelete.expenseType === 'business') {
+        // Delete from businessExpenses collection
+        const expenseRef = doc(db, 'businessExpenses', expenseToDelete.id.replace('business_', ''));
+        await deleteDoc(expenseRef);
+        showSuccess('Business expense deleted successfully');
+      } else {
+        // For order-specific expenses, we would need to update the order
+        // For now, just show a message that this needs to be done from the order page
+        showError('Order-specific expenses must be deleted from the order page');
+        return;
+      }
+      
+      closeDeleteDialog();
+      
+      // Refresh expenses
+      fetchOrders();
+      
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      showError('Failed to delete expense');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Edit functionality
+  const openEditDialog = (expense) => {
+    if (expense.expenseType === 'general' || expense.expenseType === 'business') {
+      const firebaseId = expense.id.replace(`${expense.expenseType}_`, '');
+      console.log('Opening edit dialog for expense:', expense);
+      console.log('Firebase ID:', firebaseId);
+      console.log('Material companies available:', materialCompanies);
+      console.log('Current material company:', expense.materialCompany);
+      
+      setExpenseToEdit({
+        ...expense,
+        firebaseId: firebaseId
+      });
+      setEditDialogOpen(true);
+    } else {
+      showError('Order-specific expenses must be edited from the order page');
+    }
+  };
+
+  const closeEditDialog = () => {
+    setEditDialogOpen(false);
+    setExpenseToEdit(null);
+  };
+
+  const handleEditInputChange = (field, value) => {
+    if (!expenseToEdit) return;
+    
+    const updatedExpense = { ...expenseToEdit, [field]: value };
+    
+    // Calculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(updatedExpense.price) || 0;
+      const quantity = parseFloat(updatedExpense.quantity) || 0;
+      const taxValue = parseFloat(updatedExpense.tax) || 0;
+      
+      let taxAmount = 0;
+      if (updatedExpense.taxType === 'percent') {
+        taxAmount = (price * quantity * taxValue) / 100;
+      } else {
+        taxAmount = taxValue;
+      }
+      
+      updatedExpense.total = (price * quantity + taxAmount).toFixed(2);
+    }
+    
+    setExpenseToEdit(updatedExpense);
+  };
+
+  const validateEditForm = () => {
+    if (!expenseToEdit) return false;
+    
+    const { materialCompany, materialCode, quantity, price, tax } = expenseToEdit;
+    
+    if (!materialCompany || !materialCode || !quantity || !price || !tax) {
+      showError('All fields except description are required');
+      return false;
+    }
+    
+    if (parseFloat(quantity) <= 0 || parseFloat(price) <= 0 || parseFloat(tax) < 0) {
+      showError('Quantity and price must be greater than 0, tax cannot be negative');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const saveEditExpense = async () => {
+    if (!validateEditForm()) {
+      console.log('Validation failed');
+      return;
+    }
+    
+    if (!expenseToEdit || !expenseToEdit.firebaseId) {
+      console.error('Missing expenseToEdit or firebaseId:', expenseToEdit);
+      showError('Invalid expense data');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      
+      // Ensure all fields have valid values
+      const expenseData = {
+        description: expenseToEdit.description || '',
+        materialCompany: expenseToEdit.materialCompany || '',
+        materialCode: expenseToEdit.materialCode || '',
+        quantity: parseFloat(expenseToEdit.quantity) || 0,
+        price: parseFloat(expenseToEdit.price) || 0,
+        taxType: expenseToEdit.taxType || 'percent',
+        tax: parseFloat(expenseToEdit.tax) || 0,
+        total: parseFloat(expenseToEdit.total) || 0,
+        date: expenseToEdit.date || new Date().toISOString().split('T')[0],
+        updatedAt: new Date()
+      };
+      
+      // Remove any undefined values
+      Object.keys(expenseData).forEach(key => {
+        if (expenseData[key] === undefined) {
+          delete expenseData[key];
+        }
+      });
+      
+      console.log('Updating expense with data:', expenseData);
+      console.log('Firebase ID:', expenseToEdit.firebaseId);
+      
+      const collectionName = expenseToEdit.expenseType === 'business' ? 'businessExpenses' : 'generalExpenses';
+      const expenseRef = doc(db, collectionName, expenseToEdit.firebaseId);
+      await updateDoc(expenseRef, expenseData);
+      
+      console.log('Expense updated successfully');
+      showSuccess(`${expenseToEdit.expenseType === 'business' ? 'Business' : 'General'} expense updated successfully`);
+      closeEditDialog();
+      
+      // Refresh expenses
+      fetchOrders();
+      
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      showError(`Failed to update expense: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Business expense handlers
+  const openBusinessExpenseDialog = () => {
+    setBusinessExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+    setBusinessExpenseDialogOpen(true);
+  };
+
+  const closeBusinessExpenseDialog = () => {
+    setBusinessExpenseDialogOpen(false);
+    setBusinessExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+  };
+
+  const handleBusinessExpenseInputChange = (field, value) => {
+    const newForm = { ...businessExpenseForm, [field]: value };
+    
+    // Calculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(field === 'price' ? value : newForm.price) || 0;
+      const quantity = parseFloat(field === 'quantity' ? value : newForm.quantity) || 0;
+      const tax = parseFloat(field === 'tax' ? value : newForm.tax) || 0;
+      const taxType = field === 'taxType' ? value : newForm.taxType;
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      newForm.total = (price * quantity) + taxAmount;
+    }
+    
+    setBusinessExpenseForm(newForm);
+  };
+
+  const validateBusinessExpenseForm = () => {
+    const { date, quantity, price, tax } = businessExpenseForm;
+    
+    if (!date || !quantity || !price || !tax) {
+      showError('All fields except description are required');
+      return false;
+    }
+    
+    if (parseFloat(quantity) <= 0 || parseFloat(price) <= 0 || parseFloat(tax) < 0) {
+      showError('Quantity and price must be greater than 0, tax cannot be negative');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const saveBusinessExpense = async () => {
+    if (!validateBusinessExpenseForm()) return;
+    
+    try {
+      setSavingBusinessExpense(true);
+      
+      const businessExpenseData = {
+        ...businessExpenseForm,
+        quantity: parseFloat(businessExpenseForm.quantity),
+        price: parseFloat(businessExpenseForm.price),
+        tax: parseFloat(businessExpenseForm.tax),
+        total: parseFloat(businessExpenseForm.total),
+        type: 'business',
+        createdAt: new Date()
+      };
+      
+      await addDoc(collection(db, 'businessExpenses'), businessExpenseData);
+      
+      showSuccess('Business expense added successfully');
+      closeBusinessExpenseDialog();
+      
+      // Refresh expenses to show the new business expense
+      fetchOrders();
+    } catch (error) {
+      console.error('Error saving business expense:', error);
+      showError('Failed to save business expense');
+    } finally {
+      setSavingBusinessExpense(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -466,12 +864,29 @@ const ExtraExpensesPage = () => {
         </Grid>
       </Grid>
 
-      {/* Filters */}
+      {/* Filters and Actions */}
       <Paper sx={{ p: 3, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #444444' }}>
-        <Typography variant="h6" sx={{ color: '#d4af5a', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FilterListIcon />
-          Filters
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" sx={{ color: '#d4af5a', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FilterListIcon />
+            Filters
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={openBusinessExpenseDialog}
+            sx={{
+              backgroundColor: '#f27921',
+              '&:hover': {
+                backgroundColor: '#e67e22'
+              },
+              color: '#000000',
+              fontWeight: 'bold'
+            }}
+          >
+            Business Expenses
+          </Button>
+        </Box>
         
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={3}>
@@ -579,6 +994,9 @@ const ExtraExpensesPage = () => {
                 }}
               >
                 <MenuItem value="all">All Types</MenuItem>
+                <MenuItem value="general">General</MenuItem>
+                <MenuItem value="business">Business</MenuItem>
+                <MenuItem value="order-specific">Order-Specific</MenuItem>
                 <MenuItem value="taxed">With Tax</MenuItem>
                 <MenuItem value="no_tax">No Tax</MenuItem>
               </Select>
@@ -594,6 +1012,7 @@ const ExtraExpensesPage = () => {
             <TableHead>
               <TableRow sx={{ backgroundColor: '#1a1a1a' }}>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Description</TableCell>
+                <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Type</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Customer</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Order #</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Date</TableCell>
@@ -608,7 +1027,7 @@ const ExtraExpensesPage = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={11} sx={{ textAlign: 'center', py: 4 }}>
                     <CircularProgress sx={{ color: '#d4af5a' }} />
                     <Typography variant="body2" sx={{ color: '#ffffff', mt: 2 }}>
                       Loading expenses...
@@ -617,7 +1036,7 @@ const ExtraExpensesPage = () => {
                 </TableRow>
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={11} sx={{ textAlign: 'center', py: 4 }}>
                     <ReceiptIcon sx={{ fontSize: '3rem', color: '#666666', mb: 2 }} />
                     <Typography variant="h6" sx={{ color: '#ffffff', mb: 1 }}>
                       No expenses found
@@ -643,6 +1062,31 @@ const ExtraExpensesPage = () => {
                       <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
                         {expense.description}
                       </Typography>
+                      {expense.expenseType === 'general' && (
+                        <Typography variant="caption" sx={{ color: '#d4af5a', fontSize: '0.7rem' }}>
+                          {expense.materialCompany} • {expense.quantity} units
+                        </Typography>
+                      )}
+                    </TableCell>
+                    
+                    <TableCell>
+                      <Chip 
+                        label={
+                          expense.expenseType === 'general' ? 'General' : 
+                          expense.expenseType === 'business' ? 'Business' : 
+                          'Order-Specific'
+                        }
+                        size="small"
+                        sx={{ 
+                          backgroundColor: 
+                            expense.expenseType === 'general' ? '#f27921' : 
+                            expense.expenseType === 'business' ? '#9c27b0' : 
+                            '#2196f3',
+                          color: '#ffffff',
+                          fontWeight: 'medium',
+                          fontSize: '0.7rem'
+                        }}
+                      />
                     </TableCell>
                     
                     <TableCell sx={{ color: '#ffffff' }}>
@@ -704,15 +1148,39 @@ const ExtraExpensesPage = () => {
                     </TableCell>
                     
                     <TableCell>
-                      <Tooltip title="View Order">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewOrder(expense.orderId)}
-                          sx={{ color: '#d4af5a' }}
-                        >
-                          <ViewIcon />
-                        </IconButton>
-                      </Tooltip>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Tooltip title="View Order">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleViewOrder(expense.orderId)}
+                            sx={{ color: '#d4af5a' }}
+                          >
+                            <ViewIcon />
+                          </IconButton>
+                        </Tooltip>
+                        {(expense.expenseType === 'general' || expense.expenseType === 'business') && (
+                          <>
+                            <Tooltip title="Edit Expense">
+                              <IconButton
+                                size="small"
+                                onClick={() => openEditDialog(expense)}
+                                sx={{ color: '#2196f3' }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Expense">
+                              <IconButton
+                                size="small"
+                                onClick={() => openDeleteDialog(expense)}
+                                sx={{ color: '#f44336' }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Tooltip>
+                          </>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
@@ -721,6 +1189,450 @@ const ExtraExpensesPage = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <DeleteIcon />
+          Delete Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete this expense?
+          </Typography>
+          {expenseToDelete && (
+            <Box sx={{ p: 2, backgroundColor: '#f5f5f5', borderRadius: 1, border: '1px solid #ddd' }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {expenseToDelete.description}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#666' }}>
+                {expenseToDelete.expenseType === 'general' ? 'General Expense' : 'Order-Specific'} • 
+                {expenseToDelete.materialCompany && ` ${expenseToDelete.materialCompany} •`}
+                {expenseToDelete.quantity && ` ${expenseToDelete.quantity} •`}
+                {formatCurrency(expenseToDelete.total)}
+              </Typography>
+            </Box>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            This action cannot be undone. The expense will be permanently removed from the system.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeDeleteDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={deleteExpense}
+            variant="contained"
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <DeleteIcon sx={{ color: '#000000' }} />}
+            sx={{
+              backgroundColor: '#f44336',
+              '&:hover': {
+                backgroundColor: '#d32f2f'
+              },
+              '&:disabled': {
+                backgroundColor: '#a0a0a0'
+              }
+            }}
+          >
+            {deleting ? 'Deleting...' : 'Delete Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Expense Dialog */}
+      <Dialog open={editDialogOpen} onClose={closeEditDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <EditIcon />
+          Edit General Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {expenseToEdit && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Description Field */}
+              <TextField
+                fullWidth
+                label="Description"
+                value={expenseToEdit.description || ''}
+                onChange={(e) => handleEditInputChange('description', e.target.value)}
+                placeholder="Enter expense description (optional)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+
+              {/* Date Field */}
+              <TextField
+                fullWidth
+                label="Date"
+                type="date"
+                value={expenseToEdit.date || new Date().toISOString().split('T')[0]}
+                onChange={(e) => handleEditInputChange('date', e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                required
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+
+              {/* Material Company and Material Code - Only for General Expenses */}
+              {expenseToEdit.expenseType === 'general' && (
+                <>
+                  {/* Date and Material Company Row */}
+                  <Box sx={{ display: 'flex', gap: 2 }}>
+                    <FormControl fullWidth required>
+                      <InputLabel>Material Company</InputLabel>
+                      <Select
+                        value={expenseToEdit.materialCompany || ''}
+                        onChange={(e) => handleEditInputChange('materialCompany', e.target.value)}
+                        label="Material Company"
+                        displayEmpty
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            '& fieldset': { borderColor: '#8b6b1f' },
+                            '&:hover fieldset': { borderColor: '#b98f33' },
+                            '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                          }
+                        }}
+                      >
+                        <MenuItem value="" disabled>
+                          {materialCompanies.length === 0 ? 'Loading companies...' : 'Select Material Company'}
+                        </MenuItem>
+                        {materialCompanies.map((company) => (
+                          <MenuItem key={company.id} value={company.name}>
+                            {company.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+
+                  {/* Material Code Field */}
+                  <TextField
+                    fullWidth
+                    label="Material Code"
+                    value={expenseToEdit.materialCode || ''}
+                    onChange={(e) => handleEditInputChange('materialCode', e.target.value)}
+                    placeholder="Enter material code"
+                    required
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#8b6b1f' },
+                        '&:hover fieldset': { borderColor: '#b98f33' },
+                        '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                      }
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Quantity Field */}
+              <TextField
+                fullWidth
+                label="Quantity"
+                type="number"
+                value={expenseToEdit.quantity || ''}
+                onChange={(e) => handleEditInputChange('quantity', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.1 }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+
+              {/* Price Row */}
+              <TextField
+                fullWidth
+                label="Price"
+                type="number"
+                value={expenseToEdit.price || ''}
+                onChange={(e) => handleEditInputChange('price', e.target.value)}
+                placeholder="0.00"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+
+              {/* Tax Type and Tax Amount Row */}
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Tax Type</InputLabel>
+                  <Select
+                    value={expenseToEdit.taxType || 'percent'}
+                    onChange={(e) => handleEditInputChange('taxType', e.target.value)}
+                    label="Tax Type"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#8b6b1f' },
+                        '&:hover fieldset': { borderColor: '#b98f33' },
+                        '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                      }
+                    }}
+                  >
+                    <MenuItem value="percent">Percentage (%)</MenuItem>
+                    <MenuItem value="fixed">Fixed Amount ($)</MenuItem>
+                  </Select>
+                </FormControl>
+                
+                <TextField
+                  fullWidth
+                  label={expenseToEdit.taxType === 'percent' ? 'Tax Percentage' : 'Tax Amount'}
+                  type="number"
+                  value={expenseToEdit.tax || ''}
+                  onChange={(e) => handleEditInputChange('tax', e.target.value)}
+                  placeholder="0"
+                  required
+                  inputProps={{ min: 0, step: 0.01 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        {expenseToEdit.taxType === 'percent' ? '%' : '$'}
+                      </InputAdornment>
+                    )
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                />
+              </Box>
+              
+              {/* Total Calculation Display */}
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>Total: ${expenseToEdit.total || 0}</strong>
+                  <br />
+                  Calculation: (${expenseToEdit.price || 0} × {expenseToEdit.quantity || 0}) + Tax
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeEditDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveEditExpense}
+            variant="contained"
+            disabled={saving}
+            startIcon={saving ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {saving ? 'Saving...' : 'Update Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Business Expenses Dialog */}
+      <Dialog open={businessExpenseDialogOpen} onClose={closeBusinessExpenseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <AddIcon />
+          Add Business Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Description Field */}
+            <TextField
+              fullWidth
+              label="Description"
+              value={businessExpenseForm.description}
+              onChange={(e) => handleBusinessExpenseInputChange('description', e.target.value)}
+              placeholder="Enter expense description (optional)"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Date Field */}
+            <TextField
+              fullWidth
+              label="Date"
+              type="date"
+              value={businessExpenseForm.date}
+              onChange={(e) => handleBusinessExpenseInputChange('date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Quantity and Price Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Quantity"
+                type="number"
+                value={businessExpenseForm.quantity}
+                onChange={(e) => handleBusinessExpenseInputChange('quantity', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.1 }}
+                sx={{
+                  minWidth: '120px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <TextField
+                fullWidth
+                label="Price"
+                type="number"
+                value={businessExpenseForm.price}
+                onChange={(e) => handleBusinessExpenseInputChange('price', e.target.value)}
+                placeholder="0.00"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Tax Type and Tax Amount Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Tax Type</InputLabel>
+                <Select
+                  value={businessExpenseForm.taxType}
+                  onChange={(e) => handleBusinessExpenseInputChange('taxType', e.target.value)}
+                  label="Tax Type"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                >
+                  <MenuItem value="percent">Percentage (%)</MenuItem>
+                  <MenuItem value="fixed">Fixed Amount ($)</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <TextField
+                fullWidth
+                label={businessExpenseForm.taxType === 'percent' ? 'Tax Percentage' : 'Tax Amount'}
+                type="number"
+                value={businessExpenseForm.tax}
+                onChange={(e) => handleBusinessExpenseInputChange('tax', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {businessExpenseForm.taxType === 'percent' ? '%' : '$'}
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+            
+            {/* Total Calculation Display */}
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                <strong>Total: ${businessExpenseForm.total}</strong>
+                <br />
+                Calculation: (${businessExpenseForm.price || 0} × {businessExpenseForm.quantity || 0}) + Tax
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeBusinessExpenseDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveBusinessExpense}
+            variant="contained"
+            disabled={savingBusinessExpense}
+            startIcon={savingBusinessExpense ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {savingBusinessExpense ? 'Saving...' : 'Save Business Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

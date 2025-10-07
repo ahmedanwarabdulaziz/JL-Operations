@@ -15,7 +15,12 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Alert
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -26,9 +31,13 @@ import {
   CheckCircle as CheckCircleIcon,
   ArrowBack as ArrowBackIcon,
   LocalShipping as LocalShippingIcon,
-  Note as NoteIcon
+  Note as NoteIcon,
+  Add as AddIcon,
+  Save as SaveIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
-import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
@@ -45,6 +54,29 @@ const MaterialRequestPage = () => {
   const [selectedMaterialForNote, setSelectedMaterialForNote] = useState(null);
   const [currentNoteText, setCurrentNoteText] = useState('');
   const [materialCompanies, setMaterialCompanies] = useState([]);
+  
+  // General Expenses Dialog State
+  const [generalExpenseDialogOpen, setGeneralExpenseDialogOpen] = useState(false);
+  const [generalExpenseForm, setGeneralExpenseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    materialCompany: '',
+    materialCode: '',
+    quantity: '',
+    price: '',
+    taxType: 'percent', // 'percent' or 'fixed'
+    tax: '',
+    total: 0
+  });
+  const [savingGeneralExpense, setSavingGeneralExpense] = useState(false);
+  const [editingGeneralExpense, setEditingGeneralExpense] = useState(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  
+  // Add new company dialog state
+  const [addCompanyDialogOpen, setAddCompanyDialogOpen] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [savingCompany, setSavingCompany] = useState(false);
 
   const { showSuccess, showError } = useNotification();
 
@@ -191,10 +223,11 @@ const MaterialRequestPage = () => {
     try {
       setLoading(true);
       
-      // Fetch both orders and material companies
-      const [ordersSnapshot, companiesSnapshot] = await Promise.all([
+      // Fetch orders, material companies, and general expenses
+      const [ordersSnapshot, companiesSnapshot, generalExpensesSnapshot] = await Promise.all([
         getDocs(collection(db, 'orders')),
-        getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')))
+        getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc'))),
+        getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc')))
       ]);
       
       const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -203,6 +236,7 @@ const MaterialRequestPage = () => {
         order: doc.data().order ?? index,
         ...doc.data()
       }));
+      const generalExpensesData = generalExpensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Sort companies by order field
       companiesData.sort((a, b) => a.order - b.order);
@@ -211,8 +245,41 @@ const MaterialRequestPage = () => {
       setMaterialCompanies(companiesData);
       
       const allMaterials = extractMaterialsFromOrders(ordersData);
-      const requiredMaterials = allMaterials.filter(m => !m.materialStatus || m.materialStatus === null);
-      const orderedMaterials = allMaterials.filter(m => m.materialStatus === 'Ordered');
+      
+      // Convert general expenses to material format
+      const generalExpenseMaterials = generalExpensesData.map(expense => ({
+        id: `general_${expense.id}`,
+        orderId: 'general',
+        invoiceNo: 'GENERAL',
+        materialCompany: expense.materialCompany,
+        materialCode: expense.materialCode,
+        materialName: expense.materialCode,
+        quantity: expense.quantity,
+        materialQntyJL: expense.quantity,
+        unit: '',
+        materialStatus: expense.materialStatus || null,
+        materialNote: expense.note || '',
+        orderDate: expense.createdAt,
+        customerName: expense.description || 'General Expense',
+        orderStatus: 'General',
+        price: expense.price,
+        tax: expense.tax,
+        taxType: expense.taxType,
+        total: expense.total,
+        // Include original expense data for editing
+        date: expense.date,
+        description: expense.description,
+        note: expense.note,
+        createdAt: expense.createdAt,
+        updatedAt: expense.updatedAt,
+        isGeneralExpense: true
+      }));
+      
+      // Combine order materials with general expense materials
+      const combinedMaterials = [...allMaterials, ...generalExpenseMaterials];
+      
+      const requiredMaterials = combinedMaterials.filter(m => !m.materialStatus || m.materialStatus === null);
+      const orderedMaterials = combinedMaterials.filter(m => m.materialStatus === 'Ordered');
       
       setMaterialsRequired(requiredMaterials);
       setMaterialsOrdered(orderedMaterials);
@@ -239,7 +306,24 @@ const MaterialRequestPage = () => {
         return;
       }
 
-      // Update the order in Firebase
+      // Handle general expenses differently
+      if (material.isGeneralExpense) {
+        const generalExpenseId = material.id.replace('general_', '');
+        const generalExpenseRef = doc(db, 'generalExpenses', generalExpenseId);
+        
+        await updateDoc(generalExpenseRef, {
+          materialStatus: newStatus,
+          note: note || material.materialNote || ''
+        });
+        
+        showSuccess(`General expense status updated to ${newStatus || 'Required'}`);
+        
+        // Refresh materials to reflect the change
+        fetchMaterials();
+        return;
+      }
+
+      // Handle regular order materials
       const orderRef = doc(db, 'orders', material.orderId);
       const order = orders.find(o => o.id === material.orderId);
       
@@ -333,6 +417,249 @@ const MaterialRequestPage = () => {
     }
   };
 
+  // General Expenses Functions
+  const openGeneralExpenseDialog = () => {
+    setGeneralExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      materialCompany: '',
+      materialCode: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+    setGeneralExpenseDialogOpen(true);
+  };
+
+  const closeGeneralExpenseDialog = () => {
+    setGeneralExpenseDialogOpen(false);
+    setGeneralExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      materialCompany: '',
+      materialCode: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+  };
+
+  const handleGeneralExpenseInputChange = (field, value) => {
+    const newForm = { ...generalExpenseForm, [field]: value };
+    
+    // Calculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(newForm.price) || 0;
+      const quantity = parseFloat(newForm.quantity) || 0;
+      const taxValue = parseFloat(newForm.tax) || 0;
+      
+      let taxAmount = 0;
+      if (newForm.taxType === 'percent') {
+        taxAmount = (price * quantity * taxValue) / 100;
+      } else {
+        taxAmount = taxValue;
+      }
+      
+      newForm.total = (price * quantity + taxAmount).toFixed(2);
+    }
+    
+    setGeneralExpenseForm(newForm);
+  };
+
+  const validateGeneralExpenseForm = () => {
+    const { date, materialCompany, materialCode, quantity, price, tax } = generalExpenseForm;
+    
+    if (!date || !materialCompany || !materialCode || !quantity || !price || !tax) {
+      showError('All fields except description are required');
+      return false;
+    }
+    
+    if (parseFloat(quantity) <= 0 || parseFloat(price) <= 0 || parseFloat(tax) < 0) {
+      showError('Quantity and price must be greater than 0, tax cannot be negative');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const saveGeneralExpense = async () => {
+    if (!validateGeneralExpenseForm()) return;
+    
+    try {
+      setSavingGeneralExpense(true);
+      
+      const generalExpenseData = {
+        ...generalExpenseForm,
+        quantity: parseFloat(generalExpenseForm.quantity),
+        price: parseFloat(generalExpenseForm.price),
+        tax: parseFloat(generalExpenseForm.tax),
+        total: parseFloat(generalExpenseForm.total),
+        type: 'general' // Mark as general expense
+      };
+      
+      if (editingGeneralExpense) {
+        // Update existing expense - extract Firebase ID from material ID
+        const firebaseId = editingGeneralExpense.id.replace('general_', '');
+        const expenseRef = doc(db, 'generalExpenses', firebaseId);
+        await updateDoc(expenseRef, {
+          ...generalExpenseData,
+          updatedAt: new Date()
+        });
+        showSuccess('General expense updated successfully');
+      } else {
+        // Create new expense
+        await addDoc(collection(db, 'generalExpenses'), {
+          ...generalExpenseData,
+          createdAt: new Date()
+        });
+        showSuccess('General expense added successfully');
+      }
+      
+      closeGeneralExpenseDialog();
+      
+      // Refresh materials to include the new/updated general expense
+      fetchMaterials();
+      
+    } catch (error) {
+      console.error('Error saving general expense:', error);
+      showError('Failed to save general expense');
+    } finally {
+      setSavingGeneralExpense(false);
+    }
+  };
+
+  // Edit General Expense Functions
+  const openEditGeneralExpenseDialog = (expense) => {
+    setEditingGeneralExpense(expense);
+    setGeneralExpenseForm({
+      date: expense.date || new Date().toISOString().split('T')[0],
+      description: expense.description || '',
+      materialCompany: expense.materialCompany || '',
+      materialCode: expense.materialCode || '',
+      quantity: expense.quantity?.toString() || '',
+      price: expense.price?.toString() || '',
+      taxType: expense.taxType || 'percent',
+      tax: expense.tax?.toString() || '',
+      total: expense.total || 0
+    });
+    setGeneralExpenseDialogOpen(true);
+  };
+
+  const closeEditDialog = () => {
+    setEditingGeneralExpense(null);
+    closeGeneralExpenseDialog();
+  };
+
+  // Delete General Expense Functions
+  const openDeleteDialog = (expense) => {
+    setExpenseToDelete(expense);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setExpenseToDelete(null);
+  };
+
+  const deleteGeneralExpense = async () => {
+    if (!expenseToDelete) return;
+    
+    try {
+      setUpdating(true);
+      
+      // Extract the original Firebase ID from the material ID
+      const firebaseId = expenseToDelete.id.replace('general_', '');
+      const expenseRef = doc(db, 'generalExpenses', firebaseId);
+      await deleteDoc(expenseRef);
+      
+      showSuccess('General expense deleted successfully');
+      closeDeleteDialog();
+      
+      // Refresh materials to remove the deleted expense
+      fetchMaterials();
+      
+    } catch (error) {
+      console.error('Error deleting general expense:', error);
+      showError('Failed to delete general expense');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Add new company dialog handlers
+  const openAddCompanyDialog = () => {
+    setNewCompanyName('');
+    setAddCompanyDialogOpen(true);
+  };
+
+  const closeAddCompanyDialog = () => {
+    setAddCompanyDialogOpen(false);
+    setNewCompanyName('');
+  };
+
+  const saveNewCompany = async () => {
+    if (!newCompanyName.trim()) {
+      showError('Please enter a company name');
+      return;
+    }
+
+    // Check if company already exists
+    const existingCompany = materialCompanies.find(company => 
+      company.name.toLowerCase() === newCompanyName.trim().toLowerCase()
+    );
+
+    if (existingCompany) {
+      showError('A company with this name already exists');
+      return;
+    }
+
+    setSavingCompany(true);
+
+    try {
+      // Get the highest order number
+      const maxOrder = materialCompanies.reduce((max, company) => 
+        Math.max(max, company.order || 0), 0
+      );
+
+      const newCompanyData = {
+        name: newCompanyName.trim(),
+        order: maxOrder + 1,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'materialCompanies'), newCompanyData);
+      
+      // Add to local state
+      const newCompany = {
+        id: docRef.id,
+        ...newCompanyData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      setMaterialCompanies(prev => [...prev, newCompany].sort((a, b) => a.order - b.order));
+      
+      // Update the general expense form to select the new company
+      setGeneralExpenseForm(prev => ({
+        ...prev,
+        materialCompany: newCompany.name
+      }));
+
+      showSuccess('New material company added successfully');
+      closeAddCompanyDialog();
+    } catch (error) {
+      console.error('Error saving new company:', error);
+      showError('Failed to save new company');
+    } finally {
+      setSavingCompany(false);
+    }
+  };
+
   useEffect(() => {
     fetchMaterials();
   }, [fetchMaterials]);
@@ -416,6 +743,20 @@ const MaterialRequestPage = () => {
               }
             }}
           />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={openGeneralExpenseDialog}
+            sx={{
+              ...buttonStyles.primaryButton,
+              backgroundColor: '#f27921',
+              '&:hover': {
+                backgroundColor: '#e67e22'
+              }
+            }}
+          >
+            ADD General Expenses
+          </Button>
           <Button
             variant="contained"
             startIcon={<RefreshIcon />}
@@ -512,26 +853,69 @@ const MaterialRequestPage = () => {
                           {/* Middle Column - Quantity */}
                           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
-                              {material.materialQntyJL} {material.unit?.toLowerCase() || 'yards'}
+                              {material.isGeneralExpense ? material.materialQntyJL : `${material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
                             </Typography>
                           </Box>
                           
-                          {/* Right Column - Button */}
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minWidth: 48 }}>
+                          {/* Right Column - Action Buttons */}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, minWidth: 48 }}>
+                            {/* Note Button */}
                             <IconButton
-                            sx={{
-                              ...buttonStyles.secondaryButton,
-                              minWidth: 'auto',
-                              padding: '8px',
-                              borderRadius: '50%',
-                              width: '40px',
-                              height: '40px'
-                            }}
-                            size="small"
-                            onClick={() => openNoteDialog(material)}
-                          >
-                            <NoteIcon sx={{ fontSize: 20 }} />
-                          </IconButton>
+                              sx={{
+                                ...buttonStyles.secondaryButton,
+                                minWidth: 'auto',
+                                padding: '8px',
+                                borderRadius: '50%',
+                                width: '32px',
+                                height: '32px'
+                              }}
+                              size="small"
+                              onClick={() => openNoteDialog(material)}
+                            >
+                              <NoteIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                            
+                            {/* Edit/Delete buttons for general expenses */}
+                            {material.isGeneralExpense && (
+                              <>
+                                <IconButton
+                                  sx={{
+                                    backgroundColor: '#2196f3',
+                                    color: '#ffffff',
+                                    minWidth: 'auto',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    '&:hover': {
+                                      backgroundColor: '#1976d2'
+                                    }
+                                  }}
+                                  size="small"
+                                  onClick={() => openEditGeneralExpenseDialog(material)}
+                                >
+                                  <EditIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                                <IconButton
+                                  sx={{
+                                    backgroundColor: '#f44336',
+                                    color: '#ffffff',
+                                    minWidth: 'auto',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    '&:hover': {
+                                      backgroundColor: '#d32f2f'
+                                    }
+                                  }}
+                                  size="small"
+                                  onClick={() => openDeleteDialog(material)}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </>
+                            )}
                           </Box>
                           
                           {/* Action Button */}
@@ -666,26 +1050,69 @@ const MaterialRequestPage = () => {
                           {/* Middle Column - Quantity */}
                           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
-                              {material.materialQntyJL} {material.unit?.toLowerCase() || 'yards'}
+                              {material.isGeneralExpense ? material.materialQntyJL : `${material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
                             </Typography>
                           </Box>
                           
-                          {/* Right Column - Button */}
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', minWidth: 48 }}>
+                          {/* Right Column - Action Buttons */}
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 1, minWidth: 48 }}>
+                            {/* Note Button */}
                             <IconButton
-                            sx={{
-                              ...buttonStyles.secondaryButton,
-                              minWidth: 'auto',
-                              padding: '8px',
-                              borderRadius: '50%',
-                              width: '40px',
-                              height: '40px'
-                            }}
-                            size="small"
-                            onClick={() => openNoteDialog(material)}
-                          >
-                            <NoteIcon sx={{ fontSize: 20 }} />
-                          </IconButton>
+                              sx={{
+                                ...buttonStyles.secondaryButton,
+                                minWidth: 'auto',
+                                padding: '8px',
+                                borderRadius: '50%',
+                                width: '32px',
+                                height: '32px'
+                              }}
+                              size="small"
+                              onClick={() => openNoteDialog(material)}
+                            >
+                              <NoteIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                            
+                            {/* Edit/Delete buttons for general expenses */}
+                            {material.isGeneralExpense && (
+                              <>
+                                <IconButton
+                                  sx={{
+                                    backgroundColor: '#2196f3',
+                                    color: '#ffffff',
+                                    minWidth: 'auto',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    '&:hover': {
+                                      backgroundColor: '#1976d2'
+                                    }
+                                  }}
+                                  size="small"
+                                  onClick={() => openEditGeneralExpenseDialog(material)}
+                                >
+                                  <EditIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                                <IconButton
+                                  sx={{
+                                    backgroundColor: '#f44336',
+                                    color: '#ffffff',
+                                    minWidth: 'auto',
+                                    padding: '6px',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    '&:hover': {
+                                      backgroundColor: '#d32f2f'
+                                    }
+                                  }}
+                                  size="small"
+                                  onClick={() => openDeleteDialog(material)}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </>
+                            )}
                           </Box>
                           
                           {/* Action Buttons */}
@@ -808,6 +1235,341 @@ const MaterialRequestPage = () => {
             sx={buttonStyles.primaryButton}
           >
             Save Note
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* General Expenses Dialog */}
+      <Dialog open={generalExpenseDialogOpen} onClose={editingGeneralExpense ? closeEditDialog : closeGeneralExpenseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          {editingGeneralExpense ? <EditIcon /> : <AddIcon />}
+          {editingGeneralExpense ? 'Edit General Expense' : 'Add General Expense'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Description Field */}
+              <TextField
+                fullWidth
+                label="Description"
+                value={generalExpenseForm.description}
+                onChange={(e) => handleGeneralExpenseInputChange('description', e.target.value)}
+                placeholder="Enter expense description (optional)"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+
+            {/* Date and Material Company Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Date"
+                type="date"
+                value={generalExpenseForm.date}
+                onChange={(e) => handleGeneralExpenseInputChange('date', e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                required
+                sx={{
+                  minWidth: '180px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <FormControl sx={{ flex: 1, minWidth: '300px' }} required>
+                <InputLabel>Material Company</InputLabel>
+                <Select
+                  value={generalExpenseForm.materialCompany}
+                  onChange={(e) => handleGeneralExpenseInputChange('materialCompany', e.target.value)}
+                  label="Material Company"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                >
+                  {materialCompanies.map((company) => (
+                    <MenuItem key={company.id} value={company.name}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={openAddCompanyDialog}
+                sx={{
+                  ...buttonStyles.primaryButton,
+                  minWidth: '120px',
+                  px: 2,
+                  py: 1.75,
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+              >
+                Add New
+              </Button>
+            </Box>
+
+            {/* Material Code, Quantity, and Price Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                label="Material Code"
+                value={generalExpenseForm.materialCode}
+                onChange={(e) => handleGeneralExpenseInputChange('materialCode', e.target.value)}
+                placeholder="Enter material code"
+                required
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <TextField
+                label="Quantity"
+                type="number"
+                value={generalExpenseForm.quantity}
+                onChange={(e) => handleGeneralExpenseInputChange('quantity', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.1 }}
+                sx={{
+                  minWidth: '120px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <TextField
+                label="Price"
+                type="number"
+                value={generalExpenseForm.price}
+                onChange={(e) => handleGeneralExpenseInputChange('price', e.target.value)}
+                placeholder="0.00"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                sx={{
+                  minWidth: '150px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Tax Type and Tax Amount Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Tax Type</InputLabel>
+                <Select
+                  value={generalExpenseForm.taxType}
+                  onChange={(e) => handleGeneralExpenseInputChange('taxType', e.target.value)}
+                  label="Tax Type"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                >
+                  <MenuItem value="percent">Percentage (%)</MenuItem>
+                  <MenuItem value="fixed">Fixed Amount ($)</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <TextField
+                fullWidth
+                label={generalExpenseForm.taxType === 'percent' ? 'Tax Percentage' : 'Tax Amount'}
+                type="number"
+                value={generalExpenseForm.tax}
+                onChange={(e) => handleGeneralExpenseInputChange('tax', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {generalExpenseForm.taxType === 'percent' ? '%' : '$'}
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+            
+            {/* Total Calculation Display */}
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                <strong>Total: ${generalExpenseForm.total}</strong>
+                <br />
+                Calculation: (${generalExpenseForm.price || 0} × {generalExpenseForm.quantity || 0}) + Tax
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={editingGeneralExpense ? closeEditDialog : closeGeneralExpenseDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveGeneralExpense}
+            variant="contained"
+            disabled={savingGeneralExpense}
+            startIcon={savingGeneralExpense ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {savingGeneralExpense ? 'Saving...' : (editingGeneralExpense ? 'Update General Expense' : 'Save General Expense')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <DeleteIcon />
+          Delete General Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete this general expense?
+          </Typography>
+          {expenseToDelete && (
+            <Box sx={{ p: 2, backgroundColor: '#f5f5f5', borderRadius: 1, border: '1px solid #ddd' }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                {expenseToDelete.description || `${expenseToDelete.materialCode} - ${expenseToDelete.materialCompany}`}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#666' }}>
+                {expenseToDelete.materialCompany} • {expenseToDelete.quantity} • ${expenseToDelete.total}
+              </Typography>
+            </Box>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            This action cannot be undone. The expense will be permanently removed from the system.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeDeleteDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={deleteGeneralExpense}
+            variant="contained"
+            disabled={updating}
+            startIcon={updating ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <DeleteIcon sx={{ color: '#000000' }} />}
+            sx={{
+              backgroundColor: '#f44336',
+              '&:hover': {
+                backgroundColor: '#d32f2f'
+              },
+              '&:disabled': {
+                backgroundColor: '#a0a0a0'
+              }
+            }}
+          >
+            {updating ? 'Deleting...' : 'Delete Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add New Company Dialog */}
+      <Dialog open={addCompanyDialogOpen} onClose={closeAddCompanyDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #f27921 0%, #e67e22 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <AddIcon />
+          Add New Material Company
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              fullWidth
+              label="Company Name"
+              value={newCompanyName}
+              onChange={(e) => setNewCompanyName(e.target.value)}
+              placeholder="Enter company name"
+              required
+              autoFocus
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+            <Alert severity="info">
+              <Typography variant="body2">
+                This company will be added to the material companies database and will be available for all future expenses.
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeAddCompanyDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveNewCompany}
+            variant="contained"
+            disabled={savingCompany || !newCompanyName.trim()}
+            startIcon={savingCompany ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {savingCompany ? 'Adding...' : 'Add Company'}
           </Button>
         </DialogActions>
       </Dialog>
