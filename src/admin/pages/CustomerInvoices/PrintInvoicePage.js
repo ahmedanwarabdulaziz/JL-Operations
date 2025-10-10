@@ -18,7 +18,6 @@ import {
 import {
   Print as PrintIcon,
   ArrowBack as ArrowBackIcon,
-  Download as DownloadIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
   LocationOn as LocationIcon
@@ -48,14 +47,6 @@ const PrintInvoicePage = () => {
   // Handle print
   const handlePrint = () => {
     window.print();
-  };
-
-  // Handle download as PDF (using browser's print to PDF)
-  const handleDownloadPDF = () => {
-    showSuccess('Use your browser\'s print dialog and select "Save as PDF" to download the invoice as a PDF file.');
-    setTimeout(() => {
-      window.print();
-    }, 1000);
   };
 
   // Calculate paid amount
@@ -98,7 +89,7 @@ const PrintInvoicePage = () => {
         {`
           @media print {
             @page {
-              margin: 0.5in;
+              margin: 0.3in;
               size: A4;
             }
             
@@ -129,12 +120,12 @@ const PrintInvoicePage = () => {
               padding: 0 !important;
             }
             
-            /* Preserve original invoice styling */
+            /* Preserve original invoice styling with reduced padding */
             .MuiPaper-root {
               background: white !important;
               box-shadow: none !important;
               margin: 0 !important;
-              padding: 20px !important;
+              padding: 10px !important;
             }
             
             /* Preserve color styling for totals sections */
@@ -142,7 +133,7 @@ const PrintInvoicePage = () => {
               background-color: inherit !important;
             }
             
-            /* Preserve table styling */
+            /* Preserve table styling with reduced padding */
             table {
               border-collapse: collapse !important;
               width: 100% !important;
@@ -153,43 +144,156 @@ const PrintInvoicePage = () => {
               color: #333333 !important;
               border: 2px solid #333333 !important;
               border-right: 1px solid #ddd !important;
+              padding: 4px 8px !important;
+              font-size: 11px !important;
             }
             
             td {
               border-bottom: 1px solid #ddd !important;
               border-right: 1px solid #eee !important;
               color: #333333 !important;
+              padding: 4px 8px !important;
+              font-size: 11px !important;
+            }
+            
+            /* Reduce typography sizes */
+            .MuiTypography-h5 {
+              font-size: 1.1rem !important;
+            }
+            
+            .MuiTypography-h6 {
+              font-size: 0.95rem !important;
+            }
+            
+            .MuiTypography-body1 {
+              font-size: 0.85rem !important;
+            }
+            
+            .MuiTypography-body2 {
+              font-size: 0.75rem !important;
             }
             
             /* Preserve colored sections in totals */
-            .MuiTypography-root[style*="background-color: #4CAF50"] {
+            .MuiBox-root[style*="background-color: rgb(76, 175, 80)"],
+            .MuiBox-root[style*="background-color: #4CAF50"] {
               background-color: #4CAF50 !important;
-              color: white !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             
-            .MuiTypography-root[style*="background-color: #f27921"] {
-              background-color: #f27921 !important;
-              color: white !important;
+            .MuiBox-root[style*="background-color: rgb(204, 130, 13)"],
+            .MuiBox-root[style*="background-color: #cc820d"] {
+              background-color: #cc820d !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             
-            .MuiTypography-root[style*="background-color: #2c2c2c"] {
+            .MuiBox-root[style*="background-color: rgb(44, 44, 44)"],
+            .MuiBox-root[style*="background-color: #2c2c2c"] {
               background-color: #2c2c2c !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            .MuiTypography-root {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            /* Reduce spacing for print */
+            .invoice-header {
+              position: fixed !important;
+              top: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+              background: white !important;
+            }
+            
+            .invoice-header img {
+              max-height: 100px !important;
+              width: 100% !important;
+              object-fit: contain !important;
+              display: block !important;
+            }
+            
+            .invoice-info-section {
+              margin-bottom: 10px !important;
+            }
+            
+            .invoice-table-section {
+              margin-bottom: 10px !important;
+            }
+            
+            .invoice-footer {
+              position: fixed !important;
+              bottom: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+            }
+            
+            .invoice-footer img {
+              max-height: 100px !important;
+              width: 100% !important;
+              object-fit: contain !important;
+              display: block !important;
+            }
+            
+            /* Add padding to main content to prevent overlap with header and footer */
+            .MuiPaper-root {
+              padding-top: 110px !important;
+              padding-bottom: 110px !important;
+              padding-left: 10px !important;
+              padding-right: 10px !important;
+            }
+            
+            /* Ensure Terms and Conditions header is visible */
+            .terms-header {
+              background-color: #cc820d !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            .terms-header * {
               color: white !important;
             }
             
-            /* Hide browser print headers and footers */
-            @page :first {
-              margin-top: 0.5in;
+            /* Ensure totals section is visible */
+            .totals-section {
+              margin-top: 8px !important;
             }
             
-            @page :left {
-              margin-left: 0.5in;
-              margin-right: 0.5in;
+            /* Preserve colored boxes */
+            .paid-box {
+              background-color: #4CAF50 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             
-            @page :right {
-              margin-left: 0.5in;
-              margin-right: 0.5in;
+            .balance-box {
+              background-color: #cc820d !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            .total-box {
+              background-color: #2c2c2c !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            .paid-box *, .balance-box *, .total-box * {
+              color: white !important;
+            }
+            
+            .signature-section {
+              margin-top: 10px !important;
+              margin-bottom: 10px !important;
             }
           }
         `}
@@ -222,14 +326,6 @@ const PrintInvoicePage = () => {
           </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownloadPDF}
-            sx={buttonStyles.cancelButton}
-          >
-            Download PDF
-          </Button>
           <Button
             variant="contained"
             startIcon={<PrintIcon />}
@@ -270,7 +366,7 @@ const PrintInvoicePage = () => {
         }}
       >
         {/* Professional Invoice Header - Image Only */}
-        <Box sx={{ 
+        <Box className="invoice-header" sx={{ 
           mb: 4,
           position: 'relative',
           overflow: 'hidden',
@@ -294,7 +390,7 @@ const PrintInvoicePage = () => {
         </Box>
 
         {/* Invoice Information Row - Left: Customer Info, Right: Date/Invoice/Tax */}
-        <Box sx={{ 
+        <Box className="invoice-info-section" sx={{ 
           mb: 4,
           display: 'flex',
           justifyContent: 'space-between',
@@ -356,7 +452,7 @@ const PrintInvoicePage = () => {
         </Box>
 
         {/* Items Table and Totals - Professional Layout */}
-        <Box sx={{ mb: 4 }}>
+        <Box className="invoice-table-section" sx={{ mb: 4 }}>
           <Box sx={{ 
             border: '2px solid #333333',
             borderRadius: 0,
@@ -607,8 +703,8 @@ const PrintInvoicePage = () => {
 
                   return rows;
                 })()}
-                {/* Add empty rows to match the design */}
-                {Array.from({ length: Math.max(0, 8 - invoiceData.items.length) }).map((_, index) => (
+                {/* Add empty rows to match the design - reduced for print */}
+                {Array.from({ length: Math.max(0, 3 - invoiceData.items.length) }).map((_, index) => (
                   <tr key={`empty-${index}`} style={{ borderBottom: '1px solid #ddd' }}>
                     <td style={{ 
                       width: '66.67%',
@@ -645,7 +741,7 @@ const PrintInvoicePage = () => {
           </Box>
           
           {/* Terms and Conditions + Totals Section - Side by side */}
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 1 }}>
             {/* Left Side - Terms and Conditions */}
             <Box sx={{ 
               display: 'flex',
@@ -656,8 +752,8 @@ const PrintInvoicePage = () => {
                 flex: '0 0 50%',
                 maxWidth: '50%'
               }}>
-                <Box sx={{ 
-                  backgroundColor: '#f27921',
+                <Box className="terms-header" sx={{ 
+                  backgroundColor: '#cc820d',
                   color: 'white',
                   p: 1,
                   mb: 2
@@ -715,7 +811,7 @@ const PrintInvoicePage = () => {
                 justifyContent: 'flex-end', 
                 alignItems: 'flex-start'
               }}>
-                <Box sx={{ 
+                <Box className="totals-section" sx={{ 
                   minWidth: '300px',
                   maxWidth: '400px'
                 }}>
@@ -749,7 +845,7 @@ const PrintInvoicePage = () => {
                     </Box>
                   )}
                   
-                  <Box sx={{ 
+                  <Box className="paid-box" sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     mb: 1,
@@ -758,32 +854,32 @@ const PrintInvoicePage = () => {
                     p: 1,
                     borderRadius: 1
                   }}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       Paid:
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       ${getPaidAmount(invoiceData).toFixed(2)}
                     </Typography>
                   </Box>
                   
-                  <Box sx={{ 
+                  <Box className="balance-box" sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between',
-                    backgroundColor: calculateBalance(invoiceData) >= 0 ? '#f27921' : '#4CAF50',
+                    backgroundColor: calculateBalance(invoiceData) >= 0 ? '#cc820d' : '#4CAF50',
                     color: 'white',
                     p: 1,
                     borderRadius: 1,
                     mb: 1
                   }}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       Balance:
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       ${calculateBalance(invoiceData).toFixed(2)}
                     </Typography>
                   </Box>
                   
-                  <Box sx={{ 
+                  <Box className="total-box" sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between',
                     backgroundColor: '#2c2c2c',
@@ -791,10 +887,10 @@ const PrintInvoicePage = () => {
                     p: 1,
                     borderRadius: 1
                   }}>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       Total:
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
                       ${invoiceData.calculations?.total?.toFixed(2) || '0.00'}
                     </Typography>
                   </Box>
@@ -805,7 +901,7 @@ const PrintInvoicePage = () => {
         </Box>
 
         {/* Signature Section - Right Aligned */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', mt: 4, mb: 4 }}>
+        <Box className="signature-section" sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', mt: 4, mb: 4 }}>
           <Box sx={{ textAlign: 'center', minWidth: 300, mr: 8 }}>
             <Typography variant="body2" sx={{ color: 'black', mb: 2 }}>
               Signature
@@ -832,7 +928,7 @@ const PrintInvoicePage = () => {
         </Box>
 
         {/* Invoice Footer Image */}
-        <Box sx={{ 
+        <Box className="invoice-footer" sx={{ 
           mt: 6,
           width: '100%',
           display: 'flex',
