@@ -89,14 +89,24 @@ const PrintInvoicePage = () => {
         {`
           @media print {
             @page {
-              margin: 0.3in;
+              margin: 0.5in 0.6in 0.5in 0.5in;
               size: A4;
             }
             
             body {
               -webkit-print-color-adjust: exact;
               color-adjust: exact;
+              print-color-adjust: exact;
               background: white !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              overflow-x: hidden !important;
+            }
+            
+            /* Ensure all elements respect boundaries */
+            * {
+              box-sizing: border-box !important;
+              max-width: 100% !important;
             }
             
             /* Hide main app header and sidebar */
@@ -120,12 +130,14 @@ const PrintInvoicePage = () => {
               padding: 0 !important;
             }
             
-            /* Preserve original invoice styling with reduced padding */
+            /* Preserve original invoice styling with proper padding for Mac compatibility */
             .MuiPaper-root {
               background: white !important;
               box-shadow: none !important;
-              margin: 0 !important;
-              padding: 10px !important;
+              margin: 0 auto !important;
+              padding: 15px 20px !important;
+              max-width: 100% !important;
+              box-sizing: border-box !important;
             }
             
             /* Preserve color styling for totals sections */
@@ -133,10 +145,13 @@ const PrintInvoicePage = () => {
               background-color: inherit !important;
             }
             
-            /* Preserve table styling with reduced padding */
+            /* Preserve table styling with proper constraints for Mac compatibility */
             table {
               border-collapse: collapse !important;
               width: 100% !important;
+              max-width: 100% !important;
+              table-layout: fixed !important;
+              box-sizing: border-box !important;
             }
             
             th {
@@ -146,6 +161,9 @@ const PrintInvoicePage = () => {
               border-right: 1px solid #ddd !important;
               padding: 4px 8px !important;
               font-size: 11px !important;
+              word-wrap: break-word !important;
+              overflow-wrap: break-word !important;
+              box-sizing: border-box !important;
             }
             
             td {
@@ -154,6 +172,9 @@ const PrintInvoicePage = () => {
               color: #333333 !important;
               padding: 4px 8px !important;
               font-size: 11px !important;
+              word-wrap: break-word !important;
+              overflow-wrap: break-word !important;
+              box-sizing: border-box !important;
             }
             
             /* Reduce typography sizes */
@@ -244,12 +265,13 @@ const PrintInvoicePage = () => {
               display: block !important;
             }
             
-            /* Add padding to main content to prevent overlap with header and footer */
+            /* Add padding to main content to prevent overlap with header and footer - Mac compatible */
             .MuiPaper-root {
               padding-top: 110px !important;
               padding-bottom: 110px !important;
-              padding-left: 10px !important;
-              padding-right: 10px !important;
+              padding-left: 15px !important;
+              padding-right: 20px !important;
+              box-sizing: border-box !important;
             }
             
             /* Ensure Terms and Conditions header is visible */
@@ -294,6 +316,24 @@ const PrintInvoicePage = () => {
             .signature-section {
               margin-top: 10px !important;
               margin-bottom: 10px !important;
+            }
+            
+            /* Ensure totals section doesn't overflow on the right */
+            .totals-section {
+              max-width: 400px !important;
+              box-sizing: border-box !important;
+            }
+            
+            /* Ensure terms section respects boundaries */
+            .terms-header {
+              box-sizing: border-box !important;
+            }
+            
+            /* Safari/Webkit specific fixes for Mac */
+            @supports (-webkit-appearance: none) {
+              .MuiPaper-root {
+                padding-right: 25px !important;
+              }
             }
           }
         `}
