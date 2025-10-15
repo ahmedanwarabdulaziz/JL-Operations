@@ -2,6 +2,8 @@
 
 A comprehensive business management application built with React and Firebase for handling customers, orders, treatments, and workshop operations.
 
+<!-- Deployment test - Updated after rollback to ensure Vercel deployment works smoothly -->
+
 ## Features
 
 - **Customer Management**: Add, edit, and manage customer information
