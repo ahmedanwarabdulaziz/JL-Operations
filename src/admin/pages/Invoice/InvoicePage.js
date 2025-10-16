@@ -34,6 +34,8 @@ import {
   Select,
   MenuItem,
   InputAdornment,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   FileDownload as DownloadIcon,
@@ -72,6 +74,7 @@ const InvoicePage = () => {
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [workOrderDialogOpen, setWorkOrderDialogOpen] = useState(false);
   const [workOrderSelections, setWorkOrderSelections] = useState({});
+  const [workOrderPrintToggles, setWorkOrderPrintToggles] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -300,7 +303,7 @@ const InvoicePage = () => {
             .customer-name {
               font-size: 1.5rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin-bottom: 8px;
             }
             .customer-details {
@@ -321,7 +324,7 @@ const InvoicePage = () => {
             .invoice-number h1 {
               font-size: 1.5rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin: 0 0 4px 0;
             }
             .logo {
@@ -332,7 +335,7 @@ const InvoicePage = () => {
             .section-title {
               font-size: 1.1rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin-bottom: 8px;
             }
             .table {
@@ -703,10 +706,13 @@ const InvoicePage = () => {
 
     // Initialize selections with default "Furniture Form"
     const initialSelections = {};
+    const initialPrintToggles = {};
     furnitureGroups.forEach((group, index) => {
       initialSelections[index] = 'furniture';
+      initialPrintToggles[index] = true; // Default to enabled
     });
     setWorkOrderSelections(initialSelections);
+    setWorkOrderPrintToggles(initialPrintToggles);
     setWorkOrderDialogOpen(true);
   };
 
@@ -714,6 +720,13 @@ const InvoicePage = () => {
     setWorkOrderSelections(prev => ({
       ...prev,
       [groupIndex]: formType
+    }));
+  };
+
+  const handleWorkOrderPrintToggleChange = (groupIndex, enabled) => {
+    setWorkOrderPrintToggles(prev => ({
+      ...prev,
+      [groupIndex]: enabled
     }));
   };
 
@@ -770,7 +783,7 @@ const InvoicePage = () => {
               align-items: center;
               margin-bottom: 15px;
               padding-bottom: 10px;
-              border-bottom: 3px solid #274290;
+              border-bottom: 3px solid #000000;
               flex-shrink: 0;
             }
             
@@ -793,7 +806,7 @@ const InvoicePage = () => {
             .furniture-group-title h2 {
               font-size: 1.8rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin: 0;
               text-transform: uppercase;
             }
@@ -807,7 +820,7 @@ const InvoicePage = () => {
             
             .material-code {
               font-weight: 600;
-              color: #274290;
+              color: #000000;
             }
             
             .foam-details {
@@ -824,13 +837,13 @@ const InvoicePage = () => {
             .order-details .invoice-number {
               font-size: 1rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin: 0 0 3px 0;
             }
             
             .order-details .customer-name {
               font-size: 0.9rem;
-              color: #274290;
+              color: #000000;
               margin: 0 0 3px 0;
               font-weight: 500;
             }
@@ -874,7 +887,7 @@ const InvoicePage = () => {
             
             .upholstery-box {
               background-color: #ffffff;
-              border: 1px solid #274290;
+              border: 1px solid #000000;
               border-radius: 4px;
               padding: 8px;
               flex: 1;
@@ -892,7 +905,7 @@ const InvoicePage = () => {
             .section-title {
               font-size: 1rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               white-space: nowrap;
             }
             
@@ -912,7 +925,7 @@ const InvoicePage = () => {
             
             .measurement-title-section {
               background-color: #ffffff;
-              border: 1px solid #274290;
+              border: 1px solid #000000;
               border-radius: 4px;
               padding: 8px;
               flex: 1;
@@ -925,7 +938,7 @@ const InvoicePage = () => {
             .measurement-section-title {
               font-size: 1rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin-bottom: 5px;
             }
             
@@ -951,9 +964,9 @@ const InvoicePage = () => {
             .note-title {
               font-size: 0.9rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin-bottom: 3px;
-              border-bottom: 1px solid #274290;
+              border-bottom: 1px solid #000000;
               padding-bottom: 3px;
             }
             
@@ -981,7 +994,7 @@ const InvoicePage = () => {
             .measurement-box {
               padding: 8px;
               background-color: #ffffff;
-              border: 1px solid #274290;
+              border: 1px solid #000000;
               border-radius: 4px;
               min-height: 60px;
             }
@@ -989,14 +1002,14 @@ const InvoicePage = () => {
             .measurement-box-title {
               font-size: 0.9rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               margin-bottom: 5px;
             }
             
             .check-box {
               width: 20px;
               height: 20px;
-              border: 2px solid #274290;
+              border: 2px solid #000000;
               border-radius: 3px;
               background-color: #ffffff;
               position: relative;
@@ -1013,7 +1026,7 @@ const InvoicePage = () => {
               margin-bottom: 15px;
               padding: 10px;
               background-color: #f8f9fa;
-              border: 2px solid #274290;
+              border: 2px solid #000000;
               border-radius: 8px;
               display: flex;
               align-items: center;
@@ -1024,7 +1037,7 @@ const InvoicePage = () => {
             .measurement-notes {
               flex: 1;
               height: 80px;
-              border: 1px solid #274290;
+              border: 1px solid #000000;
               border-radius: 4px;
               background-color: #ffffff;
               padding: 8px;
@@ -1035,7 +1048,7 @@ const InvoicePage = () => {
             .measurement-title {
               font-size: 1rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               text-align: right;
               white-space: nowrap;
             }
@@ -1045,7 +1058,7 @@ const InvoicePage = () => {
               border-collapse: separate;
               border-spacing: 0;
               margin-bottom: 15px;
-              border: 2px solid #274290;
+              border: 2px solid #000000;
               border-radius: 8px;
               overflow: hidden;
               flex-shrink: 0;
@@ -1053,27 +1066,27 @@ const InvoicePage = () => {
             
             .measurement-table th {
               background-color: #f0f0f0;
-              border-right: 1px solid #274290;
-              border-bottom: 1px solid #274290;
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
               padding: 8px;
               font-size: 0.9rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               text-align: center;
               font-family: Arial, sans-serif;
             }
             
             .measurement-table th:first-child {
-              border-left: 2px solid #274290;
+              border-left: 2px solid #000000;
             }
             
             .measurement-table th:last-child {
-              border-right: 2px solid #274290;
+              border-right: 2px solid #000000;
             }
             
             .measurement-table td {
-              border-right: 1px solid #274290;
-              border-bottom: 1px solid #274290;
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
               padding: 4px;
               font-size: 0.8rem;
               color: #333333;
@@ -1083,15 +1096,15 @@ const InvoicePage = () => {
             }
             
             .measurement-table td:first-child {
-              border-left: 2px solid #274290;
+              border-left: 2px solid #000000;
             }
             
             .measurement-table td:last-child {
-              border-right: 2px solid #274290;
+              border-right: 2px solid #000000;
             }
             
             .measurement-table tr:first-child th {
-              border-top: 2px solid #274290;
+              border-top: 2px solid #000000;
             }
             
             .measurement-table tr:first-child th:first-child {
@@ -1103,7 +1116,7 @@ const InvoicePage = () => {
             }
             
             .measurement-table tr:last-child td {
-              border-bottom: 2px solid #274290;
+              border-bottom: 2px solid #000000;
             }
             
             .measurement-table tr:last-child td:first-child {
@@ -1119,7 +1132,7 @@ const InvoicePage = () => {
               border-collapse: separate;
               border-spacing: 0;
               margin-bottom: 0;
-              border: 2px solid #274290;
+              border: 2px solid #000000;
               border-radius: 8px;
               overflow: hidden;
               flex: 1;
@@ -1127,26 +1140,26 @@ const InvoicePage = () => {
             
             .notes-table th {
               background-color: #f0f0f0;
-              border-right: 1px solid #274290;
-              border-bottom: 1px solid #274290;
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
               padding: 8px;
               font-size: 0.9rem;
               font-weight: bold;
-              color: #274290;
+              color: #000000;
               text-align: center;
               font-family: Arial, sans-serif;
             }
             
             .notes-table th:first-child {
-              border-left: 2px solid #274290;
+              border-left: 2px solid #000000;
             }
             
             .notes-table th:last-child {
-              border-right: 2px solid #274290;
+              border-right: 2px solid #000000;
             }
             
             .notes-table td {
-              border-right: 1px solid #274290;
+              border-right: 1px solid #000000;
               padding: 8px;
               font-size: 0.9rem;
               color: #333333;
@@ -1157,17 +1170,17 @@ const InvoicePage = () => {
             }
             
             .notes-table td:first-child {
-              border-left: 2px solid #274290;
+              border-left: 2px solid #000000;
               width: 50%;
             }
             
             .notes-table td:last-child {
-              border-right: 2px solid #274290;
+              border-right: 2px solid #000000;
               width: 50%;
             }
             
             .notes-table tr:first-child th {
-              border-top: 2px solid #274290;
+              border-top: 2px solid #000000;
             }
             
             .notes-table tr:first-child th:first-child {
@@ -1179,7 +1192,7 @@ const InvoicePage = () => {
             }
             
             .notes-table tr:last-child td {
-              border-bottom: 2px solid #274290;
+              border-bottom: 2px solid #000000;
             }
             
             .notes-table tr:last-child td:first-child {
@@ -1199,7 +1212,7 @@ const InvoicePage = () => {
             .cushion-checkbox {
               width: 16px;
               height: 16px;
-              border: 1px solid #274290;
+              border: 1px solid #000000;
               border-radius: 2px;
               background-color: #ffffff;
               flex-shrink: 0;
@@ -1261,7 +1274,13 @@ const InvoicePage = () => {
         <body>
           ${furnitureGroups.map((group, index) => {
             const formType = workOrderSelections[index] || 'furniture';
+            const shouldPrint = workOrderPrintToggles[index] !== false; // Default to true if not set
             const workOrderId = `WO-${selectedOrder.id}-${index + 1}`;
+            
+            // Only generate HTML if print is enabled for this group
+            if (!shouldPrint) {
+              return '';
+            }
             
                             if (formType === 'cushion') {
                                 return `
@@ -1596,7 +1615,7 @@ const InvoicePage = () => {
             <Typography variant="h4" sx={{ 
               fontWeight: 'bold', 
               mb: 1.5, 
-              color: '#274290',
+              color: '#000000',
               fontSize: '1.5rem'
             }}>
               {selectedOrder.personalInfo?.customerName || 'N/A'}
@@ -1647,7 +1666,7 @@ const InvoicePage = () => {
             {/* Invoice Number */}
             <Typography variant="h4" sx={{ 
               fontWeight: 'bold', 
-              color: '#274290',
+              color: '#000000',
               mb: 1
             }}>
               {selectedOrder.orderDetails?.billInvoice || 'N/A'}
@@ -1660,7 +1679,7 @@ const InvoicePage = () => {
           <Typography variant="h6" sx={{ 
             fontWeight: 'bold', 
             mb: 1.5,
-            color: '#274290'
+            color: '#000000'
           }}>
             Items & Services
           </Typography>
@@ -1945,7 +1964,7 @@ const InvoicePage = () => {
           <Typography variant="h6" sx={{ 
             fontWeight: 'bold', 
             mb: 1.5,
-            color: '#274290'
+            color: '#000000'
           }}>
             Internal JL Cost Analysis
           </Typography>
@@ -2134,7 +2153,7 @@ const InvoicePage = () => {
               color: '#000000'
             }}>
               <span>Subtotal (Before Tax):</span>
-              <span style={{ color: '#274290' }}>${totals.jlSubtotalBeforeTax.toFixed(2)}</span>
+              <span style={{ color: '#000000' }}>${totals.jlSubtotalBeforeTax.toFixed(2)}</span>
             </Box>
             <Box sx={{ 
               borderTop: '1px solid #ccc',
@@ -2240,7 +2259,7 @@ const InvoicePage = () => {
             sx={{
               background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
               color: '#000000',
-              border: '3px solid #274290',
+              border: '3px solid #000000',
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
               position: 'relative',
               '&:hover': {
@@ -2327,13 +2346,13 @@ const InvoicePage = () => {
                         onClick={() => handleSelectOrder(order)}
                         sx={{
                           backgroundColor: selectedOrder?.id === order.id ? '#ffffff' : 'transparent',
-                          borderLeft: selectedOrder?.id === order.id ? '4px solid #274290' : '4px solid transparent',
+                          borderLeft: selectedOrder?.id === order.id ? '4px solid #000000' : '4px solid transparent',
                           color: selectedOrder?.id === order.id ? '#000000' : 'inherit',
                           '& .MuiTypography-root': {
                             color: selectedOrder?.id === order.id ? '#000000 !important' : 'inherit',
                           },
                           '& .MuiChip-root': {
-                            backgroundColor: selectedOrder?.id === order.id ? '#274290' : 'inherit',
+                            backgroundColor: selectedOrder?.id === order.id ? '#000000' : 'inherit',
                             color: selectedOrder?.id === order.id ? '#ffffff' : 'inherit',
                           },
                           '&:hover': {
@@ -2805,7 +2824,7 @@ const InvoicePage = () => {
                 {group.furnitureType || `Furniture Group ${index + 1}`}
               </Typography>
               
-              <Box sx={{ display: 'flex', gap: 1, flex: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, flex: 1, alignItems: 'center' }}>
                 <Button
                   variant={workOrderSelections[index] === 'furniture' ? 'contained' : 'outlined'}
                   onClick={() => handleWorkOrderFormTypeChange(index, 'furniture')}
@@ -2863,6 +2882,33 @@ const InvoicePage = () => {
                 >
                   Cushion Form
                 </Button>
+
+                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold' }}>
+                    Print:
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={workOrderPrintToggles[index] || false}
+                        onChange={(e) => handleWorkOrderPrintToggleChange(index, e.target.checked)}
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: '#d4af5a',
+                            '& + .MuiSwitch-track': {
+                              backgroundColor: '#d4af5a',
+                            },
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: '#d4af5a',
+                          },
+                        }}
+                      />
+                    }
+                    label=""
+                    sx={{ margin: 0 }}
+                  />
+                </Box>
               </Box>
             </Box>
           ))}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -92,6 +92,8 @@ const WorkshopPage = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const listContainerRef = useRef(null);
+  const selectedOrderIdRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [editPersonalDialog, setEditPersonalDialog] = useState(false);
   const [editOrderDialog, setEditOrderDialog] = useState(false);
@@ -1322,9 +1324,18 @@ const WorkshopPage = () => {
       setOrders(sortedOrders);
       setFilteredOrders(sortedOrders);
       
-      // Select first order by default if available
-      if (sortedOrders.length > 0 && !selectedOrder) {
+      // Preserve selected order if it still exists, otherwise select first order
+      if (selectedOrderIdRef.current) {
+        const preservedOrder = sortedOrders.find(order => order.id === selectedOrderIdRef.current);
+        if (preservedOrder) {
+          setSelectedOrder(preservedOrder);
+        } else if (sortedOrders.length > 0) {
+          setSelectedOrder(sortedOrders[0]);
+          selectedOrderIdRef.current = sortedOrders[0].id;
+        }
+      } else if (sortedOrders.length > 0 && !selectedOrder) {
         setSelectedOrder(sortedOrders[0]);
+        selectedOrderIdRef.current = sortedOrders[0].id;
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -1334,13 +1345,25 @@ const WorkshopPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [showError, sendingEmail, processingDeposit, selectedOrder]);
+  }, [showError, sendingEmail, processingDeposit]);
 
   useEffect(() => {
     fetchOrders();
     fetchInvoiceStatuses();
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
-  }, [fetchOrders]);
+  }, []); // Empty dependency array to run only once on mount
+
+  // Effect to restore scroll position when filteredOrders changes
+  useEffect(() => {
+    if (selectedOrderIdRef.current && filteredOrders.length > 0) {
+      // Small delay to ensure DOM is updated
+      const timeoutId = setTimeout(() => {
+        scrollToSelectedOrder(selectedOrderIdRef.current);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [filteredOrders]);
 
   // Add a refresh mechanism when the page gains focus with improved debouncing
   useEffect(() => {
@@ -1372,7 +1395,7 @@ const WorkshopPage = () => {
       window.removeEventListener('focus', handleFocus);
       clearTimeout(focusTimeout);
     };
-  }, [fetchOrders, sendingEmail, processingDeposit]);
+  }, [sendingEmail, processingDeposit]); // Removed fetchOrders to avoid circular dependency
 
   // Auto-save and unsaved changes tracking
   useEffect(() => {
@@ -2178,6 +2201,28 @@ const WorkshopPage = () => {
     setPaymentDialog(true);
   };
 
+  // Helper function to scroll to selected order
+  const scrollToSelectedOrder = (orderId) => {
+    if (listContainerRef.current && orderId) {
+      const selectedElement = listContainerRef.current.querySelector(`[data-order-id="${orderId}"]`);
+      if (selectedElement) {
+        // Get the container's scroll position
+        const container = listContainerRef.current;
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = selectedElement.getBoundingClientRect();
+        
+        // Calculate the position to scroll to
+        const scrollTop = container.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
+        
+        // Scroll to the calculated position
+        container.scrollTo({
+          top: scrollTop,
+          behavior: 'smooth'
+        });
+      }
+    }
+  };
+
   // Handle order selection - simplified to avoid double loading
   const handleOrderSelection = async (order) => {
     // Auto-save any unsaved changes before switching orders
@@ -2197,6 +2242,14 @@ const WorkshopPage = () => {
     }
     
     setSelectedOrder(order);
+    selectedOrderIdRef.current = order.id;
+    
+    // Use requestAnimationFrame to ensure DOM has updated before scrolling
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        scrollToSelectedOrder(order.id);
+      }, 150);
+    });
   };
 
   // Force refresh of selected order data when dialog opens
@@ -2687,10 +2740,10 @@ const WorkshopPage = () => {
             </Alert>
           </Box>
         ) : (
-          <List sx={{ p: 0, flex: 1 }}>
+          <List ref={listContainerRef} sx={{ p: 0, flex: 1 }}>
             {filteredOrders.map((order, index) => (
               <React.Fragment key={order.id}>
-                <ListItem disablePadding>
+                <ListItem disablePadding data-order-id={order.id}>
                   <ListItemButton
                     selected={selectedOrder?.id === order.id}
                     onClick={() => handleOrderSelection(order)}

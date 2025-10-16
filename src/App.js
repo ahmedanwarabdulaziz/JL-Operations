@@ -36,6 +36,13 @@ import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
 
+        // Website Management imports
+        import AdminWebsiteLayout from './admin/layouts/WebsiteLayout';
+        import ImageGalleryPage from './admin/pages/Website/ImageGalleryPage';
+        import CategoryManagementPage from './admin/pages/Website/CategoryManagementPage';
+        import TagManagementPage from './admin/pages/Website/TagManagementPage';
+        import FurniturePiecesPage from './admin/pages/FurniturePieces/FurniturePiecesPage';
+
 // Customer Invoices imports
 import CustomerInvoicesPage from './admin/pages/CustomerInvoices/CustomerInvoicesPage';
 import CreateInvoicePage from './admin/pages/CustomerInvoices/CreateInvoicePage';
@@ -83,7 +90,10 @@ const AppContent = () => {
     );
   }
 
-  // Check if we're on an admin route
+  // Check if we're on a website management route (separate from main admin)
+  const isWebsiteManagementRoute = location.pathname.startsWith('/admin/website');
+
+  // Check if we're on an admin route (excluding website management)
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname === '/test' ||
                       location.pathname === '/customers' ||
@@ -114,6 +124,26 @@ const AppContent = () => {
       }}>
         Loading...
       </div>
+    );
+  }
+
+  // If it's a website management route but user is not authenticated, redirect to login
+  if (isWebsiteManagementRoute && !user) {
+    return <LoginPage onLoginSuccess={() => {}} />;
+  }
+
+  // If it's a website management route and user is authenticated, render website management layout
+  if (isWebsiteManagementRoute && user) {
+    return (
+            <AdminWebsiteLayout>
+                <Routes>
+                  <Route path="/admin/website" element={<ImageGalleryPage />} />
+                  <Route path="/admin/website/images" element={<ImageGalleryPage />} />
+                  <Route path="/admin/website/categories" element={<CategoryManagementPage />} />
+                  <Route path="/admin/website/tags" element={<TagManagementPage />} />
+                  <Route path="/admin/website/furniture-pieces" element={<FurniturePiecesPage />} />
+                </Routes>
+            </AdminWebsiteLayout>
     );
   }
 

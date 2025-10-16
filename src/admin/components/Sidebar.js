@@ -63,6 +63,7 @@ const settingsItems = [
   { text: 'Material Companies', path: '/admin/material-companies', icon: <BusinessIcon /> },
   { text: 'Platforms', path: '/admin/platforms', icon: <PublicIcon /> },
   { text: 'Status Management', path: '/admin/status-management', icon: <ManageAccountsIcon /> },
+  { text: 'Website Management', path: '/admin/website', icon: <WebIcon /> },
 ];
 
 const underConstructionItems = [
