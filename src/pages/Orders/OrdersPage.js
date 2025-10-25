@@ -38,7 +38,8 @@ import {
   CalendarToday as CalendarIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
-  FlashOn as FlashOnIcon
+  FlashOn as FlashOnIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -62,6 +63,7 @@ const OrdersPage = () => {
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [fastOrderModalOpen, setFastOrderModalOpen] = useState(false);
+  const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'individual', 'corporate'
 
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
@@ -102,14 +104,37 @@ const OrdersPage = () => {
         setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
       
+      // Fetch regular orders
       const ordersCollection = collection(db, 'orders');
       const ordersQuery = query(ordersCollection, orderBy('orderDetails.billInvoice', 'desc'));
       const ordersDataPromise = getDocs(ordersQuery);
       
-      const ordersSnapshot = await Promise.race([ordersDataPromise, timeoutPromise]);
-      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Fetch corporate orders
+      const corporateOrdersCollection = collection(db, 'corporate-orders');
+      const corporateOrdersQuery = query(corporateOrdersCollection, orderBy('orderDetails.billInvoice', 'desc'));
+      const corporateOrdersDataPromise = getDocs(corporateOrdersQuery);
       
-      console.log('Orders data received:', ordersData);
+      const [ordersSnapshot, corporateOrdersSnapshot] = await Promise.race([
+        Promise.all([ordersDataPromise, corporateOrdersDataPromise]),
+        timeoutPromise
+      ]);
+      
+      const ordersData = ordersSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        orderType: 'regular'
+      }));
+      
+      const corporateOrdersData = corporateOrdersSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        orderType: 'corporate'
+      }));
+      
+      // Combine and sort all orders by bill invoice number
+      const allOrdersData = [...ordersData, ...corporateOrdersData];
+      
+      console.log('All orders data received:', allOrdersData);
       
       // Get invoice statuses to identify end states
       const statusesRef = collection(db, 'invoiceStatuses');
@@ -125,7 +150,7 @@ const OrdersPage = () => {
       );
       const endStateValues = endStateStatuses.map(status => status.value);
 
-      const activeOrders = ordersData.filter(order => 
+      const activeOrders = allOrdersData.filter(order => 
         !endStateValues.includes(order.invoiceStatus)
       );
       
@@ -136,7 +161,8 @@ const OrdersPage = () => {
       console.log('Sorted active orders:', sortedOrders);
       
       setOrders(sortedOrders);
-      setFilteredOrders(sortedOrders);
+      const filtered = applyFiltersAndSearch(sortedOrders, searchTerm, orderFilter);
+      setFilteredOrders(filtered);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showError(`Failed to fetch orders: ${error.message}`);
@@ -154,24 +180,39 @@ const OrdersPage = () => {
     fetchCustomers();
   }, [fetchOrders, fetchCustomers]);
 
-  // Global search function
-  const handleSearch = (searchValue) => {
-    setSearchTerm(searchValue);
-    
-    if (!searchValue.trim()) {
-      setFilteredOrders(sortOrdersByBillNumber([...orders]));
-      return;
+  // Apply filters and search
+  const applyFiltersAndSearch = (ordersList, searchValue, filterType) => {
+    let filtered = [...ordersList];
+
+    // Apply order type filter
+    if (filterType === 'individual') {
+      filtered = filtered.filter(order => order.orderType !== 'corporate');
+    } else if (filterType === 'corporate') {
+      filtered = filtered.filter(order => order.orderType === 'corporate');
     }
 
+    // Apply search filter
+    if (searchValue.trim()) {
     const searchLower = searchValue.toLowerCase();
-    const filtered = orders.filter(order => {
-      // Search in bill number (Step 2)
+      filtered = filtered.filter(order => {
+        // Search in bill number
       const orderDetails = order.orderDetails || {};
       if (orderDetails.billInvoice?.toLowerCase().includes(searchLower)) {
         return true;
       }
 
-      // Search in personal info (Step 1)
+        // Search in customer info (different for corporate vs individual)
+        if (order.orderType === 'corporate') {
+          const corporateCustomer = order.corporateCustomer || {};
+          if (
+            corporateCustomer.corporateName?.toLowerCase().includes(searchLower) ||
+            corporateCustomer.email?.toLowerCase().includes(searchLower) ||
+            corporateCustomer.phone?.toLowerCase().includes(searchLower) ||
+            corporateCustomer.address?.toLowerCase().includes(searchLower)
+          ) {
+            return true;
+          }
+        } else {
       const personalInfo = order.personalInfo || {};
       if (
         personalInfo.customerName?.toLowerCase().includes(searchLower) ||
@@ -181,17 +222,16 @@ const OrdersPage = () => {
       ) {
         return true;
       }
+        }
 
-      // Search in payment data (Step 4)
-      const paymentData = order.paymentData || {};
-      if (
-        paymentData.notes?.toLowerCase().includes(searchLower)
-      ) {
+        // Search in payment data
+        const paymentData = order.paymentData || order.paymentDetails || {};
+        if (paymentData.notes?.toLowerCase().includes(searchLower)) {
         return true;
       }
 
-      // Search in furniture data (Step 3)
-      const furnitureData = order.furnitureData || {};
+        // Search in furniture data
+        const furnitureData = order.furnitureData || order.furnitureGroups || {};
       if (furnitureData.groups) {
         return furnitureData.groups.some(group => 
           group.furnitureType?.toLowerCase().includes(searchLower) ||
@@ -205,10 +245,23 @@ const OrdersPage = () => {
 
       return false;
     });
+    }
 
-    // Sort filtered results by bill number (highest to lowest)
-    const sortedFiltered = sortOrdersByBillNumber(filtered);
-    setFilteredOrders(sortedFiltered);
+    return sortOrdersByBillNumber(filtered);
+  };
+
+  // Global search function
+  const handleSearch = (searchValue) => {
+    setSearchTerm(searchValue);
+    const filtered = applyFiltersAndSearch(orders, searchValue, orderFilter);
+    setFilteredOrders(filtered);
+  };
+
+  // Handle filter change
+  const handleFilterChange = (filterType) => {
+    setOrderFilter(filterType);
+    const filtered = applyFiltersAndSearch(orders, searchTerm, filterType);
+    setFilteredOrders(filtered);
   };
 
   // Handle order deletion
@@ -378,6 +431,24 @@ const OrdersPage = () => {
           >
             Add Order
           </Button>
+          <Button
+            variant="contained"
+            startIcon={<BusinessIcon />}
+            onClick={() => navigate('/admin/orders/corporate')}
+            sx={{
+              ...buttonStyles.primaryButton,
+              minWidth: 150,
+              px: 3,
+              flexShrink: 0,
+              fontWeight: 'bold',
+              backgroundColor: '#1976d2',
+              '&:hover': {
+                backgroundColor: '#1565c0'
+              }
+            }}
+          >
+            Corporate Order
+          </Button>
         </Box>
       </Box>
 
@@ -414,14 +485,117 @@ const OrdersPage = () => {
             }}
           />
         </Grid>
-        <Grid xs={12} md={4}>
-          <Card sx={{ 
-            background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
-            color: '#000000',
-            border: '6px solid #4CAF50',
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              background: orderFilter === 'all' 
+                ? 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)'
+                : 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+              color: orderFilter === 'all' ? '#000000' : '#666666',
+              border: orderFilter === 'all' ? '2px solid #b98f33' : '2px solid #e0e0e0',
+              borderRadius: 2,
+              boxShadow: orderFilter === 'all' 
+                ? '0 4px 20px rgba(185, 143, 51, 0.3)'
+                : '0 2px 8px rgba(0,0,0,0.1)',
+              position: 'relative',
+              cursor: 'pointer',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: orderFilter === 'all' 
+                  ? '0 6px 25px rgba(185, 143, 51, 0.4)'
+                  : '0 4px 15px rgba(0,0,0,0.15)'
+              },
+              transition: 'all 0.3s ease-in-out',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '2px 2px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+            onClick={() => handleFilterChange('all')}
+          >
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: orderFilter === 'all' ? '#000000' : '#666666' }}>
+                {orders.length}
+              </Typography>
+              <Typography variant="body2" sx={{ color: orderFilter === 'all' ? '#000000' : '#666666' }}>
+                Total Orders
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              background: orderFilter === 'individual' 
+                ? 'linear-gradient(135deg, #274290 0%, #1a2f5c 100%)'
+                : 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+              color: orderFilter === 'individual' ? '#ffffff' : '#666666',
+              border: orderFilter === 'individual' ? '2px solid #274290' : '2px solid #e0e0e0',
+              borderRadius: 2,
+              boxShadow: orderFilter === 'individual' 
+                ? '0 4px 20px rgba(39, 66, 144, 0.3)'
+                : '0 2px 8px rgba(0,0,0,0.1)',
+              position: 'relative',
+              cursor: 'pointer',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: orderFilter === 'individual' 
+                  ? '0 6px 25px rgba(39, 66, 144, 0.4)'
+                  : '0 4px 15px rgba(0,0,0,0.15)'
+              },
+              transition: 'all 0.3s ease-in-out',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '2px 2px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+            onClick={() => handleFilterChange('individual')}
+          >
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: orderFilter === 'individual' ? '#ffffff' : '#666666' }}>
+                {orders.filter(order => order.orderType !== 'corporate').length}
+              </Typography>
+              <Typography variant="body2" sx={{ color: orderFilter === 'individual' ? '#ffffff' : '#666666' }}>
+                Individual Orders
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              background: orderFilter === 'corporate' 
+                ? 'linear-gradient(135deg, #f27921 0%, #d65a00 100%)'
+                : 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+              color: orderFilter === 'corporate' ? '#ffffff' : '#666666',
+              border: orderFilter === 'corporate' ? '2px solid #f27921' : '2px solid #e0e0e0',
             borderRadius: 2,
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              boxShadow: orderFilter === 'corporate' 
+                ? '0 4px 20px rgba(242, 121, 33, 0.3)'
+                : '0 2px 8px rgba(0,0,0,0.1)',
             position: 'relative',
+              cursor: 'pointer',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: orderFilter === 'corporate' 
+                  ? '0 6px 25px rgba(242, 121, 33, 0.4)'
+                  : '0 4px 15px rgba(0,0,0,0.15)'
+              },
+              transition: 'all 0.3s ease-in-out',
             '&::before': {
               content: '""',
               position: 'absolute',
@@ -433,18 +607,21 @@ const OrdersPage = () => {
               borderRadius: '2px 2px 0 0',
               pointerEvents: 'none'
             }
-          }}>
+            }}
+            onClick={() => handleFilterChange('corporate')}
+          >
             <CardContent sx={{ textAlign: 'center' }}>
-              <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                {filteredOrders.length}
+              <Typography variant="h4" sx={{ fontWeight: 'bold', color: orderFilter === 'corporate' ? '#ffffff' : '#666666' }}>
+                {orders.filter(order => order.orderType === 'corporate').length}
               </Typography>
-              <Typography variant="body2" sx={{ color: '#000000' }}>
-                {searchTerm ? 'Filtered Orders' : 'Total Orders'}
+              <Typography variant="body2" sx={{ color: orderFilter === 'corporate' ? '#ffffff' : '#666666' }}>
+                Corporate Orders
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
+
 
       {/* Orders Table */}
       <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
@@ -492,6 +669,7 @@ const OrdersPage = () => {
                 filteredOrders.map((order) => (
                   <TableRow key={order.id} hover sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <ReceiptIcon sx={{ mr: 1, color: '#b98f33', fontSize: 24 }} />
                         <Typography variant="h5" sx={{ 
@@ -502,49 +680,84 @@ const OrdersPage = () => {
                         }}>
                           {order.orderDetails?.billInvoice || 'N/A'}
                         </Typography>
+                        </Box>
+                        {order.orderType === 'corporate' && (
+                          <Chip 
+                            label="Corporate" 
+                            size="small" 
+                            sx={{ 
+                              mt: 0.5,
+                              backgroundColor: '#1976d2',
+                              color: 'white',
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem'
+                            }} 
+                          />
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                          <PersonIcon />
+                        <Avatar sx={{ mr: 2, bgcolor: order.orderType === 'corporate' ? 'secondary.main' : 'primary.main' }}>
+                          {order.orderType === 'corporate' ? <BusinessIcon /> : <PersonIcon />}
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                            {order.personalInfo?.customerName || 'N/A'}
+                            {order.orderType === 'corporate' 
+                              ? order.corporateCustomer?.corporateName || 'N/A'
+                              : order.personalInfo?.customerName || 'N/A'
+                            }
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {order.personalInfo?.email || 'No email'}
+                            {order.orderType === 'corporate' 
+                              ? order.corporateCustomer?.email || 'No email'
+                              : order.personalInfo?.email || 'No email'
+                            }
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {order.personalInfo?.phone || 'No phone'}
+                            {order.orderType === 'corporate' 
+                              ? order.corporateCustomer?.phone || 'No phone'
+                              : order.personalInfo?.phone || 'No phone'
+                            }
                           </Typography>
                         </Box>
                       </Box>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921' }}>
-                        ${calculateOrderTotal(order).toFixed(2)}
+                        ${order.orderType === 'corporate' 
+                          ? (parseFloat(order.paymentDetails?.total) || 0).toFixed(2)
+                          : calculateOrderTotal(order).toFixed(2)
+                        }
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        ${order.paymentData?.deposit || 0}
+                        ${order.orderType === 'corporate' 
+                          ? (parseFloat(order.paymentDetails?.deposit) || 0).toFixed(2)
+                          : (parseFloat(order.paymentData?.deposit) || 0).toFixed(2)
+                        }
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                        ${order.paymentData?.amountPaid || 0}
+                        ${order.orderType === 'corporate' 
+                          ? (parseFloat(order.paymentDetails?.amountPaid) || 0).toFixed(2)
+                          : (parseFloat(order.paymentData?.amountPaid) || 0).toFixed(2)
+                        }
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                      {order.orderDetails?.financialStatus ? (
+                      {order.orderDetails?.financialStatus || (order.orderType === 'corporate' && parseFloat(order.paymentDetails?.deposit) > 0) ? (
                         <Chip
-                          label={order.orderDetails.financialStatus}
+                          label={order.orderDetails?.financialStatus || 
+                            (order.orderType === 'corporate' && parseFloat(order.paymentDetails?.amountPaid) >= parseFloat(order.paymentDetails?.deposit) ? 'Deposit Paid' : 'Deposit Not Paid')
+                          }
                           size="small"
                           sx={{
-                            backgroundColor: order.orderDetails.financialStatus === 'Deposit Paid' ? '#4CAF50' :
-                                           order.orderDetails.financialStatus === 'Deposit Not Paid' ? '#F44336' : '#757575',
+                            backgroundColor: (order.orderDetails?.financialStatus || 
+                              (order.orderType === 'corporate' && parseFloat(order.paymentDetails?.amountPaid) >= parseFloat(order.paymentDetails?.deposit) ? 'Deposit Paid' : 'Deposit Not Paid')
+                            ) === 'Deposit Paid' ? '#4CAF50' : '#F44336',
                             color: 'white',
                             fontWeight: 'bold',
                             border: 'none',

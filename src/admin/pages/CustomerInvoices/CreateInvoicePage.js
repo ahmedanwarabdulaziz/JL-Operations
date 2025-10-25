@@ -201,21 +201,11 @@ const CreateInvoicePage = () => {
   // Get next invoice number
   const getNextInvoiceNumber = async () => {
     try {
-      const invoicesRef = collection(db, 'customer-invoices');
-      const invoicesQuery = query(invoicesRef, orderBy('invoiceNumber', 'desc'));
-      const invoicesSnapshot = await getDocs(invoicesQuery);
-      
-      if (invoicesSnapshot.empty) {
-        return 'INV-001';
-      }
-      
-      const lastInvoice = invoicesSnapshot.docs[0].data();
-      const lastNumber = parseInt(lastInvoice.invoiceNumber?.replace('INV-', '') || '0');
-      const nextNumber = lastNumber + 1;
-      return `INV-${nextNumber.toString().padStart(3, '0')}`;
+      const { getNextCustomerInvoiceNumber } = await import('../../../utils/invoiceNumberUtils');
+      return await getNextCustomerInvoiceNumber();
     } catch (error) {
       console.error('Error getting next invoice number:', error);
-      return 'INV-001';
+      return '101660';
     }
   };
 

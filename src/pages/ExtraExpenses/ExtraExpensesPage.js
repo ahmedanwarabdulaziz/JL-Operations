@@ -111,9 +111,11 @@ const ExtraExpensesPage = () => {
     try {
       setLoading(true);
       
-      // Fetch orders, general expenses, business expenses, and material companies
-      const [ordersSnapshot, generalExpensesSnapshot, businessExpensesSnapshot, companiesSnapshot] = await Promise.all([
+      // Fetch orders, corporate orders, done orders, general expenses, business expenses, and material companies
+      const [ordersSnapshot, corporateOrdersSnapshot, doneOrdersSnapshot, generalExpensesSnapshot, businessExpensesSnapshot, companiesSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'corporate-orders'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'done-orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'businessExpenses'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')))
@@ -122,9 +124,9 @@ const ExtraExpensesPage = () => {
       const ordersData = [];
       const allExpenses = [];
       
-      // Extract order-based extra expenses
+      // Extract order-based extra expenses from regular orders
       ordersSnapshot.forEach((doc) => {
-        const orderData = { id: doc.id, ...doc.data() };
+        const orderData = { id: doc.id, ...doc.data(), orderType: 'regular' };
         ordersData.push(orderData);
         
         // Extract extra expenses with order context
@@ -134,7 +136,7 @@ const ExtraExpensesPage = () => {
               id: `${orderData.id}_${index}`,
               orderId: orderData.id,
               orderBillNumber: orderData.orderDetails?.billInvoice || 'N/A',
-              customerName: orderData.personalInfo?.name || 'Unknown',
+              customerName: orderData.personalInfo?.customerName || orderData.personalInfo?.name || 'Unknown',
               customerEmail: orderData.personalInfo?.email || '',
               orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
               orderStatus: orderData.invoiceStatus || 'Unknown',
@@ -145,9 +147,75 @@ const ExtraExpensesPage = () => {
               taxType: expense.taxType || 'fixed',
               total: parseFloat(expense.total) || 0,
               originalExpense: expense,
-              expenseType: 'order-specific'
+              expenseType: 'order-specific',
+              orderType: 'regular'
             });
           });
+        }
+      });
+      
+      // Extract order-based extra expenses from corporate orders
+      corporateOrdersSnapshot.forEach((doc) => {
+        const orderData = { id: doc.id, ...doc.data(), orderType: 'corporate' };
+        ordersData.push(orderData);
+        
+        // Extract extra expenses with order context
+        if (orderData.extraExpenses && Array.isArray(orderData.extraExpenses)) {
+          orderData.extraExpenses.forEach((expense, index) => {
+            allExpenses.push({
+              id: `corporate_${orderData.id}_${index}`,
+              orderId: orderData.id,
+              orderBillNumber: orderData.orderDetails?.billInvoice || 'N/A',
+              customerName: orderData.corporateCustomer?.corporateName || 'Corporate Customer',
+              customerEmail: orderData.contactPerson?.email || orderData.corporateCustomer?.email || '',
+              orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
+              orderStatus: orderData.invoiceStatus || 'Unknown',
+              description: expense.description || 'Extra Expense',
+              price: parseFloat(expense.price) || 0,
+              unit: expense.unit || '',
+              tax: parseFloat(expense.tax) || 0,
+              taxType: expense.taxType || 'fixed',
+              total: (parseFloat(expense.price) || 0) + (parseFloat(expense.tax) || 0),
+              originalExpense: expense,
+              expenseType: 'order-specific',
+              orderType: 'corporate'
+            });
+          });
+        }
+      });
+      
+      // Extract order-based extra expenses from done orders (closed corporate orders)
+      doneOrdersSnapshot.forEach((doc) => {
+        const orderData = { id: doc.id, ...doc.data() };
+        ordersData.push(orderData);
+        
+        // Only process corporate orders from done-orders
+        if (orderData.orderType === 'corporate') {
+          // Extract extra expenses with order context
+          if (orderData.extraExpenses && Array.isArray(orderData.extraExpenses)) {
+            orderData.extraExpenses.forEach((expense, index) => {
+              allExpenses.push({
+                id: `done_corporate_${orderData.id}_${index}`,
+                orderId: orderData.id,
+                orderBillNumber: orderData.orderDetails?.billInvoice || 'N/A',
+                customerName: orderData.corporateCustomer?.corporateName || 'Corporate Customer',
+                customerEmail: orderData.contactPerson?.email || orderData.corporateCustomer?.email || '',
+                orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
+                orderStatus: 'Completed',
+                description: expense.description || 'Extra Expense',
+                price: parseFloat(expense.price) || 0,
+                unit: expense.unit || '',
+                tax: parseFloat(expense.tax) || 0,
+                taxType: expense.taxType || 'fixed',
+                total: (parseFloat(expense.price) || 0) + (parseFloat(expense.tax) || 0),
+                category: expense.category || 'Other',
+                date: expense.date || orderData.createdAt || '',
+                originalExpense: expense,
+                expenseType: 'order-specific',
+                orderType: 'corporate'
+              });
+            });
+          }
         }
       });
       
@@ -294,7 +362,8 @@ const ExtraExpensesPage = () => {
         expense.description.toLowerCase().includes(searchLower) ||
         expense.customerName.toLowerCase().includes(searchLower) ||
         expense.orderBillNumber.toLowerCase().includes(searchLower) ||
-        expense.customerEmail.toLowerCase().includes(searchLower)
+        expense.customerEmail.toLowerCase().includes(searchLower) ||
+        (expense.orderType === 'corporate' ? 'corporate' : 'regular').includes(searchLower)
       );
     }
     
@@ -370,7 +439,7 @@ const ExtraExpensesPage = () => {
     }
   }, [editDialogOpen, materialCompanies.length]);
 
-  const handleViewOrder = (orderId) => {
+  const handleViewOrder = (orderId, orderType) => {
     if (orderId === 'general') {
       navigate('/material-request');
     } else if (orderId === 'business') {
@@ -1013,6 +1082,7 @@ const ExtraExpensesPage = () => {
               <TableRow sx={{ backgroundColor: '#1a1a1a' }}>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Description</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Type</TableCell>
+                <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Order Type</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Customer</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Order #</TableCell>
                 <TableCell sx={{ color: '#d4af5a', fontWeight: 'bold' }}>Date</TableCell>
@@ -1027,7 +1097,7 @@ const ExtraExpensesPage = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={12} sx={{ textAlign: 'center', py: 4 }}>
                     <CircularProgress sx={{ color: '#d4af5a' }} />
                     <Typography variant="body2" sx={{ color: '#ffffff', mt: 2 }}>
                       Loading expenses...
@@ -1036,7 +1106,7 @@ const ExtraExpensesPage = () => {
                 </TableRow>
               ) : filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={12} sx={{ textAlign: 'center', py: 4 }}>
                     <ReceiptIcon sx={{ fontSize: '3rem', color: '#666666', mb: 2 }} />
                     <Typography variant="h6" sx={{ color: '#ffffff', mb: 1 }}>
                       No expenses found
@@ -1087,6 +1157,21 @@ const ExtraExpensesPage = () => {
                           fontSize: '0.7rem'
                         }}
                       />
+                    </TableCell>
+                    
+                    <TableCell>
+                      {expense.orderType && (
+                        <Chip 
+                          label={expense.orderType === 'corporate' ? 'Corporate' : 'Individual'}
+                          size="small"
+                          sx={{ 
+                            backgroundColor: expense.orderType === 'corporate' ? '#f27921' : '#274290',
+                            color: '#ffffff',
+                            fontWeight: 'medium',
+                            fontSize: '0.7rem'
+                          }}
+                        />
+                      )}
                     </TableCell>
                     
                     <TableCell sx={{ color: '#ffffff' }}>
@@ -1152,7 +1237,7 @@ const ExtraExpensesPage = () => {
                         <Tooltip title="View Order">
                           <IconButton
                             size="small"
-                            onClick={() => handleViewOrder(expense.orderId)}
+                            onClick={() => handleViewOrder(expense.orderId, expense.orderType)}
                             sx={{ color: '#d4af5a' }}
                           >
                             <ViewIcon />

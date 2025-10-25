@@ -37,7 +37,8 @@ import {
   Assignment as AssignmentIcon,
   TrendingUp as TrendingUpIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  KeyboardArrowUp as KeyboardArrowUpIcon
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 
 import { useNotification } from '../shared/components/Common/NotificationSystem';
@@ -73,14 +74,30 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders
-      const ordersRef = collection(db, 'orders');
-      const ordersQuery = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersData = ordersSnapshot.docs.map(doc => ({
+      // Get all orders from both regular orders and done-orders collections
+      const [ordersRef, doneOrdersRef] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc')))
+      ]);
+
+      const ordersData = ordersRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'individual'
+      }));
+
+      const doneOrdersData = doneOrdersRef.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      // Combine both collections
+      const allOrders = [...ordersData, ...doneOrdersData];
+      
+      console.log('All orders fetched:', allOrders.length);
+      console.log('Regular orders:', ordersData.length);
+      console.log('Done orders:', doneOrdersData.length);
+      console.log('Done orders data:', doneOrdersData);
 
       // Filter for orders with "done" end state status
       const doneStatuses = statusesData.filter(status => 
@@ -88,13 +105,28 @@ const EndDonePage = () => {
       );
       const doneStatusValues = doneStatuses.map(status => status.value);
 
-      const doneOrders = ordersData.filter(order => 
-        doneStatusValues.includes(order.invoiceStatus)
-      );
+      const doneOrders = allOrders.filter(order => {
+        // For regular orders, check invoiceStatus
+        if (order.invoiceStatus) {
+          const isRegularDone = doneStatusValues.includes(order.invoiceStatus);
+          console.log('Regular order check:', order.orderDetails?.billInvoice, 'invoiceStatus:', order.invoiceStatus, 'isDone:', isRegularDone);
+          return isRegularDone;
+        }
+        // For corporate orders moved to done-orders, check status field
+        if (order.status === 'done' || order.orderType === 'corporate') {
+          console.log('Corporate order check:', order.orderDetails?.billInvoice, 'status:', order.status, 'orderType:', order.orderType, 'isDone:', true);
+          return true;
+        }
+        console.log('Order not matching any criteria:', order.orderDetails?.billInvoice, 'invoiceStatus:', order.invoiceStatus, 'status:', order.status, 'orderType:', order.orderType);
+        return false;
+      });
 
       // Fetch material tax rates
       const taxRates = await fetchMaterialCompanyTaxRates();
       setMaterialTaxRates(taxRates);
+      
+      console.log('Final done orders:', doneOrders.length);
+      console.log('Final done orders data:', doneOrders);
       
       setOrders(doneOrders);
       setFilteredOrders(doneOrders);
@@ -120,12 +152,28 @@ const EndDonePage = () => {
 
     const filtered = orders.filter(order => {
       const searchLower = searchValue.toLowerCase();
-      return (
-        order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower) ||
-        order.personalInfo?.customerName?.toLowerCase().includes(searchLower) ||
-        order.personalInfo?.phone?.includes(searchValue) ||
-        order.personalInfo?.email?.toLowerCase().includes(searchLower)
-      );
+      
+      // Search in common fields
+      if (order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      // Search in individual order fields
+      if (order.personalInfo?.customerName?.toLowerCase().includes(searchLower) ||
+          order.personalInfo?.phone?.includes(searchValue) ||
+          order.personalInfo?.email?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      // Search in corporate order fields
+      if (order.corporateCustomer?.corporateName?.toLowerCase().includes(searchLower) ||
+          order.contactPerson?.name?.toLowerCase().includes(searchLower) ||
+          order.contactPerson?.phone?.includes(searchValue) ||
+          order.contactPerson?.email?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      return false;
     });
 
     setFilteredOrders(filtered);
@@ -275,11 +323,32 @@ const EndDonePage = () => {
                       </TableCell>
                       <TableCell>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
-                            {order.personalInfo?.customerName || 'Unknown Customer'}
-                          </Typography>
+                          <Box display="flex" alignItems="center" gap={1} mb={1}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                              {order.orderType === 'corporate' 
+                                ? order.corporateCustomer?.corporateName || 'Unknown Corporate'
+                                : order.personalInfo?.customerName || 'Unknown Customer'
+                              }
+                            </Typography>
+                            {order.orderType === 'corporate' && (
+                              <Chip
+                                icon={<BusinessIcon />}
+                                label="Corporate"
+                                size="small"
+                                sx={{
+                                  backgroundColor: '#f27921',
+                                  color: 'white',
+                                  fontSize: '0.7rem',
+                                  height: '20px'
+                                }}
+                              />
+                            )}
+                          </Box>
                           <Typography variant="caption" sx={{ color: '#b98f33' }}>
-                            {order.personalInfo?.phone || 'No Phone'}
+                            {order.orderType === 'corporate'
+                              ? order.contactPerson?.phone || 'No Phone'
+                              : order.personalInfo?.phone || 'No Phone'
+                            }
                           </Typography>
                         </Box>
                       </TableCell>
@@ -344,40 +413,90 @@ const EndDonePage = () => {
                                   }}>
                                     <CardContent>
                                       <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={6}>
-                                          <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                              {order.personalInfo?.customerName || 'N/A'}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                              Customer Name
-                                            </Typography>
-                                          </Box>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                              {order.personalInfo?.phone || 'N/A'}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                              Phone Number
-                                            </Typography>
-                                          </Box>
-                                        </Grid>
+                                        {order.orderType === 'corporate' ? (
+                                          <>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.corporateCustomer?.corporateName || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Corporate Name
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.contactPerson?.name || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Contact Person
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.contactPerson?.phone || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Phone Number
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.contactPerson?.email || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Email Address
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.personalInfo?.customerName || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Customer Name
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.personalInfo?.phone || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Phone Number
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                              <Box sx={{ textAlign: 'center' }}>
+                                                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                  {order.personalInfo?.email || 'N/A'}
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                                                  Email Address
+                                                </Typography>
+                                              </Box>
+                                            </Grid>
+                                          </>
+                                        )}
                                         <Grid item xs={12}>
                                           <Box sx={{ textAlign: 'center' }}>
                                             <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                              {order.personalInfo?.email || 'N/A'}
-                                            </Typography>
-                                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                              Email Address
-                                            </Typography>
-                                          </Box>
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                          <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                              {order.personalInfo?.address || 'N/A'}
+                                              {order.orderType === 'corporate' 
+                                                ? order.corporateCustomer?.address || 'N/A'
+                                                : order.personalInfo?.address || 'N/A'
+                                              }
                                             </Typography>
                                             <Typography variant="body2" sx={{ opacity: 0.9 }}>
                                               Delivery Address

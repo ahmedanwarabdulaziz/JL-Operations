@@ -10,9 +10,9 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import { useAuth } from '../shared/components/Auth/AuthContext';
+import { useAuth } from '../../components/Auth/AuthContext';
 import { Google as GoogleIcon } from '@mui/icons-material';
-import { isGmailConfigured, getCurrentGmailConfig, requestGmailPermissions, signOutGmail } from '../shared/services/emailService';
+import { isGmailConfigured, getCurrentGmailConfig, ensureGmailAuthorized, signOutGmail } from '../../services/emailService';
 
 const Header = () => {
   const { user, logout } = useAuth();
@@ -39,7 +39,7 @@ const Header = () => {
   const handleGmailSignIn = async () => {
     setIsAuthorizing(true);
     try {
-      const result = await requestGmailPermissions();
+      const result = await ensureGmailAuthorized();
       setGmailConfig(result);
     } catch (error) {
       console.error('Gmail authorization failed:', error);

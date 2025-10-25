@@ -7,18 +7,23 @@ import { AuthProvider, useAuth } from './components/Auth/AuthContext';
 import { NotificationProvider } from './components/Common/NotificationSystem';
 import { FirebaseProvider } from './contexts/FirebaseContext';
 import MainLayout from './components/Layout/MainLayout';
+import AdminMainLayout from './admin/layouts/MainLayout';
 import LoginPage from './components/Auth/LoginPage';
 import DashboardPage from './admin/pages/Dashboard/DashboardPage';
 import TestPage from './pages/Test/TestPage';
 import EmailTestPage from './pages/Test/EmailTestPage';
 import CustomersPage from './pages/Customers/CustomersPage';
+import CorporateCustomersPage from './admin/pages/CorporateCustomers/CorporateCustomersPage';
 import OrdersPage from './pages/Orders/OrdersPage';
 import NewOrderPage from './pages/Orders/NewOrderPage';
+import CorporateOrderPage from './pages/Orders/CorporateOrderPage';
 import WorkshopPage from './pages/Workshop/WorkshopPage';
 import TreatmentPage from './pages/Treatment/TreatmentPage';
 import MaterialCompaniesPage from './pages/MaterialCompanies/MaterialCompaniesPage';
 import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './admin/pages/Invoice/InvoicePage';
+import CorporateInvoicesPage from './admin/pages/CorporateInvoices/CorporateInvoicesPage';
+import TaxedInvoicesPage from './admin/pages/TaxedInvoices/TaxedInvoicesPage';
 
 import FinancePage from './pages/Finance/FinancePage';
 import PLPage from './pages/Finance/PLPage';
@@ -155,7 +160,7 @@ const AppContent = () => {
   // If it's an admin route and user is authenticated, render admin layout
   if (isAdminRoute && user) {
     return (
-      <MainLayout>
+      <AdminMainLayout>
         <Routes>
           {/* Redirect old admin routes to new /admin routes */}
           <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -165,10 +170,12 @@ const AppContent = () => {
           <Route path="/admin/email-test" element={<EmailTestPage />} />
           <Route path="/customers" element={<Navigate to="/admin/customers" replace />} />
           <Route path="/admin/customers" element={<CustomersPage />} />
+          <Route path="/admin/corporate-customers" element={<CorporateCustomersPage />} />
           <Route path="/orders" element={<Navigate to="/admin/orders" replace />} />
           <Route path="/admin/orders" element={<OrdersPage />} />
           <Route path="/orders/new" element={<Navigate to="/admin/orders/new" replace />} />
           <Route path="/admin/orders/new" element={<NewOrderPage />} />
+          <Route path="/admin/orders/corporate" element={<CorporateOrderPage />} />
           <Route path="/workshop" element={<Navigate to="/admin/workshop" replace />} />
           <Route path="/admin/workshop" element={<WorkshopPage />} />
           <Route path="/material-request" element={<Navigate to="/admin/material-request" replace />} />
@@ -181,6 +188,8 @@ const AppContent = () => {
           <Route path="/admin/platforms" element={<PlatformsPage />} />
           <Route path="/invoices" element={<Navigate to="/admin/invoices" replace />} />
           <Route path="/admin/invoices" element={<InvoicePage />} />
+          <Route path="/admin/corporate-invoices" element={<CorporateInvoicesPage />} />
+          <Route path="/admin/taxed-invoices" element={<TaxedInvoicesPage />} />
           
           {/* Customer Invoices Routes */}
           <Route path="/customer-invoices" element={<Navigate to="/admin/customer-invoices" replace />} />
@@ -211,7 +220,7 @@ const AppContent = () => {
           <Route path="/admin/extra-expenses" element={<ExtraExpensesPage />} />
           <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />
         </Routes>
-      </MainLayout>
+      </AdminMainLayout>
     );
   }
 

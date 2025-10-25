@@ -37,7 +37,8 @@ import {
   Assignment as AssignmentIcon,
   TrendingUp as TrendingUpIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  KeyboardArrowUp as KeyboardArrowUpIcon
+  KeyboardArrowUp as KeyboardArrowUpIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -73,14 +74,25 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders
-      const ordersRef = collection(db, 'orders');
-      const ordersQuery = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersData = ordersSnapshot.docs.map(doc => ({
+      // Get all orders from both regular orders and done-orders collections
+      const [ordersRef, doneOrdersRef] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc')))
+      ]);
+
+      const ordersData = ordersRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'individual'
+      }));
+
+      const doneOrdersData = doneOrdersRef.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      // Combine both collections
+      const allOrders = [...ordersData, ...doneOrdersData];
 
       // Filter for orders with "done" end state status
       const doneStatuses = statusesData.filter(status => 
@@ -88,9 +100,17 @@ const EndDonePage = () => {
       );
       const doneStatusValues = doneStatuses.map(status => status.value);
 
-      const doneOrders = ordersData.filter(order => 
-        doneStatusValues.includes(order.invoiceStatus)
-      );
+      const doneOrders = allOrders.filter(order => {
+        // For regular orders, check invoiceStatus
+        if (order.invoiceStatus) {
+          return doneStatusValues.includes(order.invoiceStatus);
+        }
+        // For corporate orders moved to done-orders, check status field
+        if (order.status === 'done' || order.orderType === 'corporate') {
+          return true;
+        }
+        return false;
+      });
 
       // Fetch material tax rates
       const taxRates = await fetchMaterialCompanyTaxRates();
@@ -120,12 +140,28 @@ const EndDonePage = () => {
 
     const filtered = orders.filter(order => {
       const searchLower = searchValue.toLowerCase();
-      return (
-        order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower) ||
-        order.personalInfo?.customerName?.toLowerCase().includes(searchLower) ||
-        order.personalInfo?.phone?.includes(searchValue) ||
-        order.personalInfo?.email?.toLowerCase().includes(searchLower)
-      );
+      
+      // Search in common fields
+      if (order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      // Search in individual order fields
+      if (order.personalInfo?.customerName?.toLowerCase().includes(searchLower) ||
+          order.personalInfo?.phone?.includes(searchValue) ||
+          order.personalInfo?.email?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      // Search in corporate order fields
+      if (order.corporateCustomer?.corporateName?.toLowerCase().includes(searchLower) ||
+          order.contactPerson?.name?.toLowerCase().includes(searchLower) ||
+          order.contactPerson?.phone?.includes(searchValue) ||
+          order.contactPerson?.email?.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      return false;
     });
 
     setFilteredOrders(filtered);
@@ -275,11 +311,32 @@ const EndDonePage = () => {
                       </TableCell>
                       <TableCell>
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
-                            {order.personalInfo?.customerName || 'Unknown Customer'}
-                          </Typography>
+                          <Box display="flex" alignItems="center" gap={1} mb={1}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                              {order.orderType === 'corporate' 
+                                ? order.corporateCustomer?.corporateName || 'Unknown Corporate'
+                                : order.personalInfo?.customerName || 'Unknown Customer'
+                              }
+                            </Typography>
+                            {order.orderType === 'corporate' && (
+                              <Chip
+                                icon={<BusinessIcon />}
+                                label="Corporate"
+                                size="small"
+                                sx={{
+                                  backgroundColor: '#f27921',
+                                  color: 'white',
+                                  fontSize: '0.7rem',
+                                  height: '20px'
+                                }}
+                              />
+                            )}
+                          </Box>
                           <Typography variant="caption" sx={{ color: '#b98f33' }}>
-                            {order.personalInfo?.phone || 'No Phone'}
+                            {order.orderType === 'corporate'
+                              ? order.contactPerson?.phone || 'No Phone'
+                              : order.personalInfo?.phone || 'No Phone'
+                            }
                           </Typography>
                         </Box>
                       </TableCell>

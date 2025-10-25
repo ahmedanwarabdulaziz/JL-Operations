@@ -69,7 +69,8 @@ import {
   BarChart as BarChartIcon,
   RestartAlt as RestartAltIcon,
   Inventory as InventoryIcon,
-  AccessTime as AccessTimeIcon
+  AccessTime as AccessTimeIcon,
+  Business as BusinessIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
@@ -114,6 +115,7 @@ const WorkshopPage = () => {
   const [lastSavedData, setLastSavedData] = useState(null);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'individual', 'corporate'
   const [sendingEmail, setSendingEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -1288,13 +1290,28 @@ const WorkshopPage = () => {
     try {
       setLoading(true);
       
+      // Fetch regular orders
       const ordersRef = collection(db, 'orders');
       const ordersQuery = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
       const ordersSnapshot = await getDocs(ordersQuery);
       const ordersData = ordersSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        orderType: 'regular'
       }));
+      
+      // Fetch corporate orders
+      const corporateOrdersRef = collection(db, 'corporate-orders');
+      const corporateOrdersQuery = query(corporateOrdersRef, orderBy('orderDetails.billInvoice', 'desc'));
+      const corporateOrdersSnapshot = await getDocs(corporateOrdersQuery);
+      const corporateOrdersData = corporateOrdersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'corporate'
+      }));
+      
+      // Combine all orders
+      const allOrdersData = [...ordersData, ...corporateOrdersData];
       
       // Get invoice statuses to identify end states
       const statusesRef = collection(db, 'invoiceStatuses');
@@ -1310,7 +1327,7 @@ const WorkshopPage = () => {
       );
       const endStateValues = endStateStatuses.map(status => status.value);
 
-      const activeOrders = ordersData.filter(order => 
+      const activeOrders = allOrdersData.filter(order => 
         !endStateValues.includes(order.invoiceStatus)
       );
       
@@ -1322,6 +1339,7 @@ const WorkshopPage = () => {
       });
       
       setOrders(sortedOrders);
+      // Apply initial filter - show all orders by default
       setFilteredOrders(sortedOrders);
       
       // Preserve selected order if it still exists, otherwise select first order
@@ -1408,8 +1426,11 @@ const WorkshopPage = () => {
     }
     
     // Reset editing state when switching orders
-    if (selectedOrder?.furnitureData) {
-      setLastSavedData(JSON.stringify(selectedOrder.furnitureData));
+    // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+    const furnitureData = selectedOrder?.furnitureData || (selectedOrder?.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null);
+    
+    if (furnitureData) {
+      setLastSavedData(JSON.stringify(furnitureData));
       setHasUnsavedChanges(false);
       setEditingFurnitureData(null); // Clear any previous editing state
       setIsAutoSaving(false); // Clear any auto-saving indicator
@@ -1424,9 +1445,19 @@ const WorkshopPage = () => {
     }
   }, [selectedOrder?.id]); // Reset when order changes
 
+  // Apply initial filter when orders are loaded
+  useEffect(() => {
+    if (orders.length > 0) {
+      applyFiltersAndSearch(searchTerm, orderFilter);
+    }
+  }, [orders, searchTerm, orderFilter]);
+
   useEffect(() => {
     // Track changes in editingFurnitureData
-    if (editingFurnitureData && selectedOrder?.furnitureData) {
+    // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+    const furnitureData = selectedOrder?.furnitureData || (selectedOrder?.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null);
+    
+    if (editingFurnitureData && furnitureData) {
       const currentData = JSON.stringify(editingFurnitureData);
       const hasChanges = currentData !== lastSavedData;
       setHasUnsavedChanges(hasChanges);
@@ -1478,20 +1509,53 @@ const WorkshopPage = () => {
   // Search function
   const handleSearch = (searchValue) => {
     setSearchTerm(searchValue);
-    
-    if (!searchValue.trim()) {
-      setFilteredOrders([...orders]);
-      return;
-    }
+    applyFiltersAndSearch(searchValue, orderFilter);
+  };
 
+  const handleFilterChange = (filter) => {
+    setOrderFilter(filter);
+    applyFiltersAndSearch(searchTerm, filter);
+  };
+
+  const applyFiltersAndSearch = (searchValue, filter) => {
     const searchLower = searchValue.toLowerCase();
+    
     const filtered = orders.filter(order => {
+      // Apply order type filter first
+      if (filter === 'individual' && order.orderType === 'corporate') {
+        return false;
+      }
+      if (filter === 'corporate' && order.orderType !== 'corporate') {
+        return false;
+      }
+      
+      // If no search term, return all orders that pass the filter
+      if (!searchValue.trim()) {
+        return true;
+      }
+      
       // Search in bill number
       if (order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower)) {
         return true;
       }
 
-      // Search in personal info
+      // Search in customer info (different for corporate vs regular orders)
+      if (order.orderType === 'corporate') {
+        // Search in corporate customer info
+        const corporateCustomer = order.corporateCustomer || {};
+        const contactPerson = order.contactPerson || {};
+        if (
+          corporateCustomer.corporateName?.toLowerCase().includes(searchLower) ||
+          corporateCustomer.email?.toLowerCase().includes(searchLower) ||
+          corporateCustomer.phone?.toLowerCase().includes(searchLower) ||
+          contactPerson.name?.toLowerCase().includes(searchLower) ||
+          contactPerson.email?.toLowerCase().includes(searchLower) ||
+          contactPerson.phone?.toLowerCase().includes(searchLower)
+        ) {
+          return true;
+        }
+      } else {
+        // Search in personal info for regular orders
       const personalInfo = order.personalInfo || {};
       if (
         personalInfo.customerName?.toLowerCase().includes(searchLower) ||
@@ -1500,11 +1564,12 @@ const WorkshopPage = () => {
       ) {
         return true;
       }
+      }
 
-      // Search in furniture data
-      const furnitureData = order.furnitureData || {};
-      if (furnitureData.groups) {
-        return furnitureData.groups.some(group => 
+      // Search in furniture data - handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+      const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+      if (furnitureGroups.length > 0) {
+        return furnitureGroups.some(group => 
           group.furnitureType?.toLowerCase().includes(searchLower) ||
           group.materialCompany?.toLowerCase().includes(searchLower) ||
           group.materialCode?.toLowerCase().includes(searchLower)
@@ -1521,12 +1586,15 @@ const WorkshopPage = () => {
 
   // Use consistent calculation functions from orderCalculations
   const calculateInvoiceTotals = (order) => {
+    // Get payment data (different field names for corporate vs regular orders)
+    const paymentData = order.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    
     // Calculate individual components properly
     const taxAmount = calculateOrderTax(order);
-    const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
+    const pickupDeliveryCost = paymentData?.pickupDeliveryEnabled ? 
       calculatePickupDeliveryCost(
-        parseFloat(order.paymentData.pickupDeliveryCost) || 0,
-        order.paymentData.pickupDeliveryServiceType || 'both'
+        parseFloat(paymentData.pickupDeliveryCost) || 0,
+        paymentData.pickupDeliveryServiceType || 'both'
       ) : 0;
     
     // Use the existing breakdown function to get accurate totals
@@ -1539,7 +1607,7 @@ const WorkshopPage = () => {
     // Calculate grand total
     const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
     
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
     const balanceDue = grandTotal - amountPaid;
     const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
 
@@ -1653,8 +1721,20 @@ const WorkshopPage = () => {
     return { isReceived: false, status: 'No deposit paid' };
   };
 
+  // Helper function to get the correct database reference for an order
+  const getOrderRef = (order) => {
+    const collection = order.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+    return doc(db, collection, order.id);
+  };
+
   // Handle edit personal information
   const handleEditPersonal = () => {
+    if (selectedOrder.orderType === 'corporate') {
+      // For corporate orders, we'll show a message that editing is not available
+      showError('Corporate order customer information cannot be edited from the workshop. Please use the Orders Management page.');
+      return;
+    }
+    
     setEditPersonalData({
       customerName: selectedOrder.personalInfo?.customerName || '',
       email: selectedOrder.personalInfo?.email || '',
@@ -1689,7 +1769,9 @@ const WorkshopPage = () => {
 
   // Handle edit furniture data
   const handleEditFurniture = () => {
-    setEditFurnitureData(selectedOrder.furnitureData || { groups: [] });
+    // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+    const furnitureData = selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
+    setEditFurnitureData(furnitureData);
     setEditFurnitureDialog(true);
   };
 
@@ -1770,7 +1852,7 @@ const WorkshopPage = () => {
       };
       
       // Update the order in Firebase
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, { personalInfo: editPersonalData });
       
       // Update local state
@@ -1808,7 +1890,7 @@ const WorkshopPage = () => {
         }
       };
       
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, { 
         orderDetails: {
           ...selectedOrder.orderDetails,
@@ -1850,7 +1932,7 @@ const WorkshopPage = () => {
           financialStatus,
         },
       };
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
         paymentData: editPaymentData,
         orderDetails: {
@@ -1881,7 +1963,7 @@ const WorkshopPage = () => {
       };
 
       // Update in Firestore
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
         'paymentData.notes': editAdditionalNotesData.notes
       });
@@ -1909,14 +1991,22 @@ const WorkshopPage = () => {
       }
 
       // Auto-saving furniture data
+      // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+      const orderRef = getOrderRef(selectedOrder);
+      const updateData = selectedOrder.orderType === 'corporate' 
+        ? { furnitureGroups: editingFurnitureData.groups }
+        : { furnitureData: editingFurnitureData };
 
-      const orderRef = doc(db, 'orders', selectedOrder.id);
-      await updateDoc(orderRef, {
-        furnitureData: editingFurnitureData
-      });
+      await updateDoc(orderRef, updateData);
 
       // Update local state
-      const updatedOrder = { ...selectedOrder, furnitureData: editingFurnitureData };
+      const updatedOrder = { 
+        ...selectedOrder, 
+        ...(selectedOrder.orderType === 'corporate' 
+          ? { furnitureGroups: editingFurnitureData.groups }
+          : { furnitureData: editingFurnitureData }
+        )
+      };
       setSelectedOrder(updatedOrder);
       setOrders(orders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
       setFilteredOrders(filteredOrders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
@@ -1943,15 +2033,24 @@ const WorkshopPage = () => {
   const handleSaveFurnitureGroup = async (groupIndex) => {
     try {
       // Use the editing data if available, otherwise use the current selectedOrder data
-      const furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData;
+      // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+      const furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
       
-      const orderRef = doc(db, 'orders', selectedOrder.id);
-      await updateDoc(orderRef, { furnitureData: furnitureDataToSave });
+      const orderRef = getOrderRef(selectedOrder);
+      // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+      const updateData = selectedOrder.orderType === 'corporate' 
+        ? { furnitureGroups: furnitureDataToSave.groups }
+        : { furnitureData: furnitureDataToSave };
+      
+      await updateDoc(orderRef, updateData);
       
       // Update local state with the saved data
       const updatedOrder = {
         ...selectedOrder,
-        furnitureData: furnitureDataToSave
+        ...(selectedOrder.orderType === 'corporate' 
+          ? { furnitureGroups: furnitureDataToSave.groups }
+          : { furnitureData: furnitureDataToSave }
+        )
       };
       
       setSelectedOrder(updatedOrder);
@@ -1977,8 +2076,8 @@ const WorkshopPage = () => {
   // Update furniture group data in editing state only
   const updateFurnitureGroup = (groupIndex, fieldName, value) => {
     // Updating furniture group
-
-    const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData;
+    // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
+    const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
     const updatedGroups = [...currentFurnitureData.groups];
     updatedGroups[groupIndex] = { ...updatedGroups[groupIndex], [fieldName]: value };
     
@@ -2011,9 +2110,11 @@ const WorkshopPage = () => {
 
   // Check if a specific furniture group has unsaved changes
   const hasUnsavedChangesInGroup = (groupIndex) => {
-    if (!editingFurnitureData || !selectedOrder?.furnitureData) return false;
+    if (!editingFurnitureData) return false;
     
-    const originalGroup = selectedOrder.furnitureData.groups[groupIndex];
+    // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+    const originalGroups = selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || [];
+    const originalGroup = originalGroups[groupIndex];
     const editingGroup = editingFurnitureData.groups[groupIndex];
     
     if (!originalGroup || !editingGroup) return false;
@@ -2039,7 +2140,11 @@ const WorkshopPage = () => {
       return;
     }
 
-    if (!selectedOrder.personalInfo?.email) {
+    const customerEmail = selectedOrder.orderType === 'corporate' 
+      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      : selectedOrder.personalInfo?.email;
+      
+    if (!customerEmail) {
       showError('No email address found for this customer');
       return;
     }
@@ -2048,11 +2153,19 @@ const WorkshopPage = () => {
       setSendingEmail(true);
 
       // Prepare order data in the same format as NewOrderPage
-      const orderDataForEmail = {
+      const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
+        corporateCustomer: selectedOrder.corporateCustomer,
+        contactPerson: selectedOrder.contactPerson,
+        orderDetails: selectedOrder.orderDetails,
+        furnitureData: {
+          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
+        },
+        paymentData: selectedOrder.paymentData
+      } : {
         personalInfo: selectedOrder.personalInfo,
         orderDetails: selectedOrder.orderDetails,
         furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || []
+          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
         },
         paymentData: selectedOrder.paymentData
       };
@@ -2063,7 +2176,7 @@ const WorkshopPage = () => {
       };
 
       // Send the email with progress tracking
-      const result = await sendEmailWithConfig(orderDataForEmail, selectedOrder.personalInfo.email, onEmailProgress);
+      const result = await sendEmailWithConfig(orderDataForEmail, customerEmail, onEmailProgress);
       
       if (result.success) {
         showSuccess('✅ Email sent successfully!');
@@ -2092,8 +2205,13 @@ const WorkshopPage = () => {
       return;
     }
 
+    // Get customer email
+    const customerEmail = selectedOrder.orderType === 'corporate' 
+      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      : selectedOrder.personalInfo?.email;
+
     // Check if customer has a valid email for sending
-    const hasValidEmail = isValidEmailForSending(selectedOrder.personalInfo?.email);
+    const hasValidEmail = isValidEmailForSending(customerEmail);
 
     const requiredDeposit = parseFloat(selectedOrder.paymentData?.deposit) || 0;
     if (requiredDeposit <= 0) {
@@ -2108,7 +2226,7 @@ const WorkshopPage = () => {
       await ensureGmailAuthorized();
 
       // Update the order with deposit received
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = doc(db, selectedOrder.orderType === 'corporate' ? 'corporate-orders' : 'orders', selectedOrder.id);
       const updatedPaymentData = {
         ...selectedOrder.paymentData,
         amountPaid: requiredDeposit,
@@ -2125,7 +2243,12 @@ const WorkshopPage = () => {
       });
 
       // Prepare order data for email
-      const orderDataForEmail = {
+      const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
+        corporateCustomer: selectedOrder.corporateCustomer,
+        contactPerson: selectedOrder.contactPerson,
+        orderDetails: selectedOrder.orderDetails,
+        paymentData: updatedPaymentData
+      } : {
         personalInfo: selectedOrder.personalInfo,
         orderDetails: selectedOrder.orderDetails,
         paymentData: updatedPaymentData
@@ -2139,7 +2262,7 @@ const WorkshopPage = () => {
       // Try to send deposit confirmation email only if valid email exists
       if (hasValidEmail) {
         try {
-          const emailResult = await sendDepositEmailWithConfig(orderDataForEmail, selectedOrder.personalInfo.email, onDepositEmailProgress);
+          const emailResult = await sendDepositEmailWithConfig(orderDataForEmail, customerEmail, onDepositEmailProgress);
           
           if (emailResult.success) {
             showSuccess('✅ Deposit received and confirmation email sent successfully!');
@@ -2292,7 +2415,7 @@ const WorkshopPage = () => {
       const currentAmountPaid = parseFloat(selectedOrder.paymentData?.amountPaid || 0);
       const newTotalAmountPaid = currentAmountPaid + paymentAmount;
 
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
         'paymentData.amountPaid': newTotalAmountPaid,
         'paymentData.payments': [
@@ -2449,7 +2572,7 @@ const WorkshopPage = () => {
   const handleSaveAllExpenses = async () => {
     if (!selectedOrder) return;
     try {
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       // Merge with existing extraExpenses if any
       const prev = selectedOrder.extraExpenses || [];
       const newExpenses = [...prev, ...expenseList];
@@ -2483,7 +2606,7 @@ const WorkshopPage = () => {
     if (!selectedOrder || editingExpenseIndex === null) return;
     
     try {
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       const updatedExpenses = [...selectedOrder.extraExpenses];
       updatedExpenses[editingExpenseIndex] = { ...editExpenseForm };
       
@@ -2512,7 +2635,7 @@ const WorkshopPage = () => {
     if (!selectedOrder || expenseToDelete === null) return;
     
     try {
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = getOrderRef(selectedOrder);
       const updatedExpenses = selectedOrder.extraExpenses.filter((_, index) => index !== expenseToDelete.index);
       
       await updateDoc(orderRef, { extraExpenses: updatedExpenses });
@@ -2561,7 +2684,11 @@ const WorkshopPage = () => {
 
   // Completion Email Functions
   const handleSendCompletionEmail = () => {
-    if (!selectedOrder?.personalInfo?.email) {
+    const customerEmail = selectedOrder?.orderType === 'corporate' 
+      ? selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email
+      : selectedOrder?.personalInfo?.email;
+      
+    if (!customerEmail) {
       showError('No customer email available for this order');
       return;
     }
@@ -2580,14 +2707,27 @@ const WorkshopPage = () => {
       setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
       
       // Prepare order data for email
-      const orderDataForEmail = {
+      const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
+        corporateCustomer: selectedOrder.corporateCustomer,
+        contactPerson: selectedOrder.contactPerson,
+        orderDetails: selectedOrder.orderDetails,
+        furnitureData: {
+          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
+        },
+        paymentData: selectedOrder.paymentData
+      } : {
         personalInfo: selectedOrder.personalInfo,
         orderDetails: selectedOrder.orderDetails,
         furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || []
+          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
         },
         paymentData: selectedOrder.paymentData
       };
+
+      // Get customer email
+      const customerEmail = selectedOrder.orderType === 'corporate' 
+        ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+        : selectedOrder.personalInfo?.email;
 
       // Progress callback for email sending
       const onEmailProgress = (message) => {
@@ -2598,7 +2738,7 @@ const WorkshopPage = () => {
       // Send the completion email
       const emailResult = await sendCompletionEmailWithGmail(
         orderDataForEmail, 
-        selectedOrder.personalInfo.email, 
+        customerEmail, 
         completionEmailDialog.includeReview, // includeReviewRequest
         onEmailProgress
       );
@@ -2682,6 +2822,96 @@ const WorkshopPage = () => {
             {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} in queue
           </Typography>
           
+          {/* Filter Buttons */}
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Button
+              variant={orderFilter === 'all' ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => handleFilterChange('all')}
+              sx={{
+                minWidth: 80,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                ...(orderFilter === 'all' ? {
+                  background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                  color: '#000000',
+                  border: '2px solid #f27921',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                    border: '2px solid #e06810'
+                  }
+                } : {
+                  color: '#666666',
+                  borderColor: '#e0e0e0',
+                  '&:hover': {
+                    borderColor: '#b98f33',
+                    backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                  }
+                })
+              }}
+            >
+              All
+            </Button>
+            <Button
+              variant={orderFilter === 'individual' ? 'contained' : 'outlined'}
+              size="small"
+              startIcon={<PersonIcon />}
+              onClick={() => handleFilterChange('individual')}
+              sx={{
+                minWidth: 100,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                ...(orderFilter === 'individual' ? {
+                  background: 'linear-gradient(145deg, #274290 0%, #1a2f5c 100%)',
+                  color: '#ffffff',
+                  border: '2px solid #274290',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #3a5a9a 0%, #274290 100%)',
+                    border: '2px solid #1a2f5c'
+                  }
+                } : {
+                  color: '#666666',
+                  borderColor: '#e0e0e0',
+                  '&:hover': {
+                    borderColor: '#274290',
+                    backgroundColor: 'rgba(39, 66, 144, 0.1)'
+                  }
+                })
+              }}
+            >
+              Individual
+            </Button>
+            <Button
+              variant={orderFilter === 'corporate' ? 'contained' : 'outlined'}
+              size="small"
+              startIcon={<BusinessIcon />}
+              onClick={() => handleFilterChange('corporate')}
+              sx={{
+                minWidth: 100,
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                ...(orderFilter === 'corporate' ? {
+                  background: 'linear-gradient(145deg, #f27921 0%, #d65a00 100%)',
+                  color: '#ffffff',
+                  border: '2px solid #f27921',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #ff8a33 0%, #f27921 100%)',
+                    border: '2px solid #d65a00'
+                  }
+                } : {
+                  color: '#666666',
+                  borderColor: '#e0e0e0',
+                  '&:hover': {
+                    borderColor: '#f27921',
+                    backgroundColor: 'rgba(242, 121, 33, 0.1)'
+                  }
+                })
+              }}
+            >
+              Corporate
+            </Button>
+          </Box>
+          
           {/* Material Request Button */}
           <Button
             variant="contained"
@@ -2764,15 +2994,26 @@ const WorkshopPage = () => {
                         <Box>
                           {/* Invoice Number and Customer Name */}
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Typography 
                               variant="h5" 
                               sx={{ 
                                 fontWeight: 'bold',
-                                color: 'primary.main'
+                                  color: order.orderType === 'corporate' ? '#f27921' : 'primary.main'
                               }}
                             >
                               #{order.orderDetails?.billInvoice || 'N/A'}
                             </Typography>
+                              {order.orderType === 'corporate' && (
+                                <BusinessIcon 
+                                  sx={{ 
+                                    color: '#f27921', 
+                                    fontSize: '1.2rem',
+                                    ml: 0.5
+                                  }} 
+                                />
+                              )}
+                            </Box>
                             <Typography 
                               variant="body1" 
                               sx={{ 
@@ -2781,7 +3022,10 @@ const WorkshopPage = () => {
                                 fontSize: '0.9rem'
                               }}
                             >
-                              {order.personalInfo?.customerName || 'No Name'}
+                              {order.orderType === 'corporate' 
+                                ? (order.corporateCustomer?.corporateName || 'Corporate Customer')
+                                : (order.personalInfo?.customerName || 'No Name')
+                              }
                             </Typography>
                           </Box>
 
@@ -2831,7 +3075,12 @@ const WorkshopPage = () => {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Order Details • <span style={{ color: '#ffffff' }}>{selectedOrder.personalInfo?.customerName}</span>
+                    Order Details • <span style={{ color: '#ffffff' }}>
+                      {selectedOrder.orderType === 'corporate' 
+                        ? selectedOrder.corporateCustomer?.corporateName || 'Corporate Customer'
+                        : selectedOrder.personalInfo?.customerName || 'Customer'
+                      }
+                    </span>
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
@@ -2872,7 +3121,9 @@ const WorkshopPage = () => {
                   size="medium"
                   startIcon={sendingEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SendIcon sx={{ color: '#000000' }} />}
                   onClick={handleSendEmail}
-                  disabled={sendingEmail || !selectedOrder?.personalInfo?.email}
+                  disabled={sendingEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate' 
+                    ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                    : selectedOrder?.personalInfo?.email)}
                   sx={{
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
@@ -2917,12 +3168,17 @@ const WorkshopPage = () => {
                   size="medium"
                   startIcon={<BarChartIcon />}
                   onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
+                  disabled={selectedOrder?.orderType === 'corporate'}
                   sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
+                    background: selectedOrder?.orderType === 'corporate' 
+                      ? 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)'
+                      : 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: selectedOrder?.orderType === 'corporate' ? '#666666' : '#000000',
+                    border: selectedOrder?.orderType === 'corporate' 
+                      ? '2px solid #999999'
+                      : '2px solid #f27921',
                     fontWeight: 'bold',
-                    '&:hover': {
+                    '&:hover': selectedOrder?.orderType === 'corporate' ? {} : {
                       background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
                       border: '2px solid #e06810'
                     }
@@ -2937,7 +3193,9 @@ const WorkshopPage = () => {
                   size="medium"
                   startIcon={sendingCompletionEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <CheckCircleIcon sx={{ color: '#000000' }} />}
                   onClick={handleSendCompletionEmail}
-                  disabled={sendingCompletionEmail || !selectedOrder?.personalInfo?.email}
+                  disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate' 
+                    ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                    : selectedOrder?.personalInfo?.email)}
                   sx={{
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
@@ -3008,6 +3266,76 @@ const WorkshopPage = () => {
                   {/* Content */}
                   {personalInfoExpanded && (
                     <Box sx={{ p: 3 }}>
+                      {selectedOrder.orderType === 'corporate' ? (
+                        <>
+                          {/* Corporate Customer Information */}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              🏢 Company Name
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem' }}>
+                              {selectedOrder.corporateCustomer?.corporateName || 'N/A'}
+                            </Typography>
+                          </Box>
+                          
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              📞 Company Phone
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                              {selectedOrder.corporateCustomer?.phone || 'N/A'}
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              ✉️ Company Email
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                              {selectedOrder.corporateCustomer?.email || 'N/A'}
+                            </Typography>
+                          </Box>
+
+                          <Box sx={{ mb: 3 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              📍 Company Address
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                              {selectedOrder.corporateCustomer?.address || 'N/A'}
+                            </Typography>
+                          </Box>
+
+                          {/* Contact Person Information */}
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              👤 Contact Name
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem' }}>
+                              {selectedOrder.contactPerson?.name || 'N/A'}
+                            </Typography>
+                          </Box>
+                          
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              📞 Contact Phone
+                            </Typography>
+                            <Typography variant="body1" sx={{ mb: 2 }}>
+                              {selectedOrder.contactPerson?.phone || 'N/A'}
+                            </Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                              ✉️ Contact Email
+                            </Typography>
+                            <Typography variant="body1">
+                              {selectedOrder.contactPerson?.email || 'N/A'}
+                            </Typography>
+                          </Box>
+                        </>
+                      ) : (
+                        <>
+                          {/* Regular Customer Information */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                         👤 Name
@@ -3043,6 +3371,8 @@ const WorkshopPage = () => {
                         {selectedOrder.personalInfo?.address || 'N/A'}
                       </Typography>
                     </Box>
+                        </>
+                      )}
                   </Box>
                   )}
                 </CardContent>
@@ -3176,7 +3506,7 @@ const WorkshopPage = () => {
                     >
                       Add Payment
                     </Button>
-                    {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && !getDepositStatus(selectedOrder).isReceived && (
+                    {(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.deposit : selectedOrder.paymentData?.deposit) && parseFloat(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.deposit : selectedOrder.paymentData?.deposit) > 0 && !getDepositStatus(selectedOrder).isReceived && (
                       <Button
                         variant="contained"
                         size="small"
@@ -3247,7 +3577,7 @@ const WorkshopPage = () => {
                                   💰 Deposit
                                 </Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                                  ${selectedOrder.paymentData?.deposit || '0.00'}
+                                  ${selectedOrder.orderType === 'corporate' ? (selectedOrder.paymentDetails?.deposit || '0.00') : (selectedOrder.paymentData?.deposit || '0.00')}
                                 </Typography>
                               </Box>
                               
@@ -3286,21 +3616,22 @@ const WorkshopPage = () => {
                         </Grid>
 
                         {/* Pickup & Delivery - Only Show When Enabled */}
-                        {selectedOrder.paymentData?.pickupDeliveryEnabled && (
+                        {(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.pickupDeliveryEnabled : selectedOrder.paymentData?.pickupDeliveryEnabled) && (
                           <Grid item xs={6}>
                             <Card variant="outlined" sx={{ border: '2px solid #e3f2fd', height: '100%' }}>
                               <CardContent sx={{ p: 2 }}>
                                 {/* Top Row: Service Type and Amount */}
                                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#d4af5a', mr: 1 }}>
-                                    🚚 {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'Pickup' : 
-                                         selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery' : 
+                                    🚚 {(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.pickupDeliveryServiceType : selectedOrder.paymentData?.pickupDeliveryServiceType) === 'pickup' ? 'Pickup' : 
+                                         (selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.pickupDeliveryServiceType : selectedOrder.paymentData?.pickupDeliveryServiceType) === 'delivery' ? 'Delivery' : 
                                          'Pickup & Delivery'}
                                   </Typography>
                                                                                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
                                    ${(() => {
-                                     const cost = selectedOrder.paymentData.pickupDeliveryCost || 0;
-                                     const displayValue = selectedOrder.paymentData.pickupDeliveryServiceType === 'both' 
+                                     const paymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                     const cost = paymentData?.pickupDeliveryCost || 0;
+                                     const displayValue = paymentData?.pickupDeliveryServiceType === 'both' 
                                        ? cost * 2 
                                        : cost;
                                      return displayValue % 1 === 0 ? displayValue.toString() : displayValue.toFixed(2);
@@ -3322,8 +3653,8 @@ const WorkshopPage = () => {
                                     color: '#4caf50',
                                     fontSize: '0.7rem'
                                   }}>
-                                                                          {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'One Way' :
-                                       selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'One Way' :
+                                                                          {(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.pickupDeliveryServiceType : selectedOrder.paymentData?.pickupDeliveryServiceType) === 'pickup' ? 'One Way' :
+                                       (selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.pickupDeliveryServiceType : selectedOrder.paymentData?.pickupDeliveryServiceType) === 'delivery' ? 'One Way' :
                                        'Both Services'}
                                   </Typography>
                                 </Box>
@@ -3353,7 +3684,7 @@ const WorkshopPage = () => {
                              Total Paid by Customer:
                            </Typography>
                            <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                             ${selectedOrder.paymentData?.amountPaid || '0.00'}
+                             ${selectedOrder.orderType === 'corporate' ? (selectedOrder.paymentDetails?.amountPaid || '0.00') : (selectedOrder.paymentData?.amountPaid || '0.00')}
                            </Typography>
                          </Box>
 
@@ -3363,7 +3694,7 @@ const WorkshopPage = () => {
                              Outstanding Balance:
                            </Typography>
                            <Typography variant="caption" sx={{ color: '#FFD700', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                             ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
+                             ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.amountPaid : selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
                            </Typography>
                          </Box>
                       </Box>
@@ -3417,12 +3748,15 @@ const WorkshopPage = () => {
 
                 {/* Content */}
                 <Box sx={{ p: 3 }}>
-                  {selectedOrder.furnitureData?.groups && selectedOrder.furnitureData.groups.length > 0 ? (
+                  {(() => {
+                    // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+                    const furnitureGroups = selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || [];
+                    return furnitureGroups.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {selectedOrder.furnitureData.groups.map((group, index) => {
+                        {furnitureGroups.map((group, index) => {
                         // Use editing data if available, otherwise use the original data
-                        const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData;
-                        const currentGroup = currentFurnitureData.groups[index] || group;
+                          const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
+                          const currentGroup = currentFurnitureData.groups?.[index] || currentFurnitureData[index] || group;
                         
                         return (
                           <Card key={index} sx={{ p: 2, border: '2px solid #e3f2fd' }}>
@@ -3919,7 +4253,8 @@ const WorkshopPage = () => {
                     <Typography variant="body2" color="text.secondary">
                       No furniture items added
                     </Typography>
-                  )}
+                    );
+                  })()}
                 </Box>
               </CardContent>
             </Card>
@@ -4794,13 +5129,13 @@ const WorkshopPage = () => {
                   <Box>
                     <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Amount Paid</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                      ${selectedOrder.paymentData?.amountPaid || '0.00'}
+                      ${selectedOrder.orderType === 'corporate' ? (selectedOrder.paymentDetails?.amountPaid || '0.00') : (selectedOrder.paymentData?.amountPaid || '0.00')}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Remaining Balance</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      ${(calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2)}
+                      ${(calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails?.amountPaid : selectedOrder.paymentData?.amountPaid || 0))).toFixed(2)}
                     </Typography>
                   </Box>
                 </Box>

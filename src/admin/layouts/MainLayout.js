@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { Box } from '@mui/material';
-import { useAuth } from '../shared/components/Auth/AuthContext';
+import { useAuth } from '../../components/Auth/AuthContext';
 
 const MainLayout = ({ children }) => {
   const { user } = useAuth();

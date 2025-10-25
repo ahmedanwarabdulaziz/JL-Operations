@@ -43,6 +43,7 @@ import ConstructionIcon from '@mui/icons-material/Construction';
 
 import InventoryIcon from '@mui/icons-material/Inventory';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
@@ -55,6 +56,7 @@ const menuItems = [
   { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
   { text: 'Extra Expenses', path: '/admin/extra-expenses', icon: <AttachMoneyIcon /> },
+  { text: 'Corporate Customers', path: '/admin/corporate-customers', icon: <BusinessCenterIcon /> },
   { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },

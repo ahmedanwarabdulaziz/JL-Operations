@@ -37,26 +37,36 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import WebIcon from '@mui/icons-material/Web';
 import GroupIcon from '@mui/icons-material/Group';
+import CorporateFareIcon from '@mui/icons-material/CorporateFare';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
+import ApartmentIcon from '@mui/icons-material/Apartment';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ConstructionIcon from '@mui/icons-material/Construction';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ArchiveIcon from '@mui/icons-material/Archive';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 
-import { useFirebaseStatus } from '../shared/contexts/FirebaseContext';
+import { useFirebaseStatus } from '../../contexts/FirebaseContext';
 
 const menuItems = [
   { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
-  { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Orders', path: '/admin/orders', icon: <ReceiptIcon /> },
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
-
+  { text: 'Corporate Invoices', path: '/admin/corporate-invoices', icon: <BusinessIcon /> },
+  { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <ReceiptLongIcon /> },
+  { text: 'Taxed Invoices', path: '/admin/taxed-invoices', icon: <ArchiveIcon /> },
+  { text: 'Extra Expenses', path: '/admin/extra-expenses', icon: <AttachMoneyIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
-  { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
+  { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
+  { text: 'Corporate', path: '/admin/corporate-customers', icon: <CorporateFareIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
   { text: 'Pending Orders', path: '/admin/pending-orders', icon: <AccessTimeIcon /> },
 ];
+
 
 const settingsItems = [
   { text: 'Treatment', path: '/admin/treatment', icon: <ScienceIcon /> },
@@ -72,6 +82,8 @@ const underConstructionItems = [
   { text: 'Email Settings', path: '/admin/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/admin/test', icon: <EmailIcon /> },
   { text: 'Data Management', path: '/admin/data-management', icon: <SettingsIcon /> },
+  { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
+  { text: 'TEST', path: '/admin/test-page', icon: <BuildIcon /> },
 ];
 
 const Sidebar = ({ onToggle, onPin }) => {
@@ -83,6 +95,7 @@ const Sidebar = ({ onToggle, onPin }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [underConstructionOpen, setUnderConstructionOpen] = useState(false);
+
 
   const handleNavigation = (path) => {
     navigate(path);
@@ -269,7 +282,7 @@ const Sidebar = ({ onToggle, onPin }) => {
                 justifyContent: isExpanded ? 'flex-start' : 'center',
                 width: '100%'
               }}>
-                {item.icon}
+                {item.icon && item.icon}
                 {isExpanded && (
                   <ListItemText 
                     primary={item.text} 

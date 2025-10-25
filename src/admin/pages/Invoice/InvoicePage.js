@@ -1562,6 +1562,7 @@ const InvoicePage = () => {
     setExpenseModalOpen(false);
   };
 
+
   const renderInvoiceDetails = () => {
     if (!selectedOrder) {
       return (
@@ -2952,6 +2953,7 @@ const InvoicePage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
     </Box>
   );
 };

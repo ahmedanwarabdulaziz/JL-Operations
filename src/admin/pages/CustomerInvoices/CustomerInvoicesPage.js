@@ -36,11 +36,13 @@ import {
   Person as PersonIcon,
   Receipt as ReceiptIcon,
   CalendarToday as CalendarIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  Archive as ArchiveIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc, getDoc } from 'firebase/firestore';
+import { validateCustomerInvoiceNumber } from '../../../utils/invoiceNumberUtils';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
@@ -60,6 +62,8 @@ const CustomerInvoicesPage = () => {
   const [createInvoiceDialogOpen, setCreateInvoiceDialogOpen] = useState(false);
   const [availableOrders, setAvailableOrders] = useState([]);
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [closeInvoiceDialogOpen, setCloseInvoiceDialogOpen] = useState(false);
+  const [invoiceToClose, setInvoiceToClose] = useState(null);
 
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
@@ -266,6 +270,39 @@ const CustomerInvoicesPage = () => {
     }
   };
 
+  // Handle close invoice (move to taxed invoices)
+  const handleCloseInvoice = async () => {
+    if (!invoiceToClose) return;
+
+    try {
+      // Create a copy of the invoice with additional metadata for taxed invoices
+      const taxedInvoiceData = {
+        ...invoiceToClose,
+        closedAt: new Date(),
+        originalInvoiceId: invoiceToClose.id,
+        source: 'customer_invoice'
+      };
+      
+      // Add to taxed invoices collection
+      await addDoc(collection(db, 'taxedInvoices'), taxedInvoiceData);
+      
+      // Remove from customer-invoices collection (since it's now closed)
+      await deleteDoc(doc(db, 'customer-invoices', invoiceToClose.id));
+      
+      // Update local state
+      setInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToClose.id));
+      setFilteredInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToClose.id));
+      
+      showSuccess('Invoice archived to taxed invoices!');
+      setCloseInvoiceDialogOpen(false);
+      setInvoiceToClose(null);
+      
+    } catch (error) {
+      console.error('Error closing invoice:', error);
+      showError('Failed to close invoice');
+    }
+  };
+
   // Calculate invoice total
   const calculateInvoiceTotal = (invoice) => {
     // Use the saved total from invoice calculations if available
@@ -308,10 +345,25 @@ const CustomerInvoicesPage = () => {
   };
 
   // Handle create invoice from order
-  const handleCreateInvoice = (order) => {
+  const handleCreateInvoice = async (order) => {
+    try {
+      // Validate that the customer invoice number is available
+      const invoiceNumber = order.orderDetails?.billInvoice;
+      if (invoiceNumber) {
+        const isAvailable = await validateCustomerInvoiceNumber(invoiceNumber);
+        if (!isAvailable) {
+          showError(`Customer invoice number ${invoiceNumber} is already used in taxed invoices. Please use a different order.`);
+          return;
+        }
+      }
+      
     navigate('/admin/customer-invoices/create', { 
       state: { orderData: order } 
     });
+    } catch (error) {
+      console.error('Error validating invoice number:', error);
+      showError('Failed to validate invoice number');
+    }
   };
 
   // Handle print invoice
@@ -600,6 +652,18 @@ const CustomerInvoicesPage = () => {
                           onClick={() => handlePrintInvoice(invoice)}
                         >
                           <PrintIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Archive to Taxed Invoices">
+                        <IconButton
+                          size="small"
+                          color="success"
+                          onClick={() => {
+                            setInvoiceToClose(invoice);
+                            setCloseInvoiceDialogOpen(true);
+                          }}
+                        >
+                          <ArchiveIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Delete Invoice">
@@ -1072,6 +1136,74 @@ const CustomerInvoicesPage = () => {
             sx={buttonStyles.dangerButton}
           >
             {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Close Invoice Confirmation Dialog */}
+      <Dialog
+        open={closeInvoiceDialogOpen}
+        onClose={() => setCloseInvoiceDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
+          Archive Invoice to Taxed Invoices
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', color: '#ffffff', p: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to archive this invoice to taxed invoices?
+          </Typography>
+          {invoiceToClose && (
+            <>
+              <Typography variant="body2" sx={{ mb: 2, color: '#cccccc' }}>
+                <strong>Invoice #:</strong> {invoiceToClose.invoiceNumber || 'N/A'}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, color: '#cccccc' }}>
+                <strong>Customer:</strong> {invoiceToClose.originalCustomerInfo?.customerName || invoiceToClose.customerInfo?.customerName || 'N/A'}
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 2, color: '#cccccc' }}>
+                <strong>Total Amount:</strong> ${calculateInvoiceTotal(invoiceToClose).toFixed(2)}
+              </Typography>
+            </>
+          )}
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Warning:</strong> This action will archive the invoice to the "Taxed Invoices" section and remove it from the current customer invoices list. This action cannot be undone.
+            </Typography>
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2 }}>
+          <Button 
+            onClick={() => setCloseInvoiceDialogOpen(false)}
+            sx={{
+              color: '#ffffff',
+              border: '1px solid #666666',
+              '&:hover': {
+                backgroundColor: '#555555'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleCloseInvoice}
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '2px solid #4caf50',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '2px solid #45a049'
+              }
+            }}
+          >
+            Archive Invoice
           </Button>
         </DialogActions>
       </Dialog>
