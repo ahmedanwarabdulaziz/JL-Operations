@@ -46,6 +46,7 @@ import ConstructionIcon from '@mui/icons-material/Construction';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
@@ -54,6 +55,7 @@ const menuItems = [
   { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
   { text: 'Orders', path: '/admin/orders', icon: <ReceiptIcon /> },
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
+  { text: 'Material Request', path: '/admin/material-request', icon: <InventoryIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
   { text: 'Corporate Invoices', path: '/admin/corporate-invoices', icon: <BusinessIcon /> },
   { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <ReceiptLongIcon /> },
@@ -171,8 +173,24 @@ const Sidebar = ({ onToggle, onPin }) => {
           borderRight: '1px solid #333333',
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
           transition: 'width 0.3s ease',
-          overflow: 'hidden',
+          overflow: 'auto',
           position: 'fixed',
+          height: '100vh',
+          // Custom scrollbar styling
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(0,0,0,0.1)',
+            borderRadius: '3px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: '3px',
+            '&:hover': {
+              background: 'rgba(0,0,0,0.5)',
+            },
+          },
         },
       }}
     >
