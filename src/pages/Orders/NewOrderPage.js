@@ -18,9 +18,11 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  LinearProgress
+  LinearProgress,
+  TextField,
+  InputAdornment
 } from '@mui/material';
-import { Warning as WarningIcon } from '@mui/icons-material';
+import { Warning as WarningIcon, Search as SearchIcon, Person as PersonIcon, Email as EmailIcon, Phone as PhoneIcon, LocationOn as LocationIcon } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
@@ -68,6 +70,18 @@ const NewOrderPage = () => {
   const [isUsingExistingCustomer, setIsUsingExistingCustomer] = useState(false);
   const [selectedExistingCustomer, setSelectedExistingCustomer] = useState(null);
   const [sendEmail, setSendEmail] = useState(true);
+  
+  // Search dialog state
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  
+  // Search functionality state
+  const [searchCriteria, setSearchCriteria] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   
   // Email popup state
   const [emailPopupOpen, setEmailPopupOpen] = useState(false);
@@ -399,6 +413,9 @@ const NewOrderPage = () => {
     setIsUsingExistingCustomer(true);
     setSelectedExistingCustomer(customer);
     showSuccess('Customer information loaded successfully');
+    
+    // Auto-navigate to step 2 (Order Details)
+    setActiveStep(1);
   };
 
   const handleCreateNewCustomer = () => {
@@ -406,6 +423,73 @@ const NewOrderPage = () => {
     setMatchedCustomer(null);
     setIsUsingExistingCustomer(false);
     setSelectedExistingCustomer(null);
+  };
+
+  // Search dialog functions
+  const handleOpenSearchDialog = () => {
+    setSearchDialogOpen(true);
+  };
+
+  const handleCloseSearchDialog = () => {
+    setSearchDialogOpen(false);
+    setSearchResults([]);
+    setSearchCriteria({ name: '', email: '', phone: '' });
+  };
+
+  // Search functionality
+  const handleSearchCriteriaChange = (field, value) => {
+    setSearchCriteria(prev => ({ ...prev, [field]: value }));
+  };
+
+  const performCustomerSearch = () => {
+    const { name, email, phone } = searchCriteria;
+    
+    // Check if we have at least one search criteria
+    if (!name.trim() && !email.trim() && !phone.trim()) {
+      showError('Please enter at least one search criteria (name, email, or phone)');
+      return;
+    }
+
+    setSearchLoading(true);
+    
+    // Perform search
+    const results = customers.filter(customer => {
+      let hasMatch = false;
+      
+      // Check name match
+      if (name.trim() && customer.name) {
+        const nameMatch = customer.name.toLowerCase().includes(name.toLowerCase().trim());
+        if (nameMatch) hasMatch = true;
+      }
+      
+      // Check email match
+      if (email.trim() && customer.email) {
+        const emailMatch = customer.email.toLowerCase().includes(email.toLowerCase().trim());
+        if (emailMatch) hasMatch = true;
+      }
+      
+      // Check phone match
+      if (phone.trim() && customer.phone) {
+        const phoneMatch = customer.phone.includes(phone.trim());
+        if (phoneMatch) hasMatch = true;
+      }
+      
+      return hasMatch;
+    });
+
+    setSearchResults(results);
+    setSearchLoading(false);
+    
+    if (results.length === 0) {
+      showError('No customers found matching your search criteria');
+    }
+  };
+
+  const handleSelectCustomerFromSearch = (customer) => {
+    handleUseExistingCustomer(customer);
+    setSearchDialogOpen(false);
+    setSearchResults([]);
+    setSearchCriteria({ name: '', email: '', phone: '' });
   };
 
   // Check if current customer data matches any existing customer
@@ -1428,6 +1512,47 @@ const NewOrderPage = () => {
           >
             Back
           </Button>
+          
+          {/* Search Existing Customer Button - Only show on Step 0 */}
+          {activeStep === 0 && (
+            <Button
+              variant="contained"
+              onClick={handleOpenSearchDialog}
+              startIcon={<SearchIcon />}
+              sx={{
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #4CAF50',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
+                px: 3,
+                py: 1.5,
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                borderRadius: 2,
+                mr: 1,
+                '&:hover': {
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #45a049',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '50%',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                  borderRadius: '6px 6px 0 0',
+                  pointerEvents: 'none'
+                }
+              }}
+            >
+              Search Customer
+            </Button>
+          )}
+          
           <Box>
             <Button
               variant="outlined"
@@ -1595,6 +1720,181 @@ const NewOrderPage = () => {
       <OrderSummaryPopup />
       
       {/* Email Popup */}
+      {/* Search Existing Customer Dialog */}
+      <Dialog 
+        open={searchDialogOpen} 
+        onClose={handleCloseSearchDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #b98f33',
+            borderRadius: '10px',
+            color: '#ffffff'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          borderBottom: '1px solid #b98f33'
+        }}>
+          <SearchIcon sx={{ color: '#000000', fontSize: 28 }} />
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+            Search Existing Customers
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', color: '#ffffff', p: 3 }}>
+          <Typography variant="body2" sx={{ mb: 3, color: '#ffffff', fontWeight: 500 }}>
+            Enter search criteria to find existing customers. You can search by name, email, or phone number.
+          </Typography>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+            <TextField
+              fullWidth
+              label="Customer Name"
+              value={searchCriteria.name}
+              onChange={(e) => handleSearchCriteriaChange('name', e.target.value)}
+              placeholder="Enter customer name..."
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <PersonIcon sx={{ color: '#666' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            
+            <TextField
+              fullWidth
+              label="Email Address"
+              type="email"
+              value={searchCriteria.email}
+              onChange={(e) => handleSearchCriteriaChange('email', e.target.value)}
+              placeholder="Enter email address..."
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon sx={{ color: '#666' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            
+            <TextField
+              fullWidth
+              label="Phone Number"
+              value={searchCriteria.phone}
+              onChange={(e) => handleSearchCriteriaChange('phone', e.target.value)}
+              placeholder="Enter phone number..."
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <PhoneIcon sx={{ color: '#666' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <Button
+              variant="contained"
+              onClick={performCustomerSearch}
+              disabled={searchLoading}
+              startIcon={<SearchIcon />}
+              sx={buttonStyles.primaryButton}
+            >
+              {searchLoading ? 'Searching...' : 'Search Customers'}
+            </Button>
+          </Box>
+          
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <Box>
+              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', color: '#b98f33' }}>
+                Search Results ({searchResults.length} found):
+              </Typography>
+              
+              <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                {searchResults.map((customer, index) => (
+                  <React.Fragment key={customer.id}>
+                    <ListItem sx={{ 
+                      border: '1px solid #b98f33', 
+                      borderRadius: 2, 
+                      mb: 1,
+                      backgroundColor: '#2a2a2a',
+                      '&:hover': {
+                        backgroundColor: '#333333',
+                        borderColor: '#d4af5a'
+                      }
+                    }}>
+                      <ListItemText
+                        primary={
+                          <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                              {customer.name}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                              <EmailIcon sx={{ fontSize: 16, color: '#b98f33' }} />
+                              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                                {customer.email}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                              <PhoneIcon sx={{ fontSize: 16, color: '#b98f33' }} />
+                              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                                {customer.phone}
+                              </Typography>
+                            </Box>
+                            {customer.address && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                <LocationIcon sx={{ fontSize: 16, color: '#b98f33' }} />
+                                <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                                  {customer.address}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        }
+                      />
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleSelectCustomerFromSearch(customer)}
+                        sx={buttonStyles.primaryButton}
+                      >
+                        Select
+                      </Button>
+                    </ListItem>
+                    {index < searchResults.length - 1 && <Divider sx={{ my: 1 }} />}
+                  </React.Fragment>
+                ))}
+              </List>
+            </Box>
+          )}
+          
+          {searchResults.length === 0 && (searchCriteria.name || searchCriteria.email || searchCriteria.phone) && !searchLoading && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No customers found matching your search criteria. You can create a new customer by filling out the form below.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={handleCloseSearchDialog} 
+            sx={buttonStyles.cancelButton}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <EmailPopup />
     </Container>
   );
