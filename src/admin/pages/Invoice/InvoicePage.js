@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -76,11 +76,42 @@ const InvoicePage = () => {
   const [workOrderSelections, setWorkOrderSelections] = useState({});
   const [workOrderPrintToggles, setWorkOrderPrintToggles] = useState({});
   const navigate = useNavigate();
+  const listContainerRef = useRef(null);
+
+  // Function to scroll to selected order in the list
+  const scrollToSelectedOrder = (orderId) => {
+    if (listContainerRef.current && orderId) {
+      const selectedElement = listContainerRef.current.querySelector(`[data-order-id="${orderId}"]`);
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
   }, []);
+
+  // Handle URL parameter for order selection
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('orderId');
+    
+    if (orderId && orders.length > 0) {
+      const orderToSelect = orders.find(order => order.id === orderId);
+      if (orderToSelect) {
+        setSelectedOrder(orderToSelect);
+        // Scroll to the selected order after a short delay to ensure DOM is updated
+        setTimeout(() => {
+          scrollToSelectedOrder(orderId);
+        }, 100);
+      }
+    }
+  }, [orders]);
 
   const fetchOrders = async () => {
     try {
@@ -2290,36 +2321,68 @@ const InvoicePage = () => {
             Print Work Order
           </Button>
           {selectedOrder && (
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleOpenExpenseModal}
-              sx={{
-                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                color: '#000000',
-                border: '3px solid #f27921',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                position: 'relative',
-                '&:hover': {
-                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                  border: '3px solid #e06810',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-                },
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '50%',
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                  borderRadius: '6px 6px 0 0',
-                  pointerEvents: 'none'
-                }
-              }}
-            >
-              Add Extra Expense
-            </Button>
+            <>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleOpenExpenseModal}
+                sx={{
+                  background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                  color: '#000000',
+                  border: '3px solid #f27921',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                  position: 'relative',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                    border: '3px solid #e06810',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '50%',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                    borderRadius: '6px 6px 0 0',
+                    pointerEvents: 'none'
+                  }
+                }}
+              >
+                Add Extra Expense
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => navigate(`/admin/workshop?orderId=${selectedOrder.id}`)}
+                sx={{
+                  background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                  color: '#000000',
+                  border: '3px solid #f27921',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                  position: 'relative',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                    border: '3px solid #e06810',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '50%',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                    borderRadius: '6px 6px 0 0',
+                    pointerEvents: 'none'
+                  }
+                }}
+              >
+                Workshop
+              </Button>
+            </>
           )}
         </Box>
       </Box>
@@ -2339,10 +2402,11 @@ const InvoicePage = () => {
               </Box>
             ) : (
               <Box sx={{ flex: 1, overflow: 'auto' }}>
-                <List sx={{ p: 0 }}>
+                <List ref={listContainerRef} sx={{ p: 0 }}>
                   {filteredOrders.map((order) => (
                     <React.Fragment key={order.id}>
                       <ListItem
+                        data-order-id={order.id}
                         selected={selectedOrder?.id === order.id}
                         onClick={() => handleSelectOrder(order)}
                         sx={{

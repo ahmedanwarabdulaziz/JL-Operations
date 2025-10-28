@@ -1371,6 +1371,24 @@ const WorkshopPage = () => {
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
   }, []); // Empty dependency array to run only once on mount
 
+  // Handle URL parameter for order selection
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('orderId');
+    
+    if (orderId && filteredOrders.length > 0) {
+      const orderToSelect = filteredOrders.find(order => order.id === orderId);
+      if (orderToSelect) {
+        setSelectedOrder(orderToSelect);
+        selectedOrderIdRef.current = orderToSelect.id;
+        // Scroll to the selected order after a short delay to ensure DOM is updated
+        setTimeout(() => {
+          scrollToSelectedOrder(orderId);
+        }, 300);
+      }
+    }
+  }, [filteredOrders]);
+
   // Effect to restore scroll position when filteredOrders changes
   useEffect(() => {
     if (selectedOrderIdRef.current && filteredOrders.length > 0) {
@@ -2326,22 +2344,16 @@ const WorkshopPage = () => {
 
   // Helper function to scroll to selected order
   const scrollToSelectedOrder = (orderId) => {
+    console.log('Workshop scrollToSelectedOrder called with orderId:', orderId);
     if (listContainerRef.current && orderId) {
       const selectedElement = listContainerRef.current.querySelector(`[data-order-id="${orderId}"]`);
+      console.log('Found element:', selectedElement);
       if (selectedElement) {
-        // Get the container's scroll position
-        const container = listContainerRef.current;
-        const containerRect = container.getBoundingClientRect();
-        const elementRect = selectedElement.getBoundingClientRect();
-        
-        // Calculate the position to scroll to
-        const scrollTop = container.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2);
-        
-        // Scroll to the calculated position
-        container.scrollTo({
-          top: scrollTop,
-          behavior: 'smooth'
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
+        console.log('Scrolled to element');
       }
     }
   };
@@ -3185,6 +3197,26 @@ const WorkshopPage = () => {
                   }}
                 >
                   {selectedOrder.allocation && selectedOrder.allocation.allocations ? 'Edit Allocation' : 'Allocate'}
+                </Button>
+
+                {/* Invoices Button */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  startIcon={<AssignmentIcon />}
+                  onClick={() => navigate(`/admin/invoices?orderId=${selectedOrder.id}`)}
+                  sx={{
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '2px solid #f27921',
+                    fontWeight: 'bold',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '2px solid #e06810'
+                    }
+                  }}
+                >
+                  Invoices
                 </Button>
 
                 {/* Send Completion Email Button */}
