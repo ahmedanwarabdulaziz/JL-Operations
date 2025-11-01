@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -79,6 +79,11 @@ const MaterialRequestPage = () => {
   const [savingCompany, setSavingCompany] = useState(false);
 
   const { showSuccess, showError } = useNotification();
+
+  // Refs to preserve scroll position
+  const requiredScrollRef = useRef(null);
+  const orderedScrollRef = useRef(null);
+  const pendingScrollPositions = useRef(null);
 
   // Fetch material companies to get their order
   const fetchMaterialCompanies = useCallback(async () => {
@@ -290,12 +295,18 @@ const MaterialRequestPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [extractMaterialsFromOrders, showError]);
+  }, [extractMaterialsFromOrders]);
 
   // Update material status and note
   const updateMaterialStatus = async (materialId, newStatus, note = '') => {
     try {
       setUpdating(true);
+      
+      // Save current scroll positions
+      pendingScrollPositions.current = {
+        required: requiredScrollRef.current?.scrollTop || 0,
+        ordered: orderedScrollRef.current?.scrollTop || 0
+      };
       
       // Find the material and its order
       const allMaterials = [...materialsRequired, ...materialsOrdered];
@@ -318,8 +329,33 @@ const MaterialRequestPage = () => {
         
         showSuccess(`General expense status updated to ${newStatus || 'Required'}`);
         
-        // Refresh materials to reflect the change
-        fetchMaterials();
+        // Update local state without refreshing the entire page
+        if (newStatus === 'Ordered') {
+          const materialToMove = materialsRequired.find(m => m.id === materialId);
+          if (materialToMove) {
+            const updatedMaterial = { 
+              ...materialToMove, 
+              materialStatus: 'Ordered',
+              materialNote: note || materialToMove.materialNote || ''
+            };
+            setMaterialsRequired(prev => prev.filter(m => m.id !== materialId));
+            setMaterialsOrdered(prev => [...prev, updatedMaterial]);
+          }
+        } else if (newStatus === 'Received') {
+          setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
+        } else if (newStatus === null) {
+          const materialToMove = materialsOrdered.find(m => m.id === materialId);
+          if (materialToMove) {
+            const updatedMaterial = { 
+              ...materialToMove, 
+              materialStatus: null,
+              materialNote: note || materialToMove.materialNote || ''
+            };
+            setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
+            setMaterialsRequired(prev => [...prev, updatedMaterial]);
+          }
+        }
+        
         return;
       }
 
@@ -664,13 +700,32 @@ const MaterialRequestPage = () => {
     fetchMaterials();
   }, [fetchMaterials]);
 
+  // Restore scroll position after materials update
+  useEffect(() => {
+    if (pendingScrollPositions.current) {
+      // Use setTimeout to ensure DOM is fully updated
+      setTimeout(() => {
+        if (pendingScrollPositions.current) {
+          if (requiredScrollRef.current && pendingScrollPositions.current.required !== undefined) {
+            requiredScrollRef.current.scrollTop = pendingScrollPositions.current.required;
+          }
+          if (orderedScrollRef.current && pendingScrollPositions.current.ordered !== undefined) {
+            orderedScrollRef.current.scrollTop = pendingScrollPositions.current.ordered;
+          }
+          // Clear the pending positions
+          pendingScrollPositions.current = null;
+        }
+      }, 100);
+    }
+  }, [materialsRequired, materialsOrdered]);
+
   // Filter materials based on search
-  const filteredRequiredMaterials = filterMaterials(materialsRequired, searchTerm);
-  const filteredOrderedMaterials = filterMaterials(materialsOrdered, searchTerm);
+  const filteredRequiredMaterials = useMemo(() => filterMaterials(materialsRequired, searchTerm), [materialsRequired, searchTerm]);
+  const filteredOrderedMaterials = useMemo(() => filterMaterials(materialsOrdered, searchTerm), [materialsOrdered, searchTerm]);
 
   // Group filtered materials and sort by company order
-  const groupedRequiredMaterials = sortCompaniesByOrder(groupMaterialsByCompany(filteredRequiredMaterials));
-  const groupedOrderedMaterials = sortCompaniesByOrder(groupMaterialsByCompany(filteredOrderedMaterials));
+  const groupedRequiredMaterials = useMemo(() => sortCompaniesByOrder(groupMaterialsByCompany(filteredRequiredMaterials)), [filteredRequiredMaterials, materialCompanies]);
+  const groupedOrderedMaterials = useMemo(() => sortCompaniesByOrder(groupMaterialsByCompany(filteredOrderedMaterials)), [filteredOrderedMaterials, materialCompanies]);
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
@@ -772,7 +827,7 @@ const MaterialRequestPage = () => {
       {/* Two Column Layout */}
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Column - Materials Required */}
-        <Paper sx={{ 
+        <Paper ref={requiredScrollRef} sx={{ 
           width: '50%', 
           height: '100%', 
           overflow: 'auto',
@@ -791,7 +846,7 @@ const MaterialRequestPage = () => {
            </Box>
           
           {/* Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+          <Box sx={{ flex: 1, p: 2 }}>
             {Object.keys(groupedRequiredMaterials).length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
@@ -970,7 +1025,7 @@ const MaterialRequestPage = () => {
         </Paper>
 
         {/* Right Column - Materials Ordered */}
-        <Paper sx={{ 
+        <Paper ref={orderedScrollRef} sx={{ 
           width: '50%', 
           height: '100%', 
           overflow: 'auto',
@@ -988,7 +1043,7 @@ const MaterialRequestPage = () => {
           </Box>
           
           {/* Content */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+          <Box sx={{ flex: 1, p: 2 }}>
             {Object.keys(groupedOrderedMaterials).length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 4 }}>
                 <Typography variant="body1" color="text.secondary">
