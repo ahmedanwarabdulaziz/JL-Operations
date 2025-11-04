@@ -30,7 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
-import { addDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate } from '../../../utils/dateUtils';
@@ -62,19 +62,57 @@ const CreateInvoicePage = () => {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
-    if (location.state?.orderData) {
-      const order = location.state.orderData;
-      setOrderData(order);
-      
-      // Keep existing invoice number or let the default be set by useEffect
-      
-      // Copy customer info from order
-      setCustomerInfo({
-        customerName: order.personalInfo?.customerName || '',
-        email: order.personalInfo?.email || '',
-        phone: order.personalInfo?.phone || '',
-        address: order.personalInfo?.address || ''
-      });
+    const loadOrderData = async () => {
+      if (location.state?.orderData) {
+        const order = location.state.orderData;
+        setOrderData(order);
+        
+        // Keep existing invoice number or let the default be set by useEffect
+        
+        // Copy customer info from order
+        setCustomerInfo({
+          customerName: order.personalInfo?.customerName || '',
+          email: order.personalInfo?.email || '',
+          phone: order.personalInfo?.phone || '',
+          address: order.personalInfo?.address || ''
+        });
+        
+        // Extract paid amount from order - check multiple possible locations
+        // Priority: top-level amountPaid > paymentData.amountPaid > paymentDetails.amountPaid
+        let orderPaidAmount = 0;
+        
+        if (order.amountPaid !== undefined && order.amountPaid !== null) {
+          // Top-level amountPaid field (from Firebase orders collection)
+          orderPaidAmount = parseFloat(order.amountPaid) || 0;
+        } else if (order.orderType === 'corporate') {
+          // Corporate orders: paymentDetails.amountPaid
+          orderPaidAmount = parseFloat(order.paymentDetails?.amountPaid || 0);
+        } else {
+          // Regular orders: paymentData.amountPaid
+          orderPaidAmount = parseFloat(order.paymentData?.amountPaid || 0);
+        }
+        
+        // If still not found and we have order ID, fetch fresh from Firebase
+        if (orderPaidAmount === 0 && order.id) {
+          try {
+            const orderDoc = await getDoc(doc(db, 'orders', order.id));
+            if (orderDoc.exists()) {
+              const orderData = orderDoc.data();
+              // Check all possible locations in fresh data
+              if (orderData.amountPaid !== undefined && orderData.amountPaid !== null) {
+                orderPaidAmount = parseFloat(orderData.amountPaid) || 0;
+              } else if (orderData.orderType === 'corporate') {
+                orderPaidAmount = parseFloat(orderData.paymentDetails?.amountPaid || 0);
+              } else {
+                orderPaidAmount = parseFloat(orderData.paymentData?.amountPaid || 0);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching order from Firebase:', error);
+          }
+        }
+        
+        setPaidAmount(orderPaidAmount);
       
       // Convert furniture groups to invoice items with proper details
       const invoiceItems = [];
@@ -196,6 +234,9 @@ const CreateInvoicePage = () => {
       // Redirect back if no order data
       navigate('/admin/customer-invoices');
     }
+    };
+    
+    loadOrderData();
   }, [location.state, navigate]);
 
   // Get next invoice number

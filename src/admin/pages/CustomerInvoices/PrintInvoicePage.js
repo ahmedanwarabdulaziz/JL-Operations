@@ -78,17 +78,19 @@ const PrintInvoicePage = () => {
       // Wait a bit for the DOM to update
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Capture the invoice content without footer
+      // Capture the invoice content without footer - reduced scale for smaller file size
       const canvas = await html2canvas(invoiceRef.current, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
         width: invoiceRef.current.scrollWidth,
         height: invoiceRef.current.scrollHeight,
+        windowWidth: invoiceRef.current.scrollWidth,
+        windowHeight: invoiceRef.current.scrollHeight,
       });
 
-      // Capture footer separately
+      // Capture footer separately - reduced scale for smaller file size
       let footerCanvas = null;
       let footerImgData = null;
       if (footerElement) {
@@ -96,12 +98,13 @@ const PrintInvoicePage = () => {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         footerCanvas = await html2canvas(footerElement, {
-          scale: 2,
+          scale: 1.5,
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff',
         });
-        footerImgData = footerCanvas.toDataURL('image/png');
+        // Use JPEG with lower quality for smaller file size
+        footerImgData = footerCanvas.toDataURL('image/jpeg', 0.85);
       }
 
       // Show screen-only elements back
@@ -127,7 +130,8 @@ const PrintInvoicePage = () => {
       // Calculate content dimensions
       const imgWidth = contentWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG with quality 0.85 for smaller file size while maintaining readability
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
       
       const pdf = new jsPDF('p', 'mm', 'letter');
       
@@ -158,12 +162,12 @@ const PrintInvoicePage = () => {
         const scaledHeight = imgHeight * (isLastPage && contentHeight > availableContentHeight ? contentScale : 1);
         const xPosition = margin + (contentWidth - scaledWidth) / 2;
         
-        pdf.addImage(imgData, 'PNG', xPosition, yPosition, scaledWidth, scaledHeight);
+        pdf.addImage(imgData, 'JPEG', xPosition, yPosition, scaledWidth, scaledHeight);
         
         // Add footer on last page
         if (isLastPage && footerImgData) {
           const footerY = pageHeight - margin - footerImgHeight;
-          pdf.addImage(footerImgData, 'PNG', margin, footerY, footerImgWidth, footerImgHeight);
+          pdf.addImage(footerImgData, 'JPEG', margin, footerY, footerImgWidth, footerImgHeight);
         }
         
         heightLeft -= (isLastPage ? availableContentHeight : contentAreaHeight);
