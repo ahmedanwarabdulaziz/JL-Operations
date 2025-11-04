@@ -91,7 +91,7 @@ const FastOrderStep2 = ({
       materialPrice: '',
       labourPrice: '',
       labourNote: '',
-      labourQnty: 1,
+      labourQnty: '',
       foamEnabled: false,
       foamPrice: '',
       foamQnty: 1,
@@ -355,34 +355,67 @@ const FastOrderStep2 = ({
                 }}
               />
 
-              <TextField
-                fullWidth
-                label="Timeline"
-                value={data.orderDetails.timeline}
-                onChange={(e) => handleOrderDetailsChange('timeline', e.target.value)}
-                placeholder="e.g., 2 weeks, 1 month, etc."
-                sx={{
-                  backgroundColor: '#2a2a2a',
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderWidth: '2px',
-                    borderColor: '#333333',
-                    borderRadius: 2,
-                  },
-                  '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#b98f33',
-                  },
-                  '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#b98f33',
-                    borderWidth: '2px',
-                  },
-                  '& .MuiInputLabel-root': {
-                    color: '#b98f33',
-                  },
-                  '& .MuiInputBase-input': {
-                    color: '#ffffff',
-                  },
-                }}
-              />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  label="Timeline"
+                  value={data.orderDetails.timeline}
+                  onChange={(e) => handleOrderDetailsChange('timeline', e.target.value)}
+                  placeholder="e.g., 2 weeks, 1 month, etc."
+                  sx={{
+                    backgroundColor: '#2a2a2a',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderWidth: '2px',
+                      borderColor: '#333333',
+                      borderRadius: 2,
+                    },
+                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#b98f33',
+                    },
+                    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#b98f33',
+                      borderWidth: '2px',
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
+                />
+                <TextField
+                  fullWidth
+                  label="Deadline"
+                  type="date"
+                  value={data.orderDetails.deadline}
+                  onChange={(e) => handleOrderDetailsChange('deadline', e.target.value)}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  sx={{
+                    backgroundColor: '#2a2a2a',
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderWidth: '2px',
+                      borderColor: '#333333',
+                      borderRadius: 2,
+                    },
+                    '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#b98f33',
+                    },
+                    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#b98f33',
+                      borderWidth: '2px',
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                    '& .MuiInputBase-input': {
+                      color: '#ffffff',
+                    },
+                  }}
+                />
+              </Box>
             </Box>
           )}
         </CardContent>
@@ -701,12 +734,13 @@ const FastOrderStep2 = ({
                   <Grid item xs={12} sm={4}>
                     <TextField
                       fullWidth
-                      label="Labour Quantity"
+                      label="Labour Quantity *"
                       type="number"
                       value={group.labourQnty}
                       onChange={(e) => updateFurnitureGroup(index, 'labourQnty', parseFloat(e.target.value) || 0)}
                       inputProps={{ min: 0, step: 0.1 }}
                       placeholder="Qty"
+                      required
                       error={!!errors.labourQnty}
                       helperText={errors.labourQnty}
                       sx={{

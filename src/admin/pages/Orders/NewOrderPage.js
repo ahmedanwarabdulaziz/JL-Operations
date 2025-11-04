@@ -79,7 +79,8 @@ const NewOrderPage = () => {
     description: '',
     platform: '',
     startDate: new Date().toISOString().split('T')[0],
-    timeline: ''
+    timeline: '',
+    deadline: ''
   });
   
   const [furnitureGroups, setFurnitureGroups] = useState([
@@ -90,7 +91,7 @@ const NewOrderPage = () => {
       materialQnty: '',
       materialPrice: '',
       labourPrice: '',
-      labourQnty: 1,
+      labourQnty: '',
       labourNote: '',
       foamEnabled: false,
       foamPrice: '',
@@ -256,6 +257,9 @@ const NewOrderPage = () => {
     furnitureGroups.forEach((group, index) => {
       if (!group.furnitureType.trim()) {
         errors[`furniture_${index}_type`] = 'Furniture type is required';
+      }
+      if (!group.labourQnty && group.labourQnty !== 0) {
+        errors[`furniture_${index}_labourQnty`] = 'Labour quantity is required';
       }
     });
 

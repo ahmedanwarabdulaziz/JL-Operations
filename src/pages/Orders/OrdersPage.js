@@ -39,7 +39,8 @@ import {
   Email as EmailIcon,
   Phone as PhoneIcon,
   FlashOn as FlashOnIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -49,7 +50,7 @@ import Step5Review from './steps/Step5Review';
 import FastOrderModal from '../../components/FastOrder/FastOrderModal';
 import { calculateOrderTotal, formatFurnitureDetails, isRapidOrder } from '../../utils/orderCalculations';
 import { buttonStyles } from '../../styles/buttonStyles';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, formatDateOnly } from '../../utils/dateUtils';
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -64,6 +65,7 @@ const OrdersPage = () => {
   const [deleting, setDeleting] = useState(false);
   const [fastOrderModalOpen, setFastOrderModalOpen] = useState(false);
   const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'individual', 'corporate'
+  const [creditCardFeeEnabled, setCreditCardFeeEnabled] = useState(false);
 
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
@@ -270,7 +272,12 @@ const OrdersPage = () => {
 
     try {
       setDeleting(true);
-      const ordersCollection = collection(db, 'orders');
+      
+      // Determine which collection to delete from based on order type
+      const ordersCollection = orderToDelete.orderType === 'corporate' 
+        ? collection(db, 'corporate-orders')
+        : collection(db, 'orders');
+      
       await deleteDoc(doc(ordersCollection, orderToDelete.id));
       
       setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
@@ -285,6 +292,70 @@ const OrdersPage = () => {
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Corporate invoice calculation (matching Corporate Invoices page)
+  const calculateCorporateOrderTotal = (order) => {
+    if (!order || order.orderType !== 'corporate') return 0;
+
+    // Calculate subtotal from furniture groups
+    const furnitureGroups = order.furnitureGroups || [];
+    let subtotal = 0;
+
+    furnitureGroups.forEach(group => {
+      // Add material cost
+      if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+        const price = parseFloat(group.materialPrice) || 0;
+        const quantity = parseFloat(group.materialQnty) || 0;
+        subtotal += price * quantity;
+      }
+      
+      // Add labour cost
+      if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+        const price = parseFloat(group.labourPrice) || 0;
+        const quantity = parseFloat(group.labourQnty) || 0;
+        subtotal += price * quantity;
+      }
+      
+      // Add foam cost if enabled
+      if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+        const price = parseFloat(group.foamPrice) || 0;
+        const quantity = parseFloat(group.foamQnty) || 0;
+        subtotal += price * quantity;
+      }
+      
+      // Add painting cost if enabled
+      if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+        const price = parseFloat(group.paintingLabour) || 0;
+        const quantity = parseFloat(group.paintingQnty) || 0;
+        subtotal += price * quantity;
+      }
+    });
+
+    // Add pickup/delivery cost if enabled
+    const paymentDetails = order.paymentDetails || {};
+    if (paymentDetails.pickupDeliveryEnabled) {
+      const pickupCost = parseFloat(paymentDetails.pickupDeliveryCost) || 0;
+      const serviceType = paymentDetails.pickupDeliveryServiceType;
+      if (serviceType === 'both') {
+        subtotal += pickupCost * 2;
+      } else {
+        subtotal += pickupCost;
+      }
+    }
+
+    // Calculate tax (13% on entire subtotal for corporate orders)
+    const tax = subtotal * 0.13;
+
+    // Calculate credit card fee (2.5% on subtotal + tax) if enabled
+    // Check if credit card fee is enabled in payment details or order settings
+    const creditCardFeeEnabled = paymentDetails?.creditCardFeeEnabled || order.settings?.creditCardFeeEnabled || false;
+    const creditCardFee = creditCardFeeEnabled ? (subtotal + tax) * 0.025 : 0;
+
+    // Calculate total
+    const total = subtotal + tax + creditCardFee;
+
+    return parseFloat(total.toFixed(2));
   };
 
   // Using shared calculateOrderTotal utility for consistency
@@ -726,7 +797,7 @@ const OrdersPage = () => {
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921' }}>
                         ${order.orderType === 'corporate' 
-                          ? (parseFloat(order.paymentDetails?.total) || 0).toFixed(2)
+                          ? calculateCorporateOrderTotal(order).toFixed(2)
                           : calculateOrderTotal(order).toFixed(2)
                         }
                       </Typography>
@@ -802,6 +873,7 @@ const OrdersPage = () => {
                             <ViewIcon />
                           </IconButton>
                         </Tooltip>
+                        {order.orderType !== 'corporate' && (
                         <Tooltip title="Edit Order">
                           <IconButton
                             size="small"
@@ -820,6 +892,7 @@ const OrdersPage = () => {
                             <EditIcon />
                           </IconButton>
                         </Tooltip>
+                        )}
                         <Tooltip title="Delete Order">
                           <IconButton
                             size="small"
@@ -847,15 +920,517 @@ const OrdersPage = () => {
         onClose={() => setViewDialogOpen(false)}
         maxWidth="lg"
         fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            maxHeight: '90vh'
+          }
+        }}
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <ReceiptIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6">Order Details</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
           {selectedOrder && (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <ReceiptIcon sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6">
+                  {selectedOrder.orderType === 'corporate' ? 'Corporate Invoice' : 'Order Details'}
+                </Typography>
+              </Box>
+              {selectedOrder.orderType === 'corporate' && (
+                <Typography variant="body2" sx={{ color: '#b98f33' }}>
+                  {selectedOrder.corporateCustomer?.corporateName} • {selectedOrder.contactPerson?.name || 'N/A'}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ overflow: 'auto' }}>
+          {!selectedOrder ? (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <CircularProgress />
+            </Box>
+          ) : selectedOrder.orderType === 'corporate' ? (
+            <Box sx={{ mt: 2 }}>
+              {(() => {
+                const subtotal = (() => {
+                  const furnitureGroups = selectedOrder.furnitureGroups || [];
+                  let sub = 0;
+                  furnitureGroups.forEach(group => {
+                    if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+                      sub += parseFloat(group.materialPrice) * parseFloat(group.materialQnty);
+                    }
+                    if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+                      sub += parseFloat(group.labourPrice) * parseFloat(group.labourQnty);
+                    }
+                    if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+                      sub += parseFloat(group.foamPrice) * parseFloat(group.foamQnty);
+                    }
+                    if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+                      sub += parseFloat(group.paintingLabour) * parseFloat(group.paintingQnty);
+                    }
+                  });
+                  const paymentDetails = selectedOrder.paymentDetails || {};
+                  if (paymentDetails.pickupDeliveryEnabled) {
+                    const pickupCost = parseFloat(paymentDetails.pickupDeliveryCost) || 0;
+                    const serviceType = paymentDetails.pickupDeliveryServiceType;
+                    if (serviceType === 'both') {
+                      sub += pickupCost * 2;
+                    } else {
+                      sub += pickupCost;
+                    }
+                  }
+                  return sub;
+                })();
+                const tax = subtotal * 0.13;
+                const creditCardFee = creditCardFeeEnabled ? (subtotal + tax) * 0.025 : 0;
+                const total = subtotal + tax + creditCardFee;
+
+                return (
+                  <Paper 
+                    elevation={3} 
+                    sx={{ 
+                      p: 4, 
+                      width: '100%',
+                      mx: 'auto',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    {/* Professional Invoice Header */}
+                    <Box sx={{ 
+                      mb: 4,
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}>
+                      <img 
+                        src="/assets/images/invoice-headers/Invoice Header.png" 
+                        alt="Invoice Header" 
+                        style={{ 
+                          width: '100%',
+                          height: 'auto',
+                          maxWidth: '100%',
+                          objectFit: 'contain',
+                          display: 'block'
+                        }}
+                      />
+                    </Box>
+
+                    {/* Invoice Information Row */}
+                    <Box sx={{ 
+                      mb: 4,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start'
+                    }}>
+                      {/* Left Side - Customer Information */}
+                      <Box sx={{ flex: 1, mr: 4 }}>
+                        <Typography variant="h6" sx={{ 
+                          fontWeight: 'bold', 
+                          color: 'black',
+                          mb: 2
+                        }}>
+                          Invoice to:
+                        </Typography>
+                        <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'black' }}>
+                          {selectedOrder.corporateCustomer?.corporateName || 'N/A'}
+                        </Typography>
+                        {selectedOrder.contactPerson?.name && (
+                          <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1, color: 'black' }}>
+                            Contact: {selectedOrder.contactPerson.name}
+                          </Typography>
+                        )}
+                        {selectedOrder.contactPerson?.phone && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                            <PhoneIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                            <Typography variant="body1" sx={{ color: 'black' }}>
+                              {selectedOrder.contactPerson.phone}
+                            </Typography>
+                          </Box>
+                        )}
+                        {selectedOrder.contactPerson?.email && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                            <EmailIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                            <Typography variant="body1" sx={{ color: 'black' }}>
+                              {selectedOrder.contactPerson.email}
+                            </Typography>
+                          </Box>
+                        )}
+                        {selectedOrder.corporateCustomer?.address && (
+                          <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5 }}>
+                            <LocationIcon sx={{ mr: 1, fontSize: '16px', color: '#666666', mt: 0.2 }} />
+                            <Typography variant="body1" sx={{ whiteSpace: 'pre-line', color: 'black' }}>
+                              {selectedOrder.corporateCustomer.address}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+
+                      {/* Right Side - Invoice Details */}
+                      <Box sx={{ 
+                        minWidth: '250px',
+                        flexShrink: 0
+                      }}>
+                        <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                          <strong>Date:</strong> {formatDateOnly(selectedOrder.createdAt)}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                          <strong>Invoice #</strong> {selectedOrder.orderDetails?.billInvoice || 'N/A'}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                          <strong>Tax #</strong> 798633319-RT0001
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Items Table */}
+                    <Box sx={{ mb: 4 }}>
+                      <Box sx={{ 
+                        border: '2px solid #333333',
+                        borderRadius: 0,
+                        overflow: 'hidden',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}>
+                        <table style={{ 
+                          width: '100%', 
+                          borderCollapse: 'collapse',
+                          backgroundColor: 'white',
+                          tableLayout: 'fixed'
+                        }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f5f5f5' }}>
+                              <th style={{ 
+                                width: '66.67%',
+                                padding: '8px 16px',
+                                textAlign: 'left',
+                                fontWeight: 'bold',
+                                color: '#333333',
+                                backgroundColor: '#f5f5f5',
+                                border: 'none',
+                                borderBottom: '2px solid #333333',
+                                borderRight: '1px solid #ddd',
+                                fontSize: '14px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>Description</th>
+                              <th style={{ 
+                                width: '11.11%',
+                                padding: '8px 16px',
+                                textAlign: 'center',
+                                fontWeight: 'bold',
+                                color: '#333333',
+                                backgroundColor: '#f5f5f5',
+                                border: 'none',
+                                borderBottom: '2px solid #333333',
+                                borderRight: '1px solid #ddd',
+                                fontSize: '14px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>Price</th>
+                              <th style={{ 
+                                width: '11.11%',
+                                padding: '8px 16px',
+                                textAlign: 'center',
+                                fontWeight: 'bold',
+                                color: '#333333',
+                                backgroundColor: '#f5f5f5',
+                                border: 'none',
+                                borderBottom: '2px solid #333333',
+                                borderRight: '1px solid #ddd',
+                                fontSize: '14px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>Unit</th>
+                              <th style={{ 
+                                width: '11.11%',
+                                padding: '8px 16px',
+                                textAlign: 'right',
+                                fontWeight: 'bold',
+                                color: '#333333',
+                                backgroundColor: '#f5f5f5',
+                                border: 'none',
+                                borderBottom: '2px solid #333333',
+                                fontSize: '14px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const furnitureGroups = selectedOrder.furnitureGroups || [];
+                              if (furnitureGroups.length === 0) {
+                                return (
+                                  <tr>
+                                    <td colSpan="4" style={{ 
+                                      padding: '16px',
+                                      textAlign: 'center',
+                                      color: '#666666',
+                                      fontStyle: 'italic',
+                                      border: 'none'
+                                    }}>
+                                      No items found
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              const rows = [];
+                              furnitureGroups.forEach((group, groupIndex) => {
+                                rows.push(
+                                  <tr key={`group-${groupIndex}`} style={{ backgroundColor: '#f8f9fa' }}>
+                                    <td colSpan="4" style={{ 
+                                      padding: '10px 16px',
+                                      fontWeight: 'bold',
+                                      color: '#274290',
+                                      border: 'none',
+                                      borderBottom: '1px solid #ddd',
+                                      fontSize: '14px',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      {group.furnitureType || `Furniture Group ${groupIndex + 1}`}
+                                    </td>
+                                  </tr>
+                                );
+
+                                const groupItems = [];
+                                if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+                                  groupItems.push({
+                                    name: `${group.materialCompany || 'Material'} - ${group.materialCode || 'Code'}`,
+                                    price: parseFloat(group.materialPrice) || 0,
+                                    quantity: parseFloat(group.materialQnty) || 0
+                                  });
+                                }
+                                if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+                                  groupItems.push({
+                                    name: `Labour Work${group.labourNote ? ` - ${group.labourNote}` : ''}`,
+                                    price: parseFloat(group.labourPrice) || 0,
+                                    quantity: parseFloat(group.labourQnty) || 0
+                                  });
+                                }
+                                if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+                                  groupItems.push({
+                                    name: `Foam${group.foamNote ? ` - ${group.foamNote}` : ''}`,
+                                    price: parseFloat(group.foamPrice) || 0,
+                                    quantity: parseFloat(group.foamQnty) || 0
+                                  });
+                                }
+                                if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+                                  groupItems.push({
+                                    name: `Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}`,
+                                    price: parseFloat(group.paintingLabour) || 0,
+                                    quantity: parseFloat(group.paintingQnty) || 0
+                                  });
+                                }
+
+                                groupItems.forEach((item, itemIndex) => {
+                                  const itemTotal = item.price * item.quantity;
+                                  rows.push(
+                                    <tr key={`item-${groupIndex}-${itemIndex}`}>
+                                      <td style={{ 
+                                        padding: '8px 16px',
+                                        color: '#333333',
+                                        border: 'none',
+                                        borderBottom: '1px solid #ddd',
+                                        fontSize: '14px'
+                                      }}>
+                                        {item.name}
+                                      </td>
+                                      <td style={{ 
+                                        padding: '8px 16px',
+                                        textAlign: 'center',
+                                        color: '#333333',
+                                        border: 'none',
+                                        borderBottom: '1px solid #ddd',
+                                        fontSize: '14px',
+                                        fontWeight: '500'
+                                      }}>
+                                        ${item.price.toFixed(2)}
+                                      </td>
+                                      <td style={{ 
+                                        padding: '8px 16px',
+                                        textAlign: 'center',
+                                        color: '#333333',
+                                        border: 'none',
+                                        borderBottom: '1px solid #ddd',
+                                        fontSize: '14px',
+                                        fontWeight: '500'
+                                      }}>
+                                        {item.quantity}
+                                      </td>
+                                      <td style={{ 
+                                        padding: '8px 16px',
+                                        textAlign: 'right',
+                                        fontWeight: 'bold',
+                                        color: '#333333',
+                                        border: 'none',
+                                        borderBottom: '1px solid #ddd',
+                                        fontSize: '14px'
+                                      }}>
+                                        ${itemTotal.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  );
+                                });
+                              });
+                              return rows;
+                            })()}
+                          </tbody>
+                        </table>
+                      </Box>
+                      
+                      {/* Terms and Conditions + Totals Section */}
+                      <Box sx={{ mt: 1 }}>
+                        <Box sx={{ 
+                          display: 'flex',
+                          width: '100%',
+                          gap: 4
+                        }}>
+                          {/* Left Side - Terms and Conditions */}
+                          <Box sx={{ 
+                            flex: '0 0 50%',
+                            maxWidth: '50%'
+                          }}>
+                            <Box sx={{ 
+                              backgroundColor: '#cc820d',
+                              color: 'white',
+                              p: 1,
+                              mb: 2
+                            }}>
+                              <Typography variant="h6" sx={{ 
+                                fontWeight: 'bold', 
+                                color: 'white',
+                                textAlign: 'center',
+                                textTransform: 'uppercase'
+                              }}>
+                                Terms and Conditions
+                              </Typography>
+                            </Box>
+                            
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <Box>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                                  Payment by Cheque: <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#666' }}>(for corporates only)</span>
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'black' }}>
+                                  Mail to: 322 Etheridge ave, Milton, ON CANADA L9E 1H7
+                                </Typography>
+                              </Box>
+                              
+                              <Box>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                                  Payment by direct deposit:
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'black' }}>
+                                  Transit Number: 07232
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'black' }}>
+                                  Institution Number: 010
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'black' }}>
+                                  Account Number: 1090712
+                                </Typography>
+                              </Box>
+                              
+                              <Box>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                                  Payment by e-transfer:
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'black' }}>
+                                  JL@JLupholstery.com
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+
+                          {/* Right Side - Totals Section */}
+                          <Box sx={{ 
+                            flex: '1',
+                            display: 'flex', 
+                            justifyContent: 'flex-end', 
+                            alignItems: 'flex-start'
+                          }}>
+                            <Box sx={{ 
+                              minWidth: '300px',
+                              maxWidth: '400px'
+                            }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                <Typography variant="body1" sx={{ color: 'black' }}>Subtotal:</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                                  ${subtotal.toFixed(2)}
+                                </Typography>
+                              </Box>
+                              
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                                  13%
+                                </Typography>
+                              </Box>
+                              
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                <Typography variant="body1" sx={{ color: 'black' }}>Tax Due:</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                                  ${tax.toFixed(2)}
+                                </Typography>
+                              </Box>
+                              
+                              {creditCardFeeEnabled && (
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                  <Typography variant="body1" sx={{ color: 'black' }}>Credit Card Fee:</Typography>
+                                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                                    ${creditCardFee.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              )}
+                              
+                              <Box sx={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                mb: 1,
+                                backgroundColor: '#2c2c2c',
+                                color: 'white',
+                                p: 1,
+                                borderRadius: 1
+                              }}>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
+                                  Total:
+                                </Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
+                                  ${total.toFixed(2)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Box>
+                      </Box>
+                    </Box>
+
+                    {/* Professional Invoice Footer */}
+                    <Box sx={{ 
+                      mt: 4,
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center'
+                    }}>
+                      <img 
+                        src="/assets/images/invoice-headers/invoice Footer.png" 
+                        alt="Invoice Footer" 
+                        style={{ 
+                          width: '100%',
+                          height: 'auto',
+                          maxWidth: '100%',
+                          objectFit: 'contain',
+                          display: 'block'
+                        }}
+                      />
+                    </Box>
+                  </Paper>
+                );
+              })()}
+            </Box>
+          ) : (
             <Box sx={{ mt: 2 }}>
               <Step5Review
                 personalInfo={selectedOrder.personalInfo || {}}
@@ -897,7 +1472,12 @@ const OrdersPage = () => {
           </Alert>
           <Typography>
             Are you sure you want to delete the order for{' '}
-            <strong>{orderToDelete?.personalInfo?.customerName}</strong>?
+            <strong>
+              {orderToDelete?.orderType === 'corporate' 
+                ? orderToDelete?.corporateCustomer?.corporateName || 'N/A'
+                : orderToDelete?.personalInfo?.customerName || 'N/A'
+              }
+            </strong>?
           </Typography>
         </DialogContent>
         <DialogActions>

@@ -132,6 +132,30 @@ const EnhancedImageTaggingDialog = ({
       }
       setTags(tagsData);
       
+      // Initialize existing tags from selected images (handle both old and new format)
+      if (selectedImages && selectedImages.length > 0) {
+        const existingTags = {};
+        selectedImages.forEach(image => {
+          if (image.tags) {
+            Object.entries(image.tags).forEach(([categoryId, tagValue]) => {
+              // Handle both old format (single tagId) and new format (array)
+              const tagIds = Array.isArray(tagValue) ? tagValue : [tagValue];
+              
+              // Merge with existing tags for this category (avoid duplicates)
+              if (!existingTags[categoryId]) {
+                existingTags[categoryId] = [];
+              }
+              tagIds.forEach(tagId => {
+                if (tagId && !existingTags[categoryId].includes(tagId)) {
+                  existingTags[categoryId].push(tagId);
+                }
+              });
+            });
+          }
+        });
+        setAllSelectedTags(existingTags);
+      }
+      
     } catch (err) {
       console.error('Error loading data:', err);
       setError(`Failed to load data: ${err.message}`);
@@ -201,19 +225,33 @@ const EnhancedImageTaggingDialog = ({
       setLoading(true);
       setError(null);
 
-      // Convert array-based selections to single tag per category for image tags
+      // Save all selected tags as arrays (supporting multiple tags per category)
       const imageTags = {};
       Object.entries(allSelectedTags).forEach(([categoryId, tagIds]) => {
         if (tagIds && tagIds.length > 0) {
-          // For now, just take the first selected tag from each category
-          // This maintains compatibility with the existing image tagging system
-          imageTags[categoryId] = tagIds[0];
+          // Save as array to support multiple tags per category
+          imageTags[categoryId] = tagIds;
         }
       });
 
-      // Update image tags
+      // Update image tags - only update categories that were selected in dialog
       for (const image of selectedImages) {
-        await updateImageTags(image.id, imageTags);
+        // Get existing tags
+        const existingTags = image.tags || {};
+        const updatedTags = { ...existingTags };
+        
+        // Update only the categories that were selected/changed in the dialog
+        Object.entries(imageTags).forEach(([categoryId, tagIds]) => {
+          if (tagIds && tagIds.length > 0) {
+            // Update this category with new tags (array format)
+            updatedTags[categoryId] = tagIds;
+          } else {
+            // If empty array, remove this category
+            delete updatedTags[categoryId];
+          }
+        });
+        
+        await updateImageTags(image.id, updatedTags);
       }
 
       onTagged && onTagged();

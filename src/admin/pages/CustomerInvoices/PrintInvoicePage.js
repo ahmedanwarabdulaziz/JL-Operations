@@ -89,7 +89,7 @@ const PrintInvoicePage = () => {
         {`
           @media print {
             @page {
-              margin: 0.5in 0.6in 0.5in 0.5in;
+              margin: 0.5in 0.75in 0.5in 0.5in;
               size: A4;
             }
             
@@ -270,7 +270,7 @@ const PrintInvoicePage = () => {
               padding-top: 110px !important;
               padding-bottom: 110px !important;
               padding-left: 15px !important;
-              padding-right: 20px !important;
+              padding-right: 25px !important;
               box-sizing: border-box !important;
             }
             
@@ -332,7 +332,7 @@ const PrintInvoicePage = () => {
             /* Safari/Webkit specific fixes for Mac */
             @supports (-webkit-appearance: none) {
               .MuiPaper-root {
-                padding-right: 25px !important;
+                padding-right: 30px !important;
               }
             }
           }
@@ -811,7 +811,7 @@ const PrintInvoicePage = () => {
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box>
                     <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
-                      Payment by Cheque:
+                      Payment by Cheque: <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#666' }}>(for corporates only)</span>
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'black' }}>
                       Mail to: {companyInfo.address}
@@ -865,7 +865,7 @@ const PrintInvoicePage = () => {
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
                     <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                      ${(invoiceData.headerSettings?.taxPercentage || 0) / 100}
+                      {(invoiceData.headerSettings?.taxPercentage || 0)}%
                     </Typography>
                   </Box>
                   

@@ -47,7 +47,8 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
       description: '',
       platform: '',
       startDate: new Date().toISOString().split('T')[0], // Today's date as default
-      timeline: ''
+      timeline: '',
+      deadline: ''
     },
     furnitureData: { 
       groups: [{ 
@@ -58,7 +59,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
         materialPrice: '',
         labourPrice: '',
         labourNote: '',
-        labourQnty: 1,
+        labourQnty: '',
         foamEnabled: false,
         foamPrice: '',
         foamQnty: 1,
@@ -142,7 +143,8 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
             description: '',
             platform: '',
             startDate: new Date().toISOString().split('T')[0], // Today's date as default
-            timeline: ''
+            timeline: '',
+            deadline: ''
           },
           furnitureData: { 
             groups: [{ 
@@ -153,7 +155,7 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
               materialPrice: '',
               labourPrice: '',
               labourNote: '',
-              labourQnty: 1,
+              labourQnty: '',
               foamEnabled: false,
               foamPrice: '',
               foamQnty: 1,

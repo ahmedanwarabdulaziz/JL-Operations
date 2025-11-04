@@ -701,7 +701,7 @@ const CorporateInvoicesPage = () => {
                   <div style="display: flex; flex-direction: column; gap: 8px;">
                     <div>
                       <p style="font-weight: bold; color: black; margin: 0 0 4px 0; font-size: 14px;">
-                        Payment by Cheque:
+                        Payment by Cheque: <span style="font-size: 10px; font-weight: normal; color: #666;">(for corporates only)</span>
                       </p>
                       <p style="color: black; margin: 0; font-size: 12px;">
                         Mail to: 322 Etheridge ave, Milton, ON CANADA L9E 1H7
@@ -747,7 +747,7 @@ const CorporateInvoicesPage = () => {
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                       <span style="color: black; font-size: 14px;">Tax Rate:</span>
                       <span style="font-weight: bold; color: black; font-size: 14px;">
-                        $0.13
+                        13%
                       </span>
                     </div>
                     
@@ -1436,7 +1436,7 @@ const CorporateInvoicesPage = () => {
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               <Box>
                                 <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
-                                  Payment by Cheque:
+                                  Payment by Cheque: <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#666' }}>(for corporates only)</span>
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: 'black' }}>
                                   Mail to: 322 Etheridge ave, Milton, ON CANADA L9E 1H7
@@ -1490,7 +1490,7 @@ const CorporateInvoicesPage = () => {
                               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                 <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
                                 <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
-                                  $0.13
+                                  13%
                                 </Typography>
                               </Box>
                               

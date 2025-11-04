@@ -385,31 +385,71 @@ const MaterialRequestPage = () => {
         'furnitureData.groups': updatedFurnitureGroups
       });
 
-      // Update local state
+      // Update local state - handle ALL materials with the same orderId, materialCode, and materialCompany
+      // This is important because Firebase updates all groups with the same materialCode/materialCompany
+      const matchKey = (m) => 
+        m.orderId === material.orderId && 
+        m.materialCode === material.materialCode && 
+        m.materialCompany === material.materialCompany;
+
+      // Use a single batch update to avoid nested state update issues
       if (newStatus === 'Ordered') {
-        const materialToMove = materialsRequired.find(m => m.id === materialId);
-        if (materialToMove) {
-          const updatedMaterial = { 
-            ...materialToMove, 
-            materialStatus: 'Ordered',
-            materialNote: note || materialToMove.materialNote || ''
-          };
-          setMaterialsRequired(prev => prev.filter(m => m.id !== materialId));
-          setMaterialsOrdered(prev => [...prev, updatedMaterial]);
-        }
+        // Update both states in sequence (React will batch these)
+        setMaterialsRequired(prevRequired => {
+          const materialsToMove = prevRequired.filter(matchKey);
+          return materialsToMove.length > 0 
+            ? prevRequired.filter(m => !matchKey(m))
+            : prevRequired;
+        });
+        
+        setMaterialsOrdered(prevOrdered => {
+          // Get current required state to find materials to move
+          // Since we can't access it directly, we'll use a callback that runs after state update
+          // But for now, let's get materials from the order we already have
+          const materialsToMove = materialsRequired.filter(matchKey);
+          
+          if (materialsToMove.length > 0) {
+            const updatedMaterials = materialsToMove.map(m => ({
+              ...m,
+              materialStatus: 'Ordered',
+              materialNote: note || m.materialNote || ''
+            }));
+            
+            // Remove any existing materials with the same combination to avoid duplicates
+            const filtered = prevOrdered.filter(m => !matchKey(m));
+            return [...filtered, ...updatedMaterials];
+          }
+          return prevOrdered;
+        });
       } else if (newStatus === 'Received') {
-        setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
+        // Remove all matching materials from ordered (they're received, so they disappear)
+        setMaterialsOrdered(prev => prev.filter(m => !matchKey(m)));
       } else if (newStatus === null) {
-        const materialToMove = materialsOrdered.find(m => m.id === materialId);
-        if (materialToMove) {
-          const updatedMaterial = { 
-            ...materialToMove, 
-            materialStatus: null,
-            materialNote: note || materialToMove.materialNote || ''
-          };
-          setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
-          setMaterialsRequired(prev => [...prev, updatedMaterial]);
-        }
+        // Update both states in sequence (React will batch these)
+        setMaterialsOrdered(prevOrdered => {
+          const materialsToMove = prevOrdered.filter(matchKey);
+          return materialsToMove.length > 0
+            ? prevOrdered.filter(m => !matchKey(m))
+            : prevOrdered;
+        });
+        
+        setMaterialsRequired(prevRequired => {
+          // Get materials to move from ordered state (using closure value)
+          const materialsToMove = materialsOrdered.filter(matchKey);
+          
+          if (materialsToMove.length > 0) {
+            const updatedMaterials = materialsToMove.map(m => ({
+              ...m,
+              materialStatus: null,
+              materialNote: note || m.materialNote || ''
+            }));
+            
+            // Remove any existing materials with the same combination to avoid duplicates
+            const filtered = prevRequired.filter(m => !matchKey(m));
+            return [...filtered, ...updatedMaterials];
+          }
+          return prevRequired;
+        });
       }
 
       showSuccess(`Material status updated to ${newStatus || 'Required'}`);

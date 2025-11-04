@@ -21,15 +21,19 @@ import {
   ListItemText,
   ListItemButton,
   Divider,
-  MenuItem
+  MenuItem,
+  Stepper,
+  Step,
+  StepLabel,
+  Container,
+  Paper
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Business as BusinessIcon,
   Person as PersonIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon,
-  Check as CheckIcon
+  Phone as PhoneIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -148,6 +152,25 @@ const CorporateOrderPage = () => {
     setActiveStep(1);
   };
 
+  const validateFurniture = () => {
+    const errors = {};
+    
+    orderData.furnitureGroups.forEach((group, index) => {
+      if (!group.furnitureType.trim()) {
+        errors[`furniture_${index}_type`] = 'Furniture type is required';
+      }
+      if (!group.labourQnty && group.labourQnty !== 0) {
+        errors[`furniture_${index}_labourQnty`] = 'Labour quantity is required';
+      }
+    });
+
+    setOrderData(prev => ({
+      ...prev,
+      formErrors: errors
+    }));
+    return Object.keys(errors).length === 0;
+  };
+
   const handleNext = () => {
     if (activeStep === 0 && !selectedCustomer) {
       showError('Please select a corporate customer');
@@ -156,6 +179,12 @@ const CorporateOrderPage = () => {
     if (activeStep === 0 && !selectedContactPerson) {
       showError('Please select a contact person');
       return;
+    }
+    if (activeStep === 1) {
+      // Validate furniture step
+      if (!validateFurniture()) {
+        return;
+      }
     }
     setActiveStep(activeStep + 1);
   };
@@ -388,115 +417,115 @@ const CorporateOrderPage = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
+        <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
           Corporate Order
         </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          Create a new corporate order
-        </Typography>
-        
-        {/* Step Indicator */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          {steps.map((step, index) => (
-            <React.Fragment key={index}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  px: 2,
-                  py: 1,
-                  borderRadius: 1,
-                  backgroundColor: index <= activeStep ? 'primary.main' : 'grey.200',
-                  color: index <= activeStep ? 'white' : 'text.secondary',
-                  fontSize: '0.875rem',
-                  fontWeight: index === activeStep ? 'bold' : 'normal'
-                }}
-              >
-                <Typography variant="body2">
-                  {index + 1}. {step}
-                </Typography>
-                {index <= activeStep && index < steps.length - 1 && (
-                  <CheckIcon sx={{ fontSize: 16 }} />
-                )}
-              </Box>
-              {index < steps.length - 1 && (
-                <Box sx={{ width: 20, height: 2, backgroundColor: 'grey.300' }} />
-              )}
-            </React.Fragment>
-          ))}
-        </Box>
-      </Box>
 
-      {/* Invoice Number Display */}
-      <Box sx={{ mb: 3 }}>
-        <Alert severity="info">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'nowrap' }}>
-            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-              <strong>Invoice Number:</strong> {invoiceNumberLoading ? 'Loading...' : invoiceNumber}
+        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+
+        {/* Invoice Number Display */}
+        <Box sx={{ mb: 3 }}>
+          <Alert severity="info">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'nowrap' }}>
+              <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                <strong>Invoice Number:</strong> {invoiceNumberLoading ? 'Loading...' : invoiceNumber}
+              </Typography>
+              {selectedCustomer && (
+                <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  Corporate: {selectedCustomer.corporateName}
+                </Typography>
+              )}
+              {selectedContactPerson && (
+                <Typography variant="body2" sx={{ color: 'secondary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  Contact: {selectedContactPerson.name}
+                </Typography>
+              )}
+            </Box>
+          </Alert>
+        </Box>
+
+        {/* Selected Customer Info - Only show in Step 1 */}
+        {selectedCustomer && activeStep === 0 && (
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Corporate Customer Details:
             </Typography>
-            {selectedCustomer && (
-              <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                Corporate: {selectedCustomer.corporateName}
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+              {selectedCustomer.corporateName} • {selectedCustomer.email} • {selectedCustomer.phone}
+            </Typography>
+            {selectedCustomer.address && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                {selectedCustomer.address}
               </Typography>
             )}
             {selectedContactPerson && (
-              <Typography variant="body2" sx={{ color: 'secondary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                Contact: {selectedContactPerson.name}
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Contact: {selectedContactPerson.name} • {selectedContactPerson.email} • {selectedContactPerson.phone}
               </Typography>
             )}
           </Box>
-        </Alert>
-      </Box>
+        )}
 
-      {/* Selected Customer Info - Only show in Step 1 */}
-      {selectedCustomer && activeStep === 0 && (
-        <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Corporate Customer Details:
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-            {selectedCustomer.corporateName} • {selectedCustomer.email} • {selectedCustomer.phone}
-          </Typography>
-          {selectedCustomer.address && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {selectedCustomer.address}
-            </Typography>
-          )}
-          {selectedContactPerson && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Contact: {selectedContactPerson.name} • {selectedContactPerson.email} • {selectedContactPerson.phone}
-            </Typography>
-          )}
-        </Box>
-      )}
-
-      {/* Step Content */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+        {/* Step Content */}
+        <Box sx={{ mt: 4 }}>
           {renderStepContent()}
-        </CardContent>
-      </Card>
+        </Box>
 
-      {/* Navigation */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button
-          onClick={handleBack}
-          disabled={activeStep === 0}
-        >
-          Back
-        </Button>
-        <Button
-          variant="contained"
-          onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}
-          disabled={activeStep === 0 && (!selectedCustomer || !selectedContactPerson)}
-        >
-          {activeStep === steps.length - 1 ? 'Submit Order' : 'Next'}
-        </Button>
-      </Box>
+        {/* Navigation */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+          <Button
+            onClick={handleBack}
+            disabled={activeStep === 0}
+            sx={{ 
+              mr: 1,
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                border: '3px solid #666666',
+                color: '#666666',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}
+            disabled={activeStep === 0 && (!selectedCustomer || !selectedContactPerson)}
+          >
+            {activeStep === steps.length - 1 ? 'Submit Order' : 'Next'}
+          </Button>
+        </Box>
+      </Paper>
 
       {/* Contact Person Selection Dialog */}
       <Dialog 
@@ -540,7 +569,7 @@ const CorporateOrderPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </Container>
   );
 };
 

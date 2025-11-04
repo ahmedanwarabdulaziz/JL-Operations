@@ -330,14 +330,24 @@ const PendingOrdersPage = () => {
               filteredOrders.map((order) => {
                 const overdue = isOverdue(order.expectedResumeDate);
                 const overdueDays = getOverdueDays(order.expectedResumeDate);
+                const isSelected = selectedOrder?.id === order.id;
                 
                 return (
                   <TableRow 
-                    key={order.id} 
+                    key={order.id}
+                    onClick={() => setSelectedOrder(order)}
                     sx={{ 
-                      '&:hover': { backgroundColor: 'action.hover' },
-                      backgroundColor: overdue ? 'error.light' : 'inherit',
-                      opacity: overdue ? 0.9 : 1
+                      cursor: 'pointer',
+                      backgroundColor: isSelected 
+                        ? 'rgba(0, 0, 0, 0.08)'
+                        : 'transparent',
+                      borderLeft: overdue ? '4px solid #d32f2f' : '4px solid transparent',
+                      '&:hover': { 
+                        backgroundColor: isSelected
+                          ? 'rgba(0, 0, 0, 0.12)'
+                          : 'rgba(0, 0, 0, 0.04)',
+                      },
+                      transition: 'background-color 0.2s ease'
                     }}
                   >
                     <TableCell>
@@ -419,7 +429,8 @@ const PendingOrdersPage = () => {
                       <Tooltip title="Return to Active Status">
                         <IconButton
                           color="primary"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedOrder(order);
                             setReturnDialogOpen(true);
                           }}

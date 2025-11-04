@@ -196,12 +196,24 @@ export const getImagesByCategory = async (category) => {
   }
 };
 
-// Update image tags
-export const updateImageTags = async (imageId, tags) => {
+// Update image tags (replaces tags, supports arrays per category for multiple tags from same category)
+export const updateImageTags = async (imageId, newTags) => {
   try {
     const docRef = doc(db, IMAGES_COLLECTION, imageId);
+    
+    // Convert newTags to ensure arrays are properly formatted
+    const formattedTags = {};
+    Object.entries(newTags).forEach(([categoryId, tagValue]) => {
+      // Ensure tagValue is always an array (supporting multiple tags per category)
+      if (Array.isArray(tagValue)) {
+        formattedTags[categoryId] = tagValue.filter(t => t); // Remove null/undefined
+      } else if (tagValue) {
+        formattedTags[categoryId] = [tagValue];
+      }
+    });
+    
     await updateDoc(docRef, {
-      tags: tags,
+      tags: formattedTags,
       lastModified: serverTimestamp()
     });
     return true;
@@ -221,9 +233,17 @@ export const getImagesByTags = async (tagFilters = {}) => {
     }
     
     return images.filter(image => {
-      // Check if image has all required tags
+      // Check if image has all required tags (support both old and new format)
       return Object.entries(tagFilters).every(([categoryId, tagId]) => {
-        return image.tags && image.tags[categoryId] === tagId;
+        if (!image.tags || !image.tags[categoryId]) return false;
+        
+        const imageTagValue = image.tags[categoryId];
+        // Handle both old format (single tagId) and new format (array of tagIds)
+        if (Array.isArray(imageTagValue)) {
+          return imageTagValue.includes(tagId);
+        } else {
+          return imageTagValue === tagId;
+        }
       });
     });
   } catch (error) {

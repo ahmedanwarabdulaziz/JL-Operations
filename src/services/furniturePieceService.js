@@ -164,6 +164,33 @@ export const removeImageFromFurniturePiece = async (pieceId, imageId) => {
   }
 };
 
+// Remove image from ALL furniture pieces (when image is deleted from gallery)
+export const removeImageFromAllFurniturePieces = async (imageId) => {
+  try {
+    // Get all furniture pieces
+    const pieces = await getFurniturePieces({ isActive: true });
+    
+    // Find all pieces that contain this image
+    const piecesToUpdate = pieces.filter(piece => 
+      piece.images && piece.images.some(img => img.imageId === imageId)
+    );
+    
+    // Update each piece to remove the image
+    const updatePromises = piecesToUpdate.map(async (piece) => {
+      const updatedImages = (piece.images || []).filter(img => img.imageId !== imageId);
+      await updateFurniturePiece(piece.id, { images: updatedImages });
+      return piece.id;
+    });
+    
+    const updatedPieceIds = await Promise.all(updatePromises);
+    console.log(`Removed image ${imageId} from ${updatedPieceIds.length} furniture piece(s)`);
+    return updatedPieceIds;
+  } catch (error) {
+    console.error('Error removing image from all furniture pieces:', error);
+    throw error;
+  }
+};
+
 // Get furniture pieces with before/after images
 export const getFurniturePiecesWithImages = async () => {
   try {
@@ -254,13 +281,28 @@ export const getFurniturePiecesWithCounts = async () => {
   try {
     const pieces = await getFurniturePieces({ isActive: true });
     
-    return pieces.map(piece => ({
-      ...piece,
-      imageCount: piece.images ? piece.images.length : 0,
-      beforeCount: piece.images ? piece.images.filter(img => img.status === 'before').length : 0,
-      afterCount: piece.images ? piece.images.filter(img => img.status === 'after').length : 0,
-      inProgressCount: piece.images ? piece.images.filter(img => img.status === 'in progress').length : 0
-    }));
+    return pieces.map(piece => {
+      const images = piece.images || [];
+      
+      // Helper function to normalize status (handle both 'inprogress' and 'in progress')
+      const normalizeStatus = (status) => {
+        if (!status) return status;
+        const normalized = status.toLowerCase().trim();
+        // Normalize 'inprogress' and 'in progress' variations
+        if (normalized === 'inprogress' || normalized === 'in progress' || normalized === 'in-progress') {
+          return 'inprogress';
+        }
+        return normalized;
+      };
+      
+      return {
+        ...piece,
+        imageCount: images.length,
+        beforeCount: images.filter(img => normalizeStatus(img.status) === 'before').length,
+        afterCount: images.filter(img => normalizeStatus(img.status) === 'after').length,
+        inProgressCount: images.filter(img => normalizeStatus(img.status) === 'inprogress').length
+      };
+    });
   } catch (error) {
     console.error('Error getting furniture pieces with counts:', error);
     throw error;

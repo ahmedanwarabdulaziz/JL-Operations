@@ -153,6 +153,7 @@ const Step5Review = ({
               <ReviewField label="Platform" value={orderDetails.platform} />
               <ReviewField label="Start Date" value={orderDetails.startDate} isDate={true} />
               <ReviewField label="Timeline" value={orderDetails.timeline} />
+              <ReviewField label="Deadline" value={orderDetails.deadline} isDate={true} />
             </Box>
           </CardContent>
         </Card>

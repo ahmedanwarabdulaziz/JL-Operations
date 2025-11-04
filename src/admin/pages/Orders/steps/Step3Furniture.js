@@ -41,7 +41,7 @@ const Step3Furniture = ({
       unit: 'Yard', // Default unit
       labourPrice: '',
       labourNote: '',
-      labourQnty: 1,
+      labourQnty: '',
       foamEnabled: false,
       foamPrice: '',
       foamQnty: 1,
@@ -70,6 +70,9 @@ const Step3Furniture = ({
     // Clear error when user starts typing
     if (formErrors[`furniture_${index}_type`]) {
       setFormErrors(prev => ({ ...prev, [`furniture_${index}_type`]: '' }));
+    }
+    if (formErrors[`furniture_${index}_labourQnty`]) {
+      setFormErrors(prev => ({ ...prev, [`furniture_${index}_labourQnty`]: '' }));
     }
   };
 
@@ -321,24 +324,27 @@ const Step3Furniture = ({
               <Grid item xs={12} sm={4}>
                 <TextField
                   fullWidth
-                  label="Labour Quantity"
+                  label="Labour Quantity *"
                   type="number"
                   value={group.labourQnty}
                   onChange={(e) => updateFurnitureGroup(index, 'labourQnty', parseFloat(e.target.value) || 0)}
                   onFocus={handleFocus}
                   inputProps={{ min: 0, step: 0.1 }}
                   placeholder="Qty"
+                  required
+                  error={!!formErrors[`furniture_${index}_labourQnty`]}
+                  helperText={formErrors[`furniture_${index}_labourQnty`]}
                   sx={{
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderWidth: '2px',
-                      borderColor: 'grey.300',
+                      borderColor: formErrors[`furniture_${index}_labourQnty`] ? 'error.main' : 'grey.300',
                       borderRadius: 2,
                     },
                     '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'primary.main',
+                      borderColor: formErrors[`furniture_${index}_labourQnty`] ? 'error.main' : 'primary.main',
                     },
                     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'primary.main',
+                      borderColor: formErrors[`furniture_${index}_labourQnty`] ? 'error.main' : 'primary.main',
                       borderWidth: '2px',
                     },
                   }}

@@ -1401,38 +1401,6 @@ const WorkshopPage = () => {
     }
   }, [filteredOrders]);
 
-  // Add a refresh mechanism when the page gains focus with improved debouncing
-  useEffect(() => {
-    let focusTimeout;
-    let lastRefreshTime = 0;
-    
-    const handleFocus = () => {
-      // Skip refresh if email operations are in progress
-      if (sendingEmail || processingDeposit) {
-        return;
-      }
-      
-      const now = Date.now();
-      // Prevent multiple refreshes within 2 seconds
-      if (now - lastRefreshTime < 2000) {
-        return;
-      }
-      
-      // Debounce the focus event to prevent excessive calls
-      clearTimeout(focusTimeout);
-      focusTimeout = setTimeout(() => {
-        lastRefreshTime = Date.now();
-        fetchOrders(true); // Force refresh on focus
-      }, 1000); // 1 second debounce
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearTimeout(focusTimeout);
-    };
-  }, [sendingEmail, processingDeposit]); // Removed fetchOrders to avoid circular dependency
-
   // Auto-save and unsaved changes tracking
   useEffect(() => {
     // Order changed, resetting editing state
@@ -1445,7 +1413,14 @@ const WorkshopPage = () => {
     
     // Reset editing state when switching orders
     // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
-    const furnitureData = selectedOrder?.furnitureData || (selectedOrder?.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null);
+    let furnitureData;
+    if (selectedOrder?.orderType === 'corporate') {
+      // Corporate orders have furnitureGroups as an array directly
+      furnitureData = selectedOrder.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null;
+    } else {
+      // Regular orders have furnitureData with groups property
+      furnitureData = selectedOrder?.furnitureData || null;
+    }
     
     if (furnitureData) {
       setLastSavedData(JSON.stringify(furnitureData));
@@ -1473,7 +1448,14 @@ const WorkshopPage = () => {
   useEffect(() => {
     // Track changes in editingFurnitureData
     // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
-    const furnitureData = selectedOrder?.furnitureData || (selectedOrder?.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null);
+    let furnitureData;
+    if (selectedOrder?.orderType === 'corporate') {
+      // Corporate orders have furnitureGroups as an array directly
+      furnitureData = selectedOrder.furnitureGroups ? { groups: selectedOrder.furnitureGroups } : null;
+    } else {
+      // Regular orders have furnitureData with groups property
+      furnitureData = selectedOrder?.furnitureData || null;
+    }
     
     if (editingFurnitureData && furnitureData) {
       const currentData = JSON.stringify(editingFurnitureData);
@@ -1492,7 +1474,7 @@ const WorkshopPage = () => {
         clearTimeout(autoSaveTimeout);
       }
     };
-  }, [editingFurnitureData, lastSavedData]);
+  }, [editingFurnitureData, lastSavedData, selectedOrder]);
 
   // Auto-save on page unload
   useEffect(() => {
@@ -1607,6 +1589,82 @@ const WorkshopPage = () => {
     // Get payment data (different field names for corporate vs regular orders)
     const paymentData = order.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
     
+    // Corporate orders use different calculation (same as Corporate Invoices page)
+    if (order.orderType === 'corporate') {
+      // Calculate subtotal from furniture groups
+      const furnitureGroups = order.furnitureGroups || [];
+      let subtotal = 0;
+
+      furnitureGroups.forEach(group => {
+        // Add material cost
+        if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+          const price = parseFloat(group.materialPrice) || 0;
+          const quantity = parseFloat(group.materialQnty) || 0;
+          subtotal += price * quantity;
+        }
+        
+        // Add labour cost
+        if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+          const price = parseFloat(group.labourPrice) || 0;
+          const quantity = parseFloat(group.labourQnty) || 0;
+          subtotal += price * quantity;
+        }
+        
+        // Add foam cost if enabled
+        if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+          const price = parseFloat(group.foamPrice) || 0;
+          const quantity = parseFloat(group.foamQnty) || 0;
+          subtotal += price * quantity;
+        }
+        
+        // Add painting cost if enabled
+        if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+          const price = parseFloat(group.paintingLabour) || 0;
+          const quantity = parseFloat(group.paintingQnty) || 0;
+          subtotal += price * quantity;
+        }
+      });
+
+      // Add pickup/delivery cost if enabled
+      if (paymentData?.pickupDeliveryEnabled) {
+        const pickupCost = parseFloat(paymentData.pickupDeliveryCost) || 0;
+        const serviceType = paymentData.pickupDeliveryServiceType;
+        if (serviceType === 'both') {
+          subtotal += pickupCost * 2;
+        } else {
+          subtotal += pickupCost;
+        }
+      }
+
+      // Calculate tax (13% on entire subtotal for corporate orders)
+      const taxAmount = subtotal * 0.13;
+
+      // Calculate credit card fee (2.5% on subtotal + tax) if enabled
+      const creditCardFeeEnabled = paymentData?.creditCardFeeEnabled || order.settings?.creditCardFeeEnabled || false;
+      const creditCardFee = creditCardFeeEnabled ? (subtotal + taxAmount) * 0.025 : 0;
+
+      // Calculate grand total
+      const grandTotal = subtotal + taxAmount + creditCardFee;
+      
+      const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+      const balanceDue = grandTotal - amountPaid;
+      const cost = calculateOrderCost(order, materialTaxRates);
+
+      return {
+        itemsSubtotal: parseFloat(subtotal.toFixed(2)),
+        taxAmount: parseFloat(taxAmount.toFixed(2)),
+        creditCardFee: parseFloat(creditCardFee.toFixed(2)),
+        pickupDeliveryCost: 0, // Already included in subtotal for corporate
+        grandTotal: parseFloat(grandTotal.toFixed(2)),
+        amountPaid,
+        balanceDue,
+        jlGrandTotal: cost,
+        extraExpensesTotal: 0,
+        jlSubtotalBeforeTax: cost - taxAmount,
+      };
+    }
+    
+    // Regular orders calculation (tax only on materials and foam)
     // Calculate individual components properly
     const taxAmount = calculateOrderTax(order);
     const pickupDeliveryCost = paymentData?.pickupDeliveryEnabled ? 
@@ -1764,10 +1822,38 @@ const WorkshopPage = () => {
 
   // Handle edit order details
   const handleEditOrder = () => {
+    // Convert Firestore Timestamp to date string if needed
+    const formatDateForInput = (dateValue) => {
+      if (!dateValue) return '';
+      // If it's a Firestore Timestamp, convert it
+      if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+        const date = dateValue.toDate();
+        return date.toISOString().split('T')[0];
+      }
+      // If it's already a string in ISO format or date string
+      if (typeof dateValue === 'string') {
+        // If it's already in YYYY-MM-DD format, return as is
+        if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return dateValue;
+        }
+        // Otherwise try to parse and format
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+          return date.toISOString().split('T')[0];
+        }
+      }
+      // If it's a Date object
+      if (dateValue instanceof Date) {
+        return dateValue.toISOString().split('T')[0];
+      }
+      return '';
+    };
+
     setEditOrderData({
       description: selectedOrder.orderDetails?.description || '',
       platform: selectedOrder.orderDetails?.platform || '',
-      startDate: selectedOrder.orderDetails?.startDate || '',
+      startDate: formatDateForInput(selectedOrder.orderDetails?.startDate),
+      endDate: formatDateForInput(selectedOrder.orderDetails?.endDate),
       timeline: selectedOrder.orderDetails?.timeline || ''
     });
     setEditOrderDialog(true);
@@ -1775,12 +1861,15 @@ const WorkshopPage = () => {
 
   // Handle edit payment data
   const handleEditPayment = () => {
+    // Check if corporate or regular order to use correct field
+    const paymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+    
     setEditPaymentData({
-      deposit: selectedOrder.paymentData?.deposit || '',
-      amountPaid: selectedOrder.paymentData?.amountPaid || '',
-      pickupDeliveryEnabled: selectedOrder.paymentData?.pickupDeliveryEnabled || false,
-      pickupDeliveryCost: selectedOrder.paymentData?.pickupDeliveryCost || '',
-      notes: selectedOrder.paymentData?.notes || ''
+      deposit: paymentData?.deposit || '',
+      amountPaid: paymentData?.amountPaid || '',
+      pickupDeliveryEnabled: paymentData?.pickupDeliveryEnabled || false,
+      pickupDeliveryCost: paymentData?.pickupDeliveryCost || '',
+      notes: paymentData?.notes || ''
     });
     setEditPaymentDialog(true);
   };
@@ -1788,15 +1877,41 @@ const WorkshopPage = () => {
   // Handle edit furniture data
   const handleEditFurniture = () => {
     // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
-    const furnitureData = selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
+    let furnitureData;
+    if (selectedOrder.orderType === 'corporate') {
+      // Corporate orders have furnitureGroups as an array directly
+      console.log('Loading corporate order furniture:', {
+        orderId: selectedOrder.id,
+        furnitureGroups: selectedOrder.furnitureGroups,
+        furnitureGroupsLength: selectedOrder.furnitureGroups?.length
+      });
+      furnitureData = { groups: selectedOrder.furnitureGroups || [] };
+    } else {
+      // Regular orders have furnitureData with groups property
+      console.log('Loading regular order furniture:', {
+        orderId: selectedOrder.id,
+        furnitureData: selectedOrder.furnitureData,
+        groupsLength: selectedOrder.furnitureData?.groups?.length
+      });
+      furnitureData = selectedOrder.furnitureData || { groups: [] };
+    }
+    
+    // Ensure groups array exists
+    if (!furnitureData.groups) {
+      furnitureData.groups = [];
+    }
+    
+    console.log('Setting edit furniture data:', furnitureData);
     setEditFurnitureData(furnitureData);
     setEditFurnitureDialog(true);
   };
 
   // Handle edit additional notes
   const handleEditAdditionalNotes = () => {
+    // Check if corporate or regular order to use correct field
+    const paymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
     setEditAdditionalNotesData({
-      notes: selectedOrder.paymentData?.notes || ''
+      notes: paymentData?.notes || ''
     });
     setEditAdditionalNotesDialog(true);
   };
@@ -1942,9 +2057,14 @@ const WorkshopPage = () => {
       if (amountPaid >= deposit && deposit > 0) {
         financialStatus = 'Deposit Paid';
       }
+      
+      // Check if corporate or regular order to use correct field
+      const isCorporate = selectedOrder.orderType === 'corporate';
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      
       const updatedOrder = {
         ...selectedOrder,
-        paymentData: editPaymentData,
+        [paymentField]: editPaymentData,
         orderDetails: {
           ...selectedOrder.orderDetails,
           financialStatus,
@@ -1952,7 +2072,7 @@ const WorkshopPage = () => {
       };
       const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
-        paymentData: editPaymentData,
+        [paymentField]: editPaymentData,
         orderDetails: {
           ...selectedOrder.orderDetails,
           financialStatus,
@@ -1972,10 +2092,14 @@ const WorkshopPage = () => {
   // Save additional notes
   const handleSaveAdditionalNotes = async () => {
     try {
+      // Check if corporate or regular order to use correct field
+      const isCorporate = selectedOrder.orderType === 'corporate';
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      
       const updatedOrder = {
         ...selectedOrder,
-        paymentData: {
-          ...selectedOrder.paymentData,
+        [paymentField]: {
+          ...(selectedOrder[paymentField] || {}),
           notes: editAdditionalNotesData.notes
         }
       };
@@ -1983,7 +2107,7 @@ const WorkshopPage = () => {
       // Update in Firestore
       const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
-        'paymentData.notes': editAdditionalNotesData.notes
+        [`${paymentField}.notes`]: editAdditionalNotesData.notes
       });
 
       setSelectedOrder(updatedOrder);
@@ -2047,12 +2171,25 @@ const WorkshopPage = () => {
     }
   };
 
-  // Save furniture data for a specific group
+  // Save furniture data for a specific group or all groups
   const handleSaveFurnitureGroup = async (groupIndex) => {
     try {
       // Use the editing data if available, otherwise use the current selectedOrder data
-      // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
-      const furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
+      let furnitureDataToSave;
+      if (editingFurnitureData) {
+        furnitureDataToSave = editingFurnitureData;
+      } else if (selectedOrder.orderType === 'corporate') {
+        // Corporate orders have furnitureGroups as an array directly
+        furnitureDataToSave = { groups: selectedOrder.furnitureGroups || [] };
+      } else {
+        // Regular orders have furnitureData with groups property
+        furnitureDataToSave = selectedOrder.furnitureData || { groups: [] };
+      }
+      
+      // Ensure groups array exists
+      if (!furnitureDataToSave.groups) {
+        furnitureDataToSave.groups = [];
+      }
       
       const orderRef = getOrderRef(selectedOrder);
       // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
@@ -2084,7 +2221,14 @@ const WorkshopPage = () => {
       setLastSavedData(JSON.stringify(furnitureDataToSave));
       setHasUnsavedChanges(false);
       
-      showSuccess(`Furniture group ${groupIndex + 1} updated successfully`);
+      // Close the dialog
+      setEditFurnitureDialog(false);
+      
+      if (groupIndex !== undefined) {
+        showSuccess(`Furniture group ${groupIndex + 1} updated successfully`);
+      } else {
+        showSuccess('All furniture groups updated successfully');
+      }
     } catch (error) {
       console.error('Error updating furniture group:', error);
       showError('Failed to update furniture group');
@@ -2094,8 +2238,22 @@ const WorkshopPage = () => {
   // Update furniture group data in editing state only
   const updateFurnitureGroup = (groupIndex, fieldName, value) => {
     // Updating furniture group
-    // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
-    const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
+    let currentFurnitureData;
+    if (editingFurnitureData) {
+      currentFurnitureData = editingFurnitureData;
+    } else if (selectedOrder.orderType === 'corporate') {
+      // Corporate orders have furnitureGroups as an array directly
+      currentFurnitureData = { groups: selectedOrder.furnitureGroups || [] };
+    } else {
+      // Regular orders have furnitureData with groups property
+      currentFurnitureData = selectedOrder.furnitureData || { groups: [] };
+    }
+    
+    // Ensure groups array exists
+    if (!currentFurnitureData.groups) {
+      currentFurnitureData.groups = [];
+    }
+    
     const updatedGroups = [...currentFurnitureData.groups];
     updatedGroups[groupIndex] = { ...updatedGroups[groupIndex], [fieldName]: value };
     
@@ -2131,9 +2289,17 @@ const WorkshopPage = () => {
     if (!editingFurnitureData) return false;
     
     // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
-    const originalGroups = selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || [];
+    let originalGroups;
+    if (selectedOrder.orderType === 'corporate') {
+      // Corporate orders have furnitureGroups as an array directly
+      originalGroups = selectedOrder.furnitureGroups || [];
+    } else {
+      // Regular orders have furnitureData with groups property
+      originalGroups = selectedOrder.furnitureData?.groups || [];
+    }
+    
     const originalGroup = originalGroups[groupIndex];
-    const editingGroup = editingFurnitureData.groups[groupIndex];
+    const editingGroup = editingFurnitureData.groups?.[groupIndex];
     
     if (!originalGroup || !editingGroup) return false;
     
@@ -2231,7 +2397,9 @@ const WorkshopPage = () => {
     // Check if customer has a valid email for sending
     const hasValidEmail = isValidEmailForSending(customerEmail);
 
-    const requiredDeposit = parseFloat(selectedOrder.paymentData?.deposit) || 0;
+    // Use correct payment field for corporate vs regular orders
+    const paymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
     if (requiredDeposit <= 0) {
       showError('No deposit amount set for this order');
       return;
@@ -2245,15 +2413,20 @@ const WorkshopPage = () => {
 
       // Update the order with deposit received
       const orderRef = doc(db, selectedOrder.orderType === 'corporate' ? 'corporate-orders' : 'orders', selectedOrder.id);
+      
+      // Use correct payment field for corporate vs regular orders
+      const paymentField = selectedOrder.orderType === 'corporate' ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+      
       const updatedPaymentData = {
-        ...selectedOrder.paymentData,
+        ...currentPaymentData,
         amountPaid: requiredDeposit,
         depositReceived: true,
         depositReceivedDate: new Date().toISOString()
       };
 
       await updateDoc(orderRef, {
-        paymentData: updatedPaymentData,
+        [paymentField]: updatedPaymentData,
         orderDetails: {
           ...selectedOrder.orderDetails,
           financialStatus: 'Deposit Paid',
@@ -2265,7 +2438,7 @@ const WorkshopPage = () => {
         corporateCustomer: selectedOrder.corporateCustomer,
         contactPerson: selectedOrder.contactPerson,
         orderDetails: selectedOrder.orderDetails,
-        paymentData: updatedPaymentData
+        paymentDetails: updatedPaymentData
       } : {
         personalInfo: selectedOrder.personalInfo,
         orderDetails: selectedOrder.orderDetails,
@@ -2299,7 +2472,7 @@ const WorkshopPage = () => {
       // Immediately update the selectedOrder state with the new data
       const updatedSelectedOrder = {
         ...selectedOrder,
-        paymentData: updatedPaymentData,
+        [paymentField]: updatedPaymentData,
         orderDetails: {
           ...selectedOrder.orderDetails,
           financialStatus: 'Deposit Paid',
@@ -2307,20 +2480,8 @@ const WorkshopPage = () => {
       };
       setSelectedOrder(updatedSelectedOrder);
       
-      // Refresh the orders list to ensure consistency
+      // Refresh the orders list to ensure consistency (this will fetch from both collections)
       await fetchOrders();
-      
-      // Update the selected order again with the fresh data from the database
-      const refreshedOrders = await getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc')));
-      const refreshedOrdersData = refreshedOrders.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      const finalUpdatedOrder = refreshedOrdersData.find(order => order.id === selectedOrder.id);
-      if (finalUpdatedOrder) {
-        setSelectedOrder(finalUpdatedOrder);
-      }
     } catch (error) {
       console.error('Error processing deposit:', error);
       showError(`Failed to process deposit: ${error.message}`);
@@ -2424,14 +2585,19 @@ const WorkshopPage = () => {
     }
 
     try {
-      const currentAmountPaid = parseFloat(selectedOrder.paymentData?.amountPaid || 0);
+      // Check if corporate or regular order to use correct field
+      const isCorporate = selectedOrder.orderType === 'corporate';
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = isCorporate ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+      
+      const currentAmountPaid = parseFloat(currentPaymentData?.amountPaid || 0);
       const newTotalAmountPaid = currentAmountPaid + paymentAmount;
 
       const orderRef = getOrderRef(selectedOrder);
       await updateDoc(orderRef, {
-        'paymentData.amountPaid': newTotalAmountPaid,
-        'paymentData.payments': [
-          ...(selectedOrder.paymentData?.payments || []),
+        [`${paymentField}.amountPaid`]: newTotalAmountPaid,
+        [`${paymentField}.payments`]: [
+          ...(currentPaymentData?.payments || []),
           {
             amount: paymentAmount,
             date: paymentForm.paymentDate,
@@ -2444,11 +2610,11 @@ const WorkshopPage = () => {
       // Update local state
       setSelectedOrder(prev => ({
         ...prev,
-        paymentData: {
-          ...prev.paymentData,
+        [paymentField]: {
+          ...(prev[paymentField] || {}),
           amountPaid: newTotalAmountPaid,
           payments: [
-            ...(prev.paymentData?.payments || []),
+            ...(prev[paymentField]?.payments || []),
             {
               amount: paymentAmount,
               date: paymentForm.paymentDate,
@@ -2464,11 +2630,11 @@ const WorkshopPage = () => {
         order.id === selectedOrder.id 
           ? { 
               ...order, 
-              paymentData: { 
-                ...order.paymentData, 
+              [paymentField]: { 
+                ...(order[paymentField] || {}), 
                 amountPaid: newTotalAmountPaid,
                 payments: [
-                  ...(order.paymentData?.payments || []),
+                  ...(order[paymentField]?.payments || []),
                   {
                     amount: paymentAmount,
                     date: paymentForm.paymentDate,
@@ -2485,11 +2651,11 @@ const WorkshopPage = () => {
         order.id === selectedOrder.id 
           ? { 
               ...order, 
-              paymentData: { 
-                ...order.paymentData, 
+              [paymentField]: { 
+                ...(order[paymentField] || {}), 
                 amountPaid: newTotalAmountPaid,
                 payments: [
-                  ...(order.paymentData?.payments || []),
+                  ...(order[paymentField]?.payments || []),
                   {
                     amount: paymentAmount,
                     date: paymentForm.paymentDate,
@@ -3782,13 +3948,36 @@ const WorkshopPage = () => {
                 <Box sx={{ p: 3 }}>
                   {(() => {
                     // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
-                    const furnitureGroups = selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || [];
+                    let furnitureGroups;
+                    if (selectedOrder.orderType === 'corporate') {
+                      // Corporate orders have furnitureGroups as an array directly
+                      furnitureGroups = selectedOrder.furnitureGroups || [];
+                      console.log('Displaying corporate furniture groups:', {
+                        orderId: selectedOrder.id,
+                        groupsCount: furnitureGroups.length,
+                        groups: furnitureGroups
+                      });
+                    } else {
+                      // Regular orders have furnitureData with groups property
+                      furnitureGroups = selectedOrder.furnitureData?.groups || [];
+                    }
+                    
                     return furnitureGroups.length > 0 ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {furnitureGroups.map((group, index) => {
                         // Use editing data if available, otherwise use the original data
-                          const currentFurnitureData = editingFurnitureData || selectedOrder.furnitureData || { groups: selectedOrder.furnitureGroups || [] };
-                          const currentGroup = currentFurnitureData.groups?.[index] || currentFurnitureData[index] || group;
+                          let currentFurnitureData;
+                          if (editingFurnitureData) {
+                            currentFurnitureData = editingFurnitureData;
+                          } else if (selectedOrder.orderType === 'corporate') {
+                            // Corporate orders have furnitureGroups as an array directly
+                            currentFurnitureData = { groups: selectedOrder.furnitureGroups || [] };
+                          } else {
+                            // Regular orders have furnitureData with groups property
+                            currentFurnitureData = selectedOrder.furnitureData || { groups: [] };
+                          }
+                          
+                          const currentGroup = currentFurnitureData.groups?.[index] || group;
                         
                         return (
                           <Card key={index} sx={{ p: 2, border: '2px solid #e3f2fd' }}>
@@ -4586,6 +4775,18 @@ const WorkshopPage = () => {
                 shrink: true,
               }}
               required
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="End Date"
+              type="date"
+              value={editOrderData.endDate || ''}
+              onChange={(e) => setEditOrderData({ ...editOrderData, endDate: e.target.value })}
+              onFocus={handleAutoSelect}
+              InputLabelProps={{
+                shrink: true,
+              }}
               sx={{ mb: 2 }}
             />
             <TextField

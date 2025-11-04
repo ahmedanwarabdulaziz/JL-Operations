@@ -870,39 +870,8 @@ const WorkshopPage = () => {
     fetchOrders();
     fetchInvoiceStatuses();
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
-  }, [fetchOrders]);
-
-  // Add a refresh mechanism when the page gains focus with improved debouncing
-  useEffect(() => {
-    let focusTimeout;
-    let lastRefreshTime = 0;
-    
-    const handleFocus = () => {
-      // Skip refresh if email operations are in progress
-      if (sendingEmail || processingDeposit) {
-        return;
-      }
-      
-      const now = Date.now();
-      // Prevent multiple refreshes within 2 seconds
-      if (now - lastRefreshTime < 2000) {
-        return;
-      }
-      
-      // Debounce the focus event to prevent excessive calls
-      clearTimeout(focusTimeout);
-      focusTimeout = setTimeout(() => {
-        lastRefreshTime = Date.now();
-        fetchOrders(true); // Force refresh on focus
-      }, 1000); // 1 second debounce
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearTimeout(focusTimeout);
-    };
-  }, [fetchOrders, sendingEmail, processingDeposit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Search function
   const handleSearch = (searchValue) => {

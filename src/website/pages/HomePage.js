@@ -314,7 +314,7 @@ const HomePage = () => {
                   to="/services"
                   variant="contained"
                   size="large"
-                  sx={buttonStyles.luxuryButton}
+                  sx={buttonStyles.homePageButton}
                 >
                   Explore Services
                 </Button>
@@ -323,17 +323,7 @@ const HomePage = () => {
                   to="/contact"
                   variant="contained"
                   size="large"
-                  sx={{
-                    ...buttonStyles.luxuryButton,
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 25%, transparent 50%, rgba(255,255,255,0.05) 75%, rgba(255,255,255,0.1) 100%)',
-                    color: '#ffffff',
-                    border: '3px solid #ffffff',
-                    '&:hover': {
-                      ...buttonStyles.luxuryButton['&:hover'],
-                      background: 'linear-gradient(135deg, rgba(255,215,0,0.2) 0%, rgba(255,140,0,0.1) 25%, rgba(255,255,255,0.05) 50%, rgba(255,140,0,0.1) 75%, rgba(255,215,0,0.2) 100%)',
-                      border: '3px solid #FFD700',
-                    }
-                  }}
+                  sx={buttonStyles.homePageOutlineButton}
                 >
                   Contact Us
                 </Button>
@@ -344,260 +334,465 @@ const HomePage = () => {
  
                {/* Quote Section */}
         <Box sx={{ 
-          py: { xs: 8, md: 12 },
+          py: { xs: 6, md: 10 },
           backgroundColor: '#f8f8f8'
         }}>
-                     <Container maxWidth="lg">
-             <Box sx={{ textAlign: 'center', position: 'relative' }}>
-                               {/* Left Quote Icon */}
-                <Typography sx={{
+          <Container maxWidth="xl">
+            <Box sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              gap: 3,
+              alignItems: 'stretch'
+            }}>
+              {/* Card 1 - Left */}
+              <Card sx={{
+                flex: { xs: '0 0 auto', md: '1 1 0' },
+                width: { xs: '100%', md: 'auto' },
+                height: { xs: 'auto', md: '350px' },
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: 0,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                border: '2px solid rgba(185, 143, 51, 0.15)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                display: 'flex',
+                flexDirection: 'column',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                  border: '2px solid rgba(185, 143, 51, 0.3)'
+                },
+                '&::before': {
+                  content: '""',
                   position: 'absolute',
-                  top: { xs: '-40px', md: '-60px' },
-                  left: { xs: '10px', md: '20px' },
-                  fontSize: { xs: '6rem', md: '10rem', lg: '12rem' },
-                  color: '#b98f33',
-                  opacity: 0.9,
-                  zIndex: 1,
-                  fontFamily: '"Playfair Display", "Times New Roman", serif',
-                  fontWeight: 300,
-                  lineHeight: 1,
-                  transform: 'rotate(180deg)',
-                  textShadow: '0 4px 8px rgba(0,0,0,0.1)'
-                }}>
-                  "
-                </Typography>
-                
-                <TypewriterText
-                  text="We believe everyone has the right to a well-furnished life"
-                  speed={80}
-                  delay={500}
-                  className="typewriter-quote"
-                  sx={{ 
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                  borderRadius: '16px 16px 0 0',
+                  zIndex: 1
+                }
+              }}>
+                <Box sx={{
+                  height: { xs: '200px', md: '210px' },
+                  width: '100%',
+                  backgroundImage: 'url(/assets/images/x007.png)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  position: 'relative'
+                }} />
+                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', p: { xs: 2, md: 3 } }}>
+                  <Typography sx={{
                     fontFamily: '"Playfair Display", "Times New Roman", serif',
-                    fontWeight: 700, 
-                    color: '#333333',
-                    fontSize: { xs: '2.5rem', md: '3.5rem', lg: '4.5rem' },
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                    mb: 2,
-                    px: { xs: 8, md: 12 },
-                    position: 'relative',
-                    zIndex: 2,
-                    minHeight: { xs: '3rem', md: '4rem', lg: '5rem' },
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                />
-                
-                {/* Right Quote Icon */}
-                <Typography sx={{
+                    fontWeight: 700,
+                    color: '#b98f33',
+                    fontSize: { xs: '1.2rem', md: '1.3rem' },
+                    mb: 1.5,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    30+ Years
+                  </Typography>
+                  <Typography sx={{
+                    fontFamily: '"Inter", sans-serif',
+                    color: '#666666',
+                    fontSize: { xs: '0.9rem', md: '1rem' },
+                    lineHeight: 1.6,
+                    textAlign: 'center'
+                  }}>
+                    Of Craftsmanship Excellence
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              {/* Card 2 - Right */}
+              <Card sx={{
+                flex: { xs: '0 0 auto', md: '1 1 0' },
+                width: { xs: '100%', md: 'auto' },
+                height: { xs: 'auto', md: '350px' },
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: 0,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                border: '2px solid rgba(185, 143, 51, 0.15)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                display: 'flex',
+                flexDirection: 'column',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                  border: '2px solid rgba(185, 143, 51, 0.3)'
+                },
+                '&::before': {
+                  content: '""',
                   position: 'absolute',
-                  bottom: { xs: '-40px', md: '-60px' },
-                  right: { xs: '10px', md: '20px' },
-                  fontSize: { xs: '6rem', md: '10rem', lg: '12rem' },
-                  color: '#b98f33',
-                  opacity: 0.9,
-                  zIndex: 1,
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                  borderRadius: '16px 16px 0 0',
+                  zIndex: 1
+                }
+              }}>
+                <Box sx={{
+                  height: { xs: '200px', md: '210px' },
+                  width: '100%',
+                  backgroundImage: 'url(/assets/images/x008.png)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  position: 'relative'
+                }} />
+                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', p: { xs: 2, md: 3 } }}>
+                  <Typography sx={{
+                    fontFamily: '"Playfair Display", "Times New Roman", serif',
+                    fontWeight: 700,
+                    color: '#b98f33',
+                    fontSize: { xs: '1.2rem', md: '1.3rem' },
+                    mb: 1.5,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    20+ Experts
+                  </Typography>
+                  <Typography sx={{
+                    fontFamily: '"Inter", sans-serif',
+                    color: '#666666',
+                    fontSize: { xs: '0.9rem', md: '1rem' },
+                    lineHeight: 1.6,
+                    textAlign: 'center'
+                  }}>
+                    Fabric Specialists & Craftspeople
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              {/* Card 3 - Quote Card */}
+              <Card sx={{
+                flex: { xs: '0 0 auto', md: '1 1 0' },
+                width: { xs: '100%', md: 'auto' },
+                height: { xs: 'auto', md: '350px' },
+                background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                borderRadius: '16px',
+                padding: { xs: 3, md: 4 },
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                border: '2px solid rgba(185, 143, 51, 0.15)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                  border: '2px solid rgba(185, 143, 51, 0.3)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                  borderRadius: '16px 16px 0 0'
+                }
+              }}>
+                <Typography sx={{
                   fontFamily: '"Playfair Display", "Times New Roman", serif',
-                  fontWeight: 300,
-                  lineHeight: 1,
-                  textShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                  fontWeight: 700,
+                  color: '#000000',
+                  fontSize: { xs: '1.1rem', md: '1.25rem' },
+                  lineHeight: 1.4,
+                  textAlign: 'center',
+                  px: { xs: 2, md: 3 }
                 }}>
-                  "
+                  We believe everyone has the right to a well-furnished life
                 </Typography>
-             </Box>
-           </Container>
+              </Card>
+
+              {/* Card 4 - Left (with image) */}
+              <Card sx={{
+                flex: { xs: '0 0 auto', md: '1 1 0' },
+                width: { xs: '100%', md: 'auto' },
+                height: { xs: 'auto', md: '350px' },
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: 0,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                border: '2px solid rgba(185, 143, 51, 0.15)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                display: 'flex',
+                flexDirection: 'column',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                  border: '2px solid rgba(185, 143, 51, 0.3)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                  borderRadius: '16px 16px 0 0',
+                  zIndex: 1
+                }
+              }}>
+                <Box sx={{
+                  height: { xs: '200px', md: '210px' },
+                  width: '100%',
+                  backgroundImage: 'url(/assets/images/x009.jpg)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  position: 'relative'
+                }} />
+                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', p: { xs: 2, md: 3 } }}>
+                  <Typography sx={{
+                    fontFamily: '"Playfair Display", "Times New Roman", serif',
+                    fontWeight: 700,
+                    color: '#b98f33',
+                    fontSize: { xs: '1.2rem', md: '1.3rem' },
+                    mb: 1.5,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    Custom Design
+                  </Typography>
+                  <Typography sx={{
+                    fontFamily: '"Inter", sans-serif',
+                    color: '#666666',
+                    fontSize: { xs: '0.9rem', md: '1rem' },
+                    lineHeight: 1.6,
+                    textAlign: 'center'
+                  }}>
+                    Tailored to Your Unique Vision
+                  </Typography>
+                </CardContent>
+              </Card>
+
+              {/* Card 5 - Right (with image) */}
+              <Card sx={{
+                flex: { xs: '0 0 auto', md: '1 1 0' },
+                width: { xs: '100%', md: 'auto' },
+                height: { xs: 'auto', md: '350px' },
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: 0,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                border: '2px solid rgba(185, 143, 51, 0.15)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                display: 'flex',
+                flexDirection: 'column',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                  border: '2px solid rgba(185, 143, 51, 0.3)'
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                  borderRadius: '16px 16px 0 0',
+                  zIndex: 1
+                }
+              }}>
+                <Box sx={{
+                  height: { xs: '200px', md: '210px' },
+                  width: '100%',
+                  backgroundImage: 'url(/assets/images/x010.jpg)',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  position: 'relative'
+                }} />
+                <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', p: { xs: 2, md: 3 } }}>
+                  <Typography sx={{
+                    fontFamily: '"Playfair Display", "Times New Roman", serif',
+                    fontWeight: 700,
+                    color: '#b98f33',
+                    fontSize: { xs: '1.2rem', md: '1.3rem' },
+                    mb: 1.5,
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    Quality Promise
+                  </Typography>
+                  <Typography sx={{
+                    fontFamily: '"Inter", sans-serif',
+                    color: '#666666',
+                    fontSize: { xs: '0.9rem', md: '1rem' },
+                    lineHeight: 1.6,
+                    textAlign: 'center'
+                  }}>
+                    Premium Materials & Craftsmanship
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+          </Container>
         </Box>
 
         {/* About Section */}
         <Box sx={{ 
-          backgroundImage: 'url(/assets/images/x005.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          backgroundAttachment: 'fixed',
-          position: 'relative',
-          py: { xs: 12, md: 16 },
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 0, 0, 0.6) 100%)',
-            zIndex: 1
-          }
+          backgroundColor: '#f8f8f8',
+          py: { xs: 6, md: 8 }
         }}>
-                                <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2 }}>
-                           <Box sx={{ 
-                backgroundColor: 'rgba(255, 255, 255, 0.75)',
-                backdropFilter: 'blur(15px)',
-                borderRadius: '30px',
-                boxShadow: '0 30px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(185, 143, 51, 0.1)',
-                overflow: 'hidden',
-                position: 'relative',
-                p: { xs: 4, md: 6 },
-               '&::before': {
-                 content: '""',
-                 position: 'absolute',
-                 top: 0,
-                 left: 0,
-                 right: 0,
-                 height: '6px',
-                 background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 25%, #b98f33 50%, #d4af5a 75%, #b98f33 100%)'
-               }
-             }}>
-               {/* Magazine Header */}
-               <Box sx={{ 
-                 textAlign: 'center', 
-                 mb: { xs: 4, md: 6 },
-                 borderBottom: '3px solid #b98f33',
-                 pb: 3
-               }}>
-                 <Typography variant="h1" sx={{ 
-                   fontFamily: '"Playfair Display", "Times New Roman", serif',
-                   fontWeight: 900,
-                   color: '#b98f33',
-                   fontSize: { xs: '2.5rem', md: '4rem', lg: '5rem' },
-                   letterSpacing: '-0.03em',
-                   lineHeight: 0.9,
-                   mb: 2,
-                   textTransform: 'uppercase'
-                 }}>
-                   JL Upholstery
-                 </Typography>
-                 <Typography variant="h6" sx={{ 
-                   fontFamily: '"Inter", "Roboto", sans-serif',
-                   color: '#666666',
-                   fontSize: { xs: '1rem', md: '1.2rem' },
-                   fontWeight: 400,
-                   letterSpacing: '0.1em',
-                   textTransform: 'uppercase'
-                 }}>
-                   Since 1993 • Milton, Ontario
-                 </Typography>
-               </Box>
-
-               {/* Magazine Content Grid */}
-               <Grid container spacing={4}>
-                 {/* Left Column - Main Story */}
-                 <Grid item xs={12} md={8}>
-                   <Typography variant="h2" sx={{ 
-                     fontFamily: '"Playfair Display", "Times New Roman", serif',
-                     fontWeight: 700,
-                     color: '#333333',
-                     fontSize: { xs: '1.8rem', md: '2.5rem' },
-                     lineHeight: 1.2,
-                     mb: 3,
-                     letterSpacing: '-0.02em'
-                   }}>
-                     A Family Legacy of Craftsmanship
-                   </Typography>
-                   
-                   <Typography variant="body1" paragraph sx={{ 
-                     lineHeight: 1.8,
-                     color: '#444444',
-                     fontSize: { xs: '1.1rem', md: '1.2rem' },
-                     fontWeight: 400,
-                     mb: 4
-                   }}>
-                     We're JL Upholstery, a family owned and run custom upholstery company with over 30 years of experience, located in Milton, Ontario. Our journey began with a simple belief: that every piece of furniture has a story worth preserving.
-                   </Typography>
-
-                   <Typography variant="body1" paragraph sx={{ 
-                     lineHeight: 1.8,
-                     color: '#444444',
-                     fontSize: { xs: '1.1rem', md: '1.2rem' },
-                     fontWeight: 400,
-                     mb: 4
-                   }}>
-                     We all have memories and stories that are tied to our favorite pieces of furniture so we have been inspired by the ways in which furniture can affect our lives. From the sofa where families gather to the chair that witnessed countless conversations, these pieces become part of our personal history.
-                   </Typography>
-                 </Grid>
-
-                 {/* Right Column - Pull Quote & Sidebar */}
-                 <Grid item xs={12} md={4}>
-                   {/* Pull Quote */}
-                   <Box sx={{ 
-                     backgroundColor: '#f8f8f8',
-                     borderLeft: '4px solid #b98f33',
-                     p: 3,
-                     mb: 4,
-                     borderRadius: '0 15px 15px 0',
-                     position: 'relative',
-                     '&::before': {
-                       content: '"""',
-                       position: 'absolute',
-                       top: '-10px',
-                       left: '15px',
-                       fontSize: '3rem',
-                       color: '#b98f33',
-                       fontFamily: '"Playfair Display", "Times New Roman", serif',
-                       fontWeight: 300
-                     }
-                   }}>
-                     <Typography variant="h5" sx={{ 
-                       fontFamily: '"Playfair Display", "Times New Roman", serif',
-                       fontWeight: 600,
-                       color: '#b98f33',
-                       fontSize: { xs: '1.2rem', md: '1.4rem' },
-                       lineHeight: 1.3,
-                       fontStyle: 'italic',
-                       pl: 2
-                     }}>
-                       "Every piece of furniture is as unique as the person who requests it"
-                     </Typography>
-                   </Box>
-
-                   {/* Sidebar Content */}
-                   <Box sx={{ 
-                     backgroundColor: '#f8f8f8',
-                     p: 3,
-                     borderRadius: '15px',
-                     border: '2px solid #e0e0e0'
-                   }}>
-                     <Typography variant="h6" sx={{ 
-                       fontFamily: '"Playfair Display", "Times New Roman", serif',
-                       fontWeight: 700,
-                       color: '#333333',
-                       fontSize: '1.1rem',
-                       mb: 2,
-                       textAlign: 'center'
-                     }}>
-                       Our Commitment
-                     </Typography>
-                     <Typography variant="body2" sx={{ 
-                       lineHeight: 1.6,
-                       color: '#555555',
-                       fontSize: '0.95rem',
-                       textAlign: 'center'
-                     }}>
-                       We're proud of our hand craft. We will always work with you to find a perfect solution. Our goal is to give outstanding service and have happy returning customers. We ensure the best customer service experience for all our clients.
-                     </Typography>
-                   </Box>
-                 </Grid>
-               </Grid>
-
-               {/* Magazine Footer */}
-               <Box sx={{ 
-                 textAlign: 'center', 
-                 mt: { xs: 4, md: 6 },
-                 pt: 3,
-                 borderTop: '2px solid #e0e0e0'
-               }}>
-                 <Typography variant="body2" sx={{ 
-                   color: '#888888',
-                   fontSize: '0.9rem',
-                   fontStyle: 'italic'
-                 }}>
-                   Crafting comfort, preserving memories, one piece at a time
-                 </Typography>
-               </Box>
-             </Box>
-           </Container>
-                 </Box>
+          <Container maxWidth="lg">
+            <Box sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', md: 'row' },
+              gap: { xs: 3, md: 4 },
+              alignItems: 'stretch'
+            }}>
+              {/* Left Column - Text Content - 50% width */}
+              <Box sx={{
+                flex: { xs: '0 0 auto', md: '0 0 50%' },
+                width: { xs: '100%', md: '50%' },
+                maxWidth: { xs: '100%', md: '50%' },
+                pr: { xs: 0, md: 2 }
+              }}>
+                {/* Decorative Line Above */}
+                <Box sx={{
+                  width: '80px',
+                  height: '3px',
+                  background: 'linear-gradient(90deg, #b98f33, #d4af5a, #8b6b1f)',
+                  mb: 3,
+                  borderRadius: '2px'
+                }} />
+                
+                <Typography 
+                  variant="h2" 
+                  sx={{ 
+                    fontFamily: '"Playfair Display", "Times New Roman", serif',
+                    fontWeight: 700,
+                    color: '#333333',
+                    fontSize: { xs: '2rem', md: '3rem' },
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.2,
+                    mb: 1.5,
+                    textAlign: { xs: 'center', md: 'left' }
+                  }}
+                >
+                  JL Upholstery
+                </Typography>
+                
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    fontFamily: '"Inter", "Roboto", sans-serif',
+                    color: '#b98f33',
+                    fontSize: { xs: '0.9rem', md: '1.1rem' },
+                    fontWeight: 500,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    mb: 3,
+                    textAlign: { xs: 'center', md: 'left' }
+                  }}
+                >
+                  Since 1993 • Milton, Ontario
+                </Typography>
+                
+                <Typography 
+                  variant="body1" 
+                  paragraph 
+                  sx={{ 
+                    lineHeight: 1.8,
+                    color: '#444444',
+                    fontSize: { xs: '1rem', md: '1.1rem' },
+                    fontWeight: 400,
+                    mb: 2.5,
+                    textAlign: { xs: 'center', md: 'left' }
+                  }}
+                >
+                  We're JL Upholstery, a family owned and run custom upholstery company with over 30 years of experience, located in Milton, Ontario. Our journey began with a simple belief: that every piece of furniture has a story worth preserving.
+                </Typography>
+                
+                <Typography 
+                  variant="body1" 
+                  paragraph 
+                  sx={{ 
+                    lineHeight: 1.8,
+                    color: '#444444',
+                    fontSize: { xs: '1rem', md: '1.1rem' },
+                    fontWeight: 400,
+                    textAlign: { xs: 'center', md: 'left' }
+                  }}
+                >
+                  We all have memories and stories that are tied to our favorite pieces of furniture so we have been inspired by the ways in which furniture can affect our lives.
+                </Typography>
+              </Box>
+              
+              {/* Right Column - Image - 50% width */}
+              <Box sx={{
+                flex: { xs: '0 0 auto', md: '0 0 50%' },
+                width: { xs: '100%', md: '50%' },
+                maxWidth: { xs: '100%', md: '50%' },
+                pl: { xs: 0, md: 2 }
+              }}>
+                <Card sx={{
+                  height: { xs: '350px', md: '450px' },
+                  width: '100%',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.08), 0 4px 12px rgba(185, 143, 51, 0.1)',
+                  border: '2px solid rgba(185, 143, 51, 0.15)',
+                  position: 'relative',
+                  transition: 'all 0.3s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.12), 0 6px 16px rgba(185, 143, 51, 0.15)',
+                    border: '2px solid rgba(185, 143, 51, 0.3)'
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                    borderRadius: '16px 16px 0 0',
+                    zIndex: 1
+                  }
+                }}>
+                  <Box 
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      backgroundImage: 'url(/assets/images/x005.png)',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }} 
+                  />
+                </Card>
+              </Box>
+            </Box>
+          </Container>
+        </Box>
  
                  {/* Why Us Section */}
          <Box 
@@ -1111,19 +1306,10 @@ const HomePage = () => {
                        variant="contained"
                        size="medium"
                        sx={{
-                         backgroundColor: '#b98f33',
-                         color: '#ffffff',
-                         textTransform: 'none',
-                         fontWeight: 600,
-                         px: 3,
-                         py: 1,
-                         border: '2px solid #8b6b1f',
-                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                         '&:hover': {
-                           backgroundColor: '#d4af5a',
-                           transform: 'translateY(-1px)',
-                           boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
-                         }
+                         ...buttonStyles.homePageButton,
+                         fontSize: '0.9rem',
+                         padding: '12px 28px',
+                         minWidth: 'auto'
                        }}
                      >
                        Explore Our Innovative Solutions

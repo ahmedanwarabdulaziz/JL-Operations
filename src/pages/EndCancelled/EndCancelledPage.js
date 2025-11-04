@@ -170,7 +170,7 @@ const EndCancelledPage = () => {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, minHeight: '100vh' }}>
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 1 }}>

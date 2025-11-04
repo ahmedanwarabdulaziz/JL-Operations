@@ -183,6 +183,112 @@ export const buttonStyles = {
       borderRadius: '6px 6px 0 0',
       pointerEvents: 'none'
     }
+  },
+
+  // Professional homepage gold button style
+  homePageButton: {
+    borderRadius: 3,
+    background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+    color: '#000000',
+    border: '3px solid #b98f33',
+    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.4), inset 0 -2px 0 rgba(0,0,0,0.3), 0 8px 16px rgba(185, 143, 51, 0.4), 0 4px 8px rgba(0,0,0,0.3)',
+    position: 'relative',
+    fontWeight: 700,
+    textTransform: 'none',
+    letterSpacing: '0.5px',
+    fontSize: '1rem',
+    padding: '14px 32px',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    minWidth: '180px',
+    '&:hover': {
+      background: 'linear-gradient(135deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+      border: '3px solid #d4af5a',
+      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(0,0,0,0.4), 0 12px 24px rgba(185, 143, 51, 0.6), 0 6px 12px rgba(0,0,0,0.4), 0 0 20px rgba(212, 175, 90, 0.3)',
+      transform: 'translateY(-3px) scale(1.03)',
+    },
+    '&:active': {
+      transform: 'translateY(1px) scale(0.98)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(185, 143, 51, 0.3), 0 2px 4px rgba(0,0,0,0.2)',
+    },
+    '&:disabled': {
+      background: 'linear-gradient(135deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+      border: '3px solid #666666',
+      color: '#666666',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)',
+      transform: 'none',
+    },
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: '50%',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 50%, transparent 100%)',
+      borderRadius: '12px 12px 0 0',
+      pointerEvents: 'none',
+      zIndex: 1
+    },
+    '&::after': {
+      content: '""',
+      position: 'absolute',
+      top: '2px',
+      left: '2px',
+      right: '2px',
+      height: 'calc(50% - 2px)',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+      borderRadius: '10px 10px 0 0',
+      pointerEvents: 'none',
+      zIndex: 2
+    }
+  },
+
+  // Professional homepage outline button style (for Contact Us button)
+  homePageOutlineButton: {
+    borderRadius: 3,
+    background: 'linear-gradient(135deg, rgba(212, 175, 90, 0.15) 0%, rgba(185, 143, 51, 0.1) 50%, rgba(139, 107, 31, 0.05) 100%)',
+    color: '#ffffff',
+    border: '3px solid #d4af5a',
+    boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.2), inset 0 -2px 0 rgba(0,0,0,0.2), 0 8px 16px rgba(212, 175, 90, 0.3), 0 4px 8px rgba(0,0,0,0.2)',
+    position: 'relative',
+    fontWeight: 700,
+    textTransform: 'none',
+    letterSpacing: '0.5px',
+    fontSize: '1rem',
+    padding: '14px 32px',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    minWidth: '180px',
+    backdropFilter: 'blur(10px)',
+    '&:hover': {
+      background: 'linear-gradient(135deg, rgba(230, 196, 122, 0.3) 0%, rgba(212, 175, 90, 0.2) 50%, rgba(185, 143, 51, 0.15) 100%)',
+      border: '3px solid #e6c47a',
+      boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.3), 0 12px 24px rgba(212, 175, 90, 0.5), 0 6px 12px rgba(0,0,0,0.3), 0 0 20px rgba(212, 175, 90, 0.4)',
+      transform: 'translateY(-3px) scale(1.03)',
+      color: '#ffffff',
+    },
+    '&:active': {
+      transform: 'translateY(1px) scale(0.98)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(212, 175, 90, 0.3), 0 2px 4px rgba(0,0,0,0.2)',
+    },
+    '&:disabled': {
+      background: 'linear-gradient(135deg, rgba(160, 160, 160, 0.2) 0%, rgba(128, 128, 128, 0.15) 50%, rgba(96, 96, 96, 0.1) 100%)',
+      border: '3px solid #666666',
+      color: '#999999',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)',
+      transform: 'none',
+    },
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: '50%',
+      background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 50%, transparent 100%)',
+      borderRadius: '12px 12px 0 0',
+      pointerEvents: 'none',
+      zIndex: 1
+    }
   }
 };
 

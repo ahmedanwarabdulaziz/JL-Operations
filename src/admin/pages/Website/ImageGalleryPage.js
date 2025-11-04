@@ -40,7 +40,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import TransformIcon from '@mui/icons-material/Transform';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import { useNavigate } from 'react-router-dom';
-import { uploadImageToCloudinary, deleteImageFromCloudinary } from '../../../config/cloudinary';
+import { uploadImageToCloudinary, deleteImageFromCloudinary, getCloudinaryImageUrl } from '../../../config/cloudinary';
 import { 
   saveImageMetadata, 
   getImages, 
@@ -48,6 +48,7 @@ import {
   deleteImageMetadata,
   searchImages 
 } from '../../../services/imageService';
+import { removeImageFromAllFurniturePieces } from '../../../services/furniturePieceService';
 import { useAuth } from '../../../components/Auth/AuthContext';
 import EnhancedImageTaggingDialog from '../../components/EnhancedImageTaggingDialog';
 import { getCategories, getBeforeAfterCategories } from '../../../services/categoryService';
@@ -79,6 +80,46 @@ const ImageGalleryPage = () => {
   const [showBeforeAfterOnly, setShowBeforeAfterOnly] = useState(false);
 
   const [images, setImages] = useState([]);
+
+  // Helper function to get thumbnail URL for gallery grid
+  const getThumbnailUrl = (image) => {
+    // If we have a public ID, use Cloudinary transformations for optimized thumbnails
+    if (image.cloudinaryPublicId) {
+      return getCloudinaryImageUrl(image.cloudinaryPublicId, {
+        w: 400,
+        h: 300,
+        c: 'fill',
+        q: 'auto',
+        f: 'auto'
+      });
+    }
+    
+    // Fallback: If we have a Cloudinary URL, try to extract public ID and transform it
+    if (image.cloudinaryUrl && image.cloudinaryUrl.includes('cloudinary.com')) {
+      try {
+        // Extract public ID from Cloudinary URL
+        // Format: https://res.cloudinary.com/{cloud}/image/upload/{transformations}/{public_id}
+        const urlParts = image.cloudinaryUrl.split('/upload/');
+        if (urlParts.length > 1) {
+          const publicIdWithTransforms = urlParts[1];
+          // Remove any existing transformations to get just the public ID
+          const publicId = publicIdWithTransforms.split('/').slice(-1)[0];
+          return getCloudinaryImageUrl(publicId, {
+            w: 400,
+            h: 300,
+            c: 'fill',
+            q: 'auto',
+            f: 'auto'
+          });
+        }
+      } catch (e) {
+        console.warn('Could not parse Cloudinary URL:', e);
+      }
+    }
+    
+    // Final fallback to original URL
+    return image.cloudinaryUrl;
+  };
 
   // Load images from Firebase on component mount
   useEffect(() => {
@@ -197,6 +238,16 @@ const ImageGalleryPage = () => {
           // Continue with Firebase deletion even if Cloudinary fails
           setError(`Warning: Image deleted from database but may still exist in Cloudinary. Error: ${cloudinaryError.message}`);
         }
+      }
+      
+      // Remove image from all furniture pieces first
+      try {
+        await removeImageFromAllFurniturePieces(imageId);
+        console.log('Successfully removed image from all furniture pieces');
+      } catch (furnitureError) {
+        console.error('Failed to remove image from furniture pieces:', furnitureError);
+        // Continue with deletion even if furniture piece update fails
+        setError(`Warning: Image deleted but may still be referenced in furniture pieces. Error: ${furnitureError.message}`);
       }
       
       // Delete metadata from Firebase (hard delete)
@@ -611,9 +662,26 @@ const ImageGalleryPage = () => {
         )}
 
         {/* Image Grid */}
-        <Grid container spacing={2}>
+        <Box sx={{ 
+          width: '100%',
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, 1fr)',
+            md: 'repeat(4, 1fr)',
+            lg: 'repeat(6, 1fr)'
+          },
+          gap: 2
+        }}>
           {filteredImages.map((image) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={image.id}>
+            <Box
+              key={image.id}
+              sx={{ 
+                display: 'flex',
+                minWidth: 0,
+                width: '100%'
+              }}
+            >
               <Card 
                 sx={{ 
                   position: 'relative',
@@ -621,6 +689,18 @@ const ImageGalleryPage = () => {
                   transition: 'all 0.3s ease',
                   backgroundColor: '#2a2a2a',
                   border: '1px solid #333333',
+                  width: '100%',
+                  maxWidth: '100%',
+                  minWidth: 0,
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  '& *': {
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                  },
                   '&:hover': {
                     transform: 'translateY(-4px)',
                     boxShadow: 4
@@ -630,11 +710,20 @@ const ImageGalleryPage = () => {
                 onClick={() => handlePreviewImage(image)}
               >
                 <Box sx={{ 
-                  height: 200, 
-                  backgroundImage: `url(${image.cloudinaryUrl})`,
+                  width: '100%',
+                  maxWidth: '100%',
+                  minWidth: 0,
+                  height: 200,
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  backgroundImage: `url(${getThumbnailUrl(image)})`,
                   backgroundSize: 'cover',
+                  backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'center',
-                  position: 'relative'
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box',
+                  contain: 'layout style paint'
                 }}>
                   
                   {/* Action Buttons */}
@@ -709,95 +798,180 @@ const ImageGalleryPage = () => {
                     left: 0,
                     right: 0,
                     background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                    p: 2
+                    p: 2,
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden'
                   }}>
-                    <Typography variant="body2" sx={{ color: 'white', fontWeight: 'bold' }}>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: 'white', 
+                        fontWeight: 'bold',
+                        width: '100%',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
                       {image.name}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                    <Typography 
+                      variant="caption" 
+                      sx={{ 
+                        color: 'rgba(255,255,255,0.8)',
+                        width: '100%',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
                       {image.width}x{image.height} • {(image.fileSize / 1024 / 1024).toFixed(1)}MB
                     </Typography>
                   </Box>
                 </Box>
                 
-                <CardContent sx={{ p: 2 }}>
-                  <Typography variant="body2" sx={{ color: '#ffffff', mb: 1 }} noWrap>
+                <CardContent sx={{ 
+                  p: 2, 
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexGrow: 1,
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  width: '100%',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box'
+                }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: '#ffffff', 
+                      mb: 1,
+                      width: '100%',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
                     {image.alt}
                   </Typography>
                   
                   {/* Tags Display */}
                   {image.tags && Object.keys(image.tags).length > 0 && (
-                    <Box sx={{ mb: 1 }}>
+                    <Box sx={{ 
+                      mb: 1, 
+                      width: '100%',
+                      minWidth: 0
+                    }}>
                       <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-                        {Object.entries(image.tags).map(([categoryId, tagId]) => {
-                          const category = categories.find(cat => cat.id === categoryId);
-                          const beforeAfterCategory = beforeAfterCategories.find(cat => cat.id === categoryId);
-                          const tag = tags[categoryId]?.find(t => t.id === tagId);
-                          
-                          // Special handling for before/after categories
-                          if (beforeAfterCategory) {
-                            // Check if this image has multiple before/after tags
-                            const beforeTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'before');
-                            const afterTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'after');
-                            const inProgressTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'in progress');
+                        {Object.entries(image.tags)
+                          .filter(([categoryId, tagValue]) => categoryId && tagValue)
+                          .flatMap(([categoryId, tagValue]) => {
+                            // Handle both old format (single tagId) and new format (array of tagIds)
+                            const tagIds = Array.isArray(tagValue) ? tagValue : [tagValue];
                             
-                            const hasBefore = image.tags[categoryId] === beforeTag?.id;
-                            const hasAfter = image.tags[categoryId] === afterTag?.id;
-                            const hasInProgress = image.tags[categoryId] === inProgressTag?.id;
+                            const category = categories.find(cat => cat.id === categoryId);
+                            const beforeAfterCategory = beforeAfterCategories.find(cat => cat.id === categoryId);
                             
-                            // If this is a before/after category, show combined tag
-                            return (
-                              <Chip
-                                key={`${categoryId}-combined`}
-                                label="Before & In Progress & After"
-                                size="small"
-                                sx={{
-                                  backgroundColor: '#8b5cf6', // Purple for combined
-                                  color: 'white',
-                                  fontSize: '0.8rem',
-                                  height: 24,
-                                  fontWeight: 600,
-                                  '& .MuiChip-label': {
-                                    px: 1.5
+                            return tagIds
+                              .filter(tagId => tagId) // Filter out null/undefined
+                              .map((tagId, index) => {
+                                const tag = tags[categoryId]?.find(t => t.id === tagId);
+                                
+                                // Special handling for before/after categories
+                                if (beforeAfterCategory) {
+                                  // Check if this image has multiple before/after tags
+                                  const beforeTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'before');
+                                  const afterTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'after');
+                                  const inProgressTag = tags[categoryId]?.find(t => t.name.toLowerCase() === 'in progress');
+                                  
+                                  // Show individual before/after tags
+                                  let tagLabel = tag ? tag.name : tagId;
+                                  let backgroundColor = '#8b5cf6';
+                                  
+                                  if (tagId === beforeTag?.id) {
+                                    tagLabel = 'Before';
+                                    backgroundColor = '#6B7280';
+                                  } else if (tagId === afterTag?.id) {
+                                    tagLabel = 'After';
+                                    backgroundColor = '#10B981';
+                                  } else if (tagId === inProgressTag?.id) {
+                                    tagLabel = 'In Progress';
+                                    backgroundColor = '#F59E0B';
                                   }
-                                }}
-                              />
-                            );
-                          } else {
-                            // Normal categories - show individual tags
-                            let backgroundColor = category?.color || '#b98f33';
-                            
-                            return (
-                              <Chip
-                                key={`${categoryId}-${tagId}`}
-                                label={tag ? tag.name : tagId}
-                                size="small"
-                                sx={{
-                                  backgroundColor,
-                                  color: 'white',
-                                  fontSize: '0.7rem',
-                                  height: 20,
-                                  fontWeight: 400,
-                                  '& .MuiChip-label': {
-                                    px: 1
-                                  }
-                                }}
-                              />
-                            );
-                          }
-                        })}
+                                  
+                                  return (
+                                    <Chip
+                                      key={`${categoryId}-${tagId}-${index}`}
+                                      label={tagLabel}
+                                      size="small"
+                                      sx={{
+                                        backgroundColor,
+                                        color: 'white',
+                                        fontSize: '0.8rem',
+                                        height: 24,
+                                        fontWeight: 600,
+                                        '& .MuiChip-label': {
+                                          px: 1.5
+                                        }
+                                      }}
+                                    />
+                                  );
+                                } else {
+                                  // Normal categories - show individual tags
+                                  let backgroundColor = category?.color || '#b98f33';
+                                  
+                                  // If tag not found, try to show tagId or indicate missing tag
+                                  const tagLabel = tag ? tag.name : (tagId || 'Unknown Tag');
+                                  
+                                  return (
+                                    <Chip
+                                      key={`${categoryId}-${tagId}-${index}`}
+                                      label={tagLabel}
+                                      size="small"
+                                      sx={{
+                                        backgroundColor,
+                                        color: 'white',
+                                        fontSize: '0.7rem',
+                                        height: 20,
+                                        fontWeight: 400,
+                                        '& .MuiChip-label': {
+                                          px: 1
+                                        }
+                                      }}
+                                    />
+                                  );
+                                }
+                              });
+                          })}
                       </Stack>
                     </Box>
                   )}
                   
-                  <Typography variant="caption" sx={{ color: '#b98f33', mt: 1, display: 'block' }}>
+                  <Typography 
+                    variant="caption" 
+                    sx={{ 
+                      color: '#b98f33', 
+                      mt: 'auto', 
+                      display: 'block',
+                      width: '100%',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
                     Uploaded: {image.uploadedAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
           ))}
-        </Grid>
+        </Box>
         </Paper>
 
       {/* Empty State */}

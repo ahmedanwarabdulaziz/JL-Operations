@@ -760,9 +760,20 @@ const FurniturePiecesPage = () => {
           </Grid>
         ) : (
           getFilteredFurniturePieces().map((piece) => {
-            const beforeImages = piece.images?.filter(img => img.status === 'before') || [];
-            const afterImages = piece.images?.filter(img => img.status === 'after') || [];
-            const inProgressImages = piece.images?.filter(img => img.status === 'inprogress') || [];
+            // Helper function to normalize status (handle both 'inprogress' and 'in progress')
+            const normalizeStatus = (status) => {
+              if (!status) return status;
+              const normalized = status.toLowerCase().trim();
+              // Normalize 'inprogress' and 'in progress' variations
+              if (normalized === 'inprogress' || normalized === 'in progress' || normalized === 'in-progress') {
+                return 'inprogress';
+              }
+              return normalized;
+            };
+            
+            const beforeImages = piece.images?.filter(img => normalizeStatus(img.status) === 'before') || [];
+            const afterImages = piece.images?.filter(img => normalizeStatus(img.status) === 'after') || [];
+            const inProgressImages = piece.images?.filter(img => normalizeStatus(img.status) === 'inprogress') || [];
             
             return (
               <Grid item xs={12} sm={6} md={4} lg={3} key={piece.id}>

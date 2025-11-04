@@ -110,7 +110,9 @@ const Step5Review = ({
               <Typography variant="body2" color="text.secondary">Start Date</Typography>
               <Typography variant="body1" sx={{ mb: 1 }}>{formatDateOnly(orderDetails.startDate)}</Typography>
               <Typography variant="body2" color="text.secondary">Timeline</Typography>
-              <Typography variant="body1">{orderDetails.timeline}</Typography>
+              <Typography variant="body1" sx={{ mb: 1 }}>{orderDetails.timeline}</Typography>
+              <Typography variant="body2" color="text.secondary">Deadline</Typography>
+              <Typography variant="body1">{orderDetails.deadline ? formatDateOnly(orderDetails.deadline) : ''}</Typography>
             </Box>
           </CardContent>
         </Card>

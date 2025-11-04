@@ -33,7 +33,7 @@ const Step2OrderDetails = ({
         Order Details
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Please provide the order details and timeline information.
+        Please provide the order details, timeline, and deadline information.
       </Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -185,29 +185,57 @@ const Step2OrderDetails = ({
           }}
         />
 
-        <TextField
-          fullWidth
-          label="Timeline"
-          value={orderDetails.timeline}
-          onChange={(e) => onOrderDetailsChange('timeline', e.target.value)}
-          error={!!formErrors.timeline}
-          helperText={formErrors.timeline}
-          placeholder="e.g., 2 weeks, 1 month, etc."
-          sx={{
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderWidth: '2px',
-              borderColor: formErrors.timeline ? 'error.main' : 'grey.300',
-              borderRadius: 2,
-            },
-            '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: formErrors.timeline ? 'error.main' : 'primary.main',
-            },
-            '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: formErrors.timeline ? 'error.main' : 'primary.main',
-              borderWidth: '2px',
-            },
-          }}
-        />
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <TextField
+            fullWidth
+            label="Timeline"
+            value={orderDetails.timeline}
+            onChange={(e) => onOrderDetailsChange('timeline', e.target.value)}
+            error={!!formErrors.timeline}
+            helperText={formErrors.timeline}
+            placeholder="e.g., 2 weeks, 1 month, etc."
+            sx={{
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderWidth: '2px',
+                borderColor: formErrors.timeline ? 'error.main' : 'grey.300',
+                borderRadius: 2,
+              },
+              '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: formErrors.timeline ? 'error.main' : 'primary.main',
+              },
+              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: formErrors.timeline ? 'error.main' : 'primary.main',
+                borderWidth: '2px',
+              },
+            }}
+          />
+          <TextField
+            fullWidth
+            label="Deadline"
+            type="date"
+            value={orderDetails.deadline}
+            onChange={(e) => onOrderDetailsChange('deadline', e.target.value)}
+            error={!!formErrors.deadline}
+            helperText={formErrors.deadline}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            sx={{
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderWidth: '2px',
+                borderColor: formErrors.deadline ? 'error.main' : 'grey.300',
+                borderRadius: 2,
+              },
+              '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: formErrors.deadline ? 'error.main' : 'primary.main',
+              },
+              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: formErrors.deadline ? 'error.main' : 'primary.main',
+                borderWidth: '2px',
+              },
+            }}
+          />
+        </Box>
       </Box>
     </Box>
   );
