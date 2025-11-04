@@ -18,7 +18,8 @@ import {
   TableHead,
   TableRow,
   Collapse,
-  IconButton as MuiIconButton
+  IconButton as MuiIconButton,
+  Tooltip
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -38,13 +39,15 @@ import {
   TrendingUp as TrendingUpIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 
+import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
-import { calculateOrderProfit } from '../shared/utils/orderCalculations';
+import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { formatCurrency } from '../shared/utils/plCalculations';
 import { formatDate } from '../shared/utils/plCalculations';
@@ -58,6 +61,7 @@ const EndDonePage = () => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [materialTaxRates, setMaterialTaxRates] = useState({});
 
+  const navigate = useNavigate();
   const { showError } = useNotification();
 
   // Fetch orders with "done" end state
@@ -230,6 +234,124 @@ const EndDonePage = () => {
     return dateObj.toLocaleDateString();
   };
 
+  // Handle review/print preview
+  const handleReviewInvoice = (order) => {
+    try {
+      // Calculate order totals properly
+      const taxAmount = calculateOrderTax(order);
+      const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
+        calculatePickupDeliveryCost(
+          parseFloat(order.paymentData.pickupDeliveryCost) || 0,
+          order.paymentData.pickupDeliveryServiceType || 'both'
+        ) : 0;
+      
+      const breakdown = getOrderCostBreakdown(order);
+      const itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
+      const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
+      
+      // Convert order to invoice format
+      // Create customerInfo from order data
+      let customerInfo = {};
+      if (order.orderType === 'corporate') {
+        customerInfo = {
+          customerName: order.corporateCustomer?.corporateName || 'N/A',
+          phone: order.contactPerson?.phone || '',
+          email: order.contactPerson?.email || order.corporateCustomer?.email || '',
+          address: order.corporateCustomer?.address || ''
+        };
+      } else {
+        customerInfo = {
+          customerName: order.personalInfo?.customerName || 'N/A',
+          phone: order.personalInfo?.phone || '',
+          email: order.personalInfo?.email || '',
+          address: order.personalInfo?.address || ''
+        };
+      }
+
+      const invoiceData = {
+        invoiceNumber: order.orderDetails?.billInvoice || order.id,
+        customerInfo: customerInfo,
+        personalInfo: order.personalInfo || {},
+        corporateCustomer: order.corporateCustomer || {},
+        contactPerson: order.contactPerson || {},
+        orderDetails: order.orderDetails || {},
+        calculations: {
+          subtotal: parseFloat(itemsSubtotal.toFixed(2)),
+          taxAmount: parseFloat(taxAmount.toFixed(2)),
+          total: parseFloat(grandTotal.toFixed(2)),
+          paidAmount: order.orderType === 'corporate' 
+            ? (parseFloat(order.paymentDetails?.amountPaid || 0))
+            : (parseFloat(order.paymentData?.amountPaid || 0)),
+          creditCardFeeAmount: 0
+        },
+        headerSettings: {
+          taxPercentage: 13,
+          creditCardFeeEnabled: false
+        },
+        items: [],
+        furnitureData: order.furnitureData || { groups: [] }
+      };
+
+      // Convert furniture groups to invoice items
+      if (order.furnitureData?.groups) {
+        order.furnitureData.groups.forEach(group => {
+          // Add material item
+          if (group.materialPrice && group.materialQnty) {
+            invoiceData.items.push({
+              name: `${group.furnitureName || 'Furniture'} - Material`,
+              price: parseFloat(group.materialPrice || 0),
+              quantity: parseFloat(group.materialQnty || 0)
+            });
+          }
+          
+          // Add labour item
+          if (group.labourPrice && group.labourQnty) {
+            invoiceData.items.push({
+              name: `${group.furnitureName || 'Furniture'} - Labour`,
+              price: parseFloat(group.labourPrice || 0),
+              quantity: parseFloat(group.labourQnty || 0)
+            });
+          }
+          
+          // Add foam item if enabled
+          if ((group.foamEnabled || group.foamPrice) && group.foamQnty) {
+            invoiceData.items.push({
+              name: `${group.furnitureName || 'Furniture'} - Foam`,
+              price: parseFloat(group.foamPrice || 0),
+              quantity: parseFloat(group.foamQnty || 0)
+            });
+          }
+          
+          // Add painting item if enabled
+          if ((group.paintingEnabled || group.paintingLabour) && group.paintingQnty) {
+            invoiceData.items.push({
+              name: `${group.furnitureName || 'Furniture'} - Painting`,
+              price: parseFloat(group.paintingLabour || 0),
+              quantity: parseFloat(group.paintingQnty || 0)
+            });
+          }
+        });
+      }
+      
+      // Add pickup/delivery as an item if enabled
+      if (order.paymentData?.pickupDeliveryEnabled && pickupDeliveryCost > 0) {
+        invoiceData.items.push({
+          name: 'Pickup & Delivery',
+          price: parseFloat(pickupDeliveryCost.toFixed(2)),
+          quantity: 1
+        });
+      }
+
+      // Navigate to print invoice page
+      navigate('/admin/customer-invoices/print', {
+        state: { invoiceData }
+      });
+    } catch (error) {
+      console.error('Error preparing invoice preview:', error);
+      showError('Failed to open invoice preview');
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -384,13 +506,30 @@ const EndDonePage = () => {
                          </Typography>
                        </TableCell>
                       <TableCell>
-                        <MuiIconButton
-                          size="small"
-                          onClick={() => handleRowToggle(order.id)}
-                          sx={{ color: '#b98f33' }}
-                        >
-                          {expandedRows.has(order.id) ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                        </MuiIconButton>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Tooltip title="Review Invoice">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleReviewInvoice(order)}
+                              sx={{ 
+                                color: '#b98f33',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                  color: '#d4af5a'
+                                }
+                              }}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <MuiIconButton
+                            size="small"
+                            onClick={() => handleRowToggle(order.id)}
+                            sx={{ color: '#b98f33' }}
+                          >
+                            {expandedRows.has(order.id) ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                          </MuiIconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                     <TableRow>

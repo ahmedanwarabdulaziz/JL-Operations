@@ -18,7 +18,13 @@ import {
   TableHead,
   TableRow,
   Collapse,
-  IconButton as MuiIconButton
+  IconButton as MuiIconButton,
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -38,13 +44,17 @@ import {
   TrendingUp as TrendingUpIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  Visibility as VisibilityIcon,
+  Close as CloseIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 
+import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { calculateOrderProfit } from '../../utils/orderCalculations';
+import { calculateOrderProfit, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { formatCurrency } from '../../utils/plCalculations';
 import { formatDate } from '../../utils/plCalculations';
@@ -57,7 +67,10 @@ const EndDonePage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewOrder, setPreviewOrder] = useState(null);
 
+  const navigate = useNavigate();
   const { showError } = useNotification();
 
   // Fetch orders with "done" end state
@@ -218,6 +231,744 @@ const EndDonePage = () => {
     return dateObj.toLocaleDateString();
   };
 
+  // Calculate invoice totals (same as InvoicePage)
+  const calculateInvoiceTotals = (order) => {
+    if (!order) return { 
+      grandTotal: 0, 
+      amountPaid: 0,
+      balanceDue: 0,
+      itemsSubtotal: 0,
+      taxAmount: 0,
+      pickupDeliveryCost: 0,
+      jlSubtotalBeforeTax: 0,
+      jlGrandTotal: 0
+    };
+
+    const taxAmount = calculateOrderTax(order);
+    const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
+      calculatePickupDeliveryCost(
+        parseFloat(order.paymentData.pickupDeliveryCost) || 0,
+        order.paymentData.pickupDeliveryServiceType || 'both'
+      ) : 0;
+    
+    const breakdown = getOrderCostBreakdown(order);
+    const itemsSubtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
+    const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
+    
+    const amountPaid = order.orderType === 'corporate' 
+      ? (parseFloat(order.paymentDetails?.amountPaid || 0))
+      : (parseFloat(order.paymentData?.amountPaid || 0));
+    
+    const balanceDue = grandTotal - amountPaid;
+
+    // Calculate JL costs
+    let jlSubtotalBeforeTax = 0;
+    if (order.furnitureData?.groups) {
+      order.furnitureData.groups.forEach(group => {
+        if (group.materialJLPrice && group.materialJLQnty) {
+          const materialJLTotal = (parseFloat(group.materialJLPrice) || 0) * (parseFloat(group.materialJLQnty) || 0);
+          const materialTaxRate = materialTaxRates[group.materialCompany] || 0.13;
+          jlSubtotalBeforeTax += materialJLTotal * materialTaxRate;
+        }
+        if (group.foamJLPrice && group.foamQnty) {
+          jlSubtotalBeforeTax += (parseFloat(group.foamJLPrice) || 0) * (parseFloat(group.foamQnty) || 1);
+        }
+      });
+    }
+
+    // Add extra expenses
+    if (order.extraExpenses && order.extraExpenses.length > 0) {
+      order.extraExpenses.forEach(expense => {
+        jlSubtotalBeforeTax += parseFloat(expense.total) || 0;
+      });
+    }
+
+    const jlGrandTotal = jlSubtotalBeforeTax;
+
+    return {
+      grandTotal,
+      itemsSubtotal,
+      taxAmount,
+      pickupDeliveryCost,
+      amountPaid,
+      balanceDue,
+      jlSubtotalBeforeTax,
+      jlGrandTotal
+    };
+  };
+
+      // Handle review/print preview
+  const handleReviewInvoice = (order) => {
+    try {
+      setPreviewOrder(order);
+      setPreviewDialogOpen(true);
+    } catch (error) {
+      console.error('Error opening invoice preview:', error);
+      showError('Failed to open invoice preview');
+    }
+  };
+
+  // Handle print
+  const handlePrint = () => {
+    if (!previewOrder) return;
+    
+    // Create a print window with the invoice content
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    const totals = calculateInvoiceTotals(previewOrder);
+    const order = previewOrder;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${order.orderDetails?.billInvoice || 'N/A'}</title>
+        <style>
+          @media print {
+            @page {
+              margin: 0.5in 0.75in 0.5in 0.5in;
+              size: A4;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+          }
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 12px;
+            background-color: #ffffff;
+            color: #000000;
+          }
+          .invoice-container {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 12px;
+            background-color: #ffffff;
+            color: #000000;
+            min-height: 297mm;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #ccc;
+          }
+          .customer-info {
+            flex: 1;
+          }
+          .customer-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #000000;
+            margin-bottom: 8px;
+          }
+          .customer-details {
+            display: flex;
+            gap: 16px;
+          }
+          .detail-column {
+            flex: 1;
+          }
+          .detail-item {
+            font-size: 0.8rem;
+            color: #666666;
+            margin-bottom: 4px;
+          }
+          .invoice-number {
+            text-align: right;
+          }
+          .invoice-number h1 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #000000;
+            margin: 0 0 4px 0;
+          }
+          .logo {
+            height: 45px;
+            width: auto;
+            margin-bottom: 8px;
+          }
+          .section-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #000000;
+            margin-bottom: 8px;
+          }
+          .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+          }
+          .table th {
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-align: left;
+          }
+          .table td {
+            border: 1px solid #ccc;
+            padding: 2px 4px;
+            font-size: 0.8rem;
+            text-align: left;
+          }
+          .furniture-group-header {
+            background-color: #f8f8f8;
+            font-weight: bold;
+            font-size: 0.8rem;
+            padding: 2px 4px;
+          }
+          .notes-totals-section {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+          }
+          .notes-section {
+            flex: 1;
+          }
+          .notes-header {
+            background-color: #f8f8f8;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 0.8rem;
+          }
+          .notes-content {
+            border: 1px solid #ccc;
+            min-height: 60px;
+            padding: 12px;
+            font-size: 0.8rem;
+            background-color: #ffffff;
+          }
+          .totals-section {
+            width: 300px;
+          }
+          .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 0.8rem;
+          }
+          .total-row.grand-total {
+            border-top: 1px solid #ccc;
+            padding-top: 4px;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+          }
+          .total-row.balance-due {
+            background-color: #fff3cd;
+            padding: 4px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="header">
+            <div class="customer-info">
+              <div class="customer-name">${order.orderType === 'corporate' ? (order.corporateCustomer?.corporateName || 'N/A') : (order.personalInfo?.customerName || 'N/A')}</div>
+              <div class="customer-details">
+                <div class="detail-column">
+                  <div class="detail-item">Email: ${order.orderType === 'corporate' ? (order.contactPerson?.email || order.corporateCustomer?.email || 'N/A') : (order.personalInfo?.email || 'N/A')}</div>
+                  <div class="detail-item">Phone: ${order.orderType === 'corporate' ? (order.contactPerson?.phone || 'N/A') : (order.personalInfo?.phone || 'N/A')}</div>
+                  <div class="detail-item">Platform: ${order.orderDetails?.platform || 'N/A'}</div>
+                </div>
+                <div class="detail-column">
+                  <div class="detail-item">Date: ${formatDateDisplay(order.createdAt)}</div>
+                  <div class="detail-item">Address: ${order.orderType === 'corporate' ? (order.corporateCustomer?.address || 'N/A') : (order.personalInfo?.address || 'N/A')}</div>
+                </div>
+              </div>
+            </div>
+            <div class="invoice-number">
+              <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo" />
+              <h1>${order.orderDetails?.billInvoice || 'N/A'}</h1>
+            </div>
+          </div>
+
+          <div class="section-title">Items & Services</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 60%">Description</th>
+                <th style="text-align: right; width: 13%">Price</th>
+                <th style="text-align: right; width: 13%">Qty</th>
+                <th style="text-align: right; width: 14%">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.furnitureData?.groups?.map(group => `
+                <tr class="furniture-group-header">
+                  <td colspan="4">${group.furnitureType || 'Furniture Group'}</td>
+                </tr>
+                ${group.labourPrice && parseFloat(group.labourPrice) > 0 ? `
+                  <tr>
+                    <td>Labour ${group.labourNote || ''}</td>
+                    <td style="text-align: right">$${(parseFloat(group.labourPrice) || 0).toFixed(2)}</td>
+                    <td style="text-align: right">${group.labourQnty || 1}</td>
+                    <td style="text-align: right">$${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}</td>
+                  </tr>
+                ` : ''}
+                ${group.materialPrice && parseFloat(group.materialPrice) > 0 ? `
+                  <tr>
+                    <td>Material ${group.materialCompany || ''} ${group.materialCode ? `(${group.materialCode})` : ''}</td>
+                    <td style="text-align: right">$${(parseFloat(group.materialPrice) || 0).toFixed(2)}</td>
+                    <td style="text-align: right">${group.materialQnty || 1}</td>
+                    <td style="text-align: right">$${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0)).toFixed(2)}</td>
+                  </tr>
+                ` : ''}
+                ${group.foamPrice && parseFloat(group.foamPrice) > 0 ? `
+                  <tr>
+                    <td>Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}</td>
+                    <td style="text-align: right">$${(parseFloat(group.foamPrice) || 0).toFixed(2)}</td>
+                    <td style="text-align: right">${group.foamQnty || 1}</td>
+                    <td style="text-align: right">$${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}</td>
+                  </tr>
+                ` : ''}
+                ${group.paintingLabour && parseFloat(group.paintingLabour) > 0 ? `
+                  <tr>
+                    <td>Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}</td>
+                    <td style="text-align: right">$${(parseFloat(group.paintingLabour) || 0).toFixed(2)}</td>
+                    <td style="text-align: right">${group.paintingQnty || 1}</td>
+                    <td style="text-align: right">$${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}</td>
+                  </tr>
+                ` : ''}
+              `).join('') || ''}
+              ${order.paymentData?.pickupDeliveryEnabled && totals.pickupDeliveryCost > 0 ? `
+                <tr>
+                  <td>Pickup & Delivery</td>
+                  <td style="text-align: right">$${totals.pickupDeliveryCost.toFixed(2)}</td>
+                  <td style="text-align: right">1</td>
+                  <td style="text-align: right">$${totals.pickupDeliveryCost.toFixed(2)}</td>
+                </tr>
+              ` : ''}
+            </tbody>
+          </table>
+
+          <div class="notes-totals-section">
+            <div class="notes-section">
+              <div class="notes-header">Internal Notes</div>
+              <div class="notes-content">${order.paymentData?.notes || ''}</div>
+              <div class="notes-header" style="margin-top: 16px">Customer's Item Notes</div>
+              <div class="notes-content">${order.furnitureData?.groups?.filter(group => group.customerNote && group.customerNote.trim() !== '').map(group => `<strong>${group.furnitureType || 'Furniture Group'}:</strong><br/>${group.customerNote}`).join('<br/><br/>') || ''}</div>
+            </div>
+            <div class="totals-section">
+              <div class="total-row">
+                <span>Items Subtotal:</span>
+                <span>$${totals.itemsSubtotal.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span>Tax (13% on M&F):</span>
+                <span>$${totals.taxAmount.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span>Pickup & Delivery:</span>
+                <span>$${totals.pickupDeliveryCost.toFixed(2)}</span>
+              </div>
+              <div class="total-row grand-total">
+                <span>Grand Total:</span>
+                <span>$${totals.grandTotal.toFixed(2)}</span>
+              </div>
+              <div class="total-row">
+                <span>Deposit Paid:</span>
+                <span>-$${totals.amountPaid.toFixed(2)}</span>
+              </div>
+              <div class="total-row balance-due">
+                <span>Balance Due:</span>
+                <span>$${totals.balanceDue.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
+  };
+
+  // Render invoice details (same as InvoicePage)
+  const renderInvoiceDetails = () => {
+    if (!previewOrder) {
+      return (
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          height: '100%',
+          textAlign: 'center',
+          p: 4,
+          backgroundColor: '#ffffff',
+          color: '#000000'
+        }}>
+          <ReceiptIcon sx={{ fontSize: 64, color: '#666666', mb: 2 }} />
+          <Typography variant="h6" sx={{ color: '#000000', mb: 1 }}>
+            No order selected
+          </Typography>
+        </Box>
+      );
+    }
+
+    const totals = calculateInvoiceTotals(previewOrder);
+    const order = previewOrder;
+
+    return (
+      <Box sx={{ 
+        p: 3, 
+        backgroundColor: '#ffffff',
+        color: '#000000',
+        minHeight: '297mm',
+        width: '210mm',
+        margin: '0 auto',
+        boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+        fontFamily: 'Arial, sans-serif'
+      }}>
+        {/* PDF-Style Invoice Header */}
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'flex-start',
+          mb: 2,
+          pb: 1.5,
+          borderBottom: '1px solid #ccc'
+        }}>
+          {/* Left Side - Customer Info */}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h4" sx={{ 
+              fontWeight: 'bold', 
+              mb: 1.5, 
+              color: '#000000',
+              fontSize: '1.5rem'
+            }}>
+              {order.orderType === 'corporate' 
+                ? (order.corporateCustomer?.corporateName || 'N/A')
+                : (order.personalInfo?.customerName || 'N/A')}
+            </Typography>
+            
+            <Box sx={{ display: 'flex', gap: 4 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Email: {order.orderType === 'corporate' 
+                    ? (order.contactPerson?.email || order.corporateCustomer?.email || 'N/A')
+                    : (order.personalInfo?.email || 'N/A')}
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Phone: {order.orderType === 'corporate' 
+                    ? (order.contactPerson?.phone || 'N/A')
+                    : (order.personalInfo?.phone || 'N/A')}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.8rem' }}>
+                  Platform: {order.orderDetails?.platform || 'N/A'}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: '#666666', fontSize: '0.8rem' }}>
+                  Date: {formatDateDisplay(order.createdAt)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.8rem' }}>
+                  Address: {order.orderType === 'corporate' 
+                    ? (order.corporateCustomer?.address || 'N/A')
+                    : (order.personalInfo?.address || 'N/A')}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+
+          <Box sx={{ textAlign: 'right' }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <img 
+                src="/assets/images/logo-001.png" 
+                alt="JL Upholstery Logo" 
+                style={{ 
+                  height: '60px', 
+                  width: 'auto',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+                }}
+              />
+            </Box>
+            <Typography variant="h4" sx={{ 
+              fontWeight: 'bold', 
+              color: '#000000',
+              mb: 1
+            }}>
+              {order.orderDetails?.billInvoice || 'N/A'}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Items & Services Section */}
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="h6" sx={{ 
+            fontWeight: 'bold', 
+            mb: 1.5,
+            color: '#000000'
+          }}>
+            Items & Services
+          </Typography>
+
+          <Box sx={{ 
+            display: 'flex',
+            backgroundColor: '#f0f0f0',
+            border: '1px solid #ccc',
+            fontWeight: 'bold',
+            fontSize: '0.8rem',
+            color: '#000000'
+          }}>
+            <Box sx={{ flex: 3, p: 0.5, borderRight: '1px solid #ccc' }}>Description</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Price</Box>
+            <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+            <Box sx={{ flex: 1, p: 0.5, textAlign: 'right' }}>Total</Box>
+          </Box>
+
+          {order.furnitureData?.groups?.map((group, groupIndex) => (
+            <Box key={groupIndex}>
+              <Box sx={{ 
+                display: 'flex',
+                backgroundColor: '#f8f8f8',
+                border: '1px solid #ccc',
+                borderTop: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.8rem',
+                color: '#000000',
+                minHeight: '24px'
+              }}>
+                <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
+                  {group.furnitureType || 'Furniture Group'}
+                </Box>
+              </Box>
+
+              {group.labourPrice && parseFloat(group.labourPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  borderLeft: '1px solid #ccc',
+                  borderRight: '1px solid #ccc',
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
+                }}>
+                  <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                    Labour {group.labourNote || ''}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(group.labourPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {group.labourQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {group.materialPrice && parseFloat(group.materialPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  borderLeft: '1px solid #ccc',
+                  borderRight: '1px solid #ccc',
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
+                }}>
+                  <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                    Material {group.materialCompany || ''} {group.materialCode ? `(${group.materialCode})` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(group.materialPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {group.materialQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {group.foamPrice && parseFloat(group.foamPrice) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  borderLeft: '1px solid #ccc',
+                  borderRight: '1px solid #ccc',
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
+                }}>
+                  <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                    Foam{group.foamThickness ? ` (${group.foamThickness}")` : ''}{group.foamNote ? ` - ${group.foamNote}` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(group.foamPrice) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {group.foamQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+
+              {group.paintingLabour && parseFloat(group.paintingLabour) > 0 && (
+                <Box sx={{ 
+                  display: 'flex',
+                  borderLeft: '1px solid #ccc',
+                  borderRight: '1px solid #ccc',
+                  fontSize: '0.8rem',
+                  color: '#000000',
+                  minHeight: '24px'
+                }}>
+                  <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                    Painting{group.paintingNote ? ` - ${group.paintingNote}` : ''}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${(parseFloat(group.paintingLabour) || 0).toFixed(2)}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    {group.paintingQnty || 1}
+                  </Box>
+                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    ${((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1)).toFixed(2)}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          ))}
+
+          {order.paymentData?.pickupDeliveryEnabled && totals.pickupDeliveryCost > 0 && (
+            <Box sx={{ 
+              display: 'flex',
+              border: '1px solid #ccc',
+              borderTop: 'none',
+              fontSize: '0.8rem',
+              color: '#000000',
+              minHeight: '24px'
+            }}>
+              <Box sx={{ flex: 3, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                Pickup & Delivery
+              </Box>
+              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                ${totals.pickupDeliveryCost.toFixed(2)}
+              </Box>
+              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                1
+              </Box>
+              <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                ${totals.pickupDeliveryCost.toFixed(2)}
+              </Box>
+            </Box>
+          )}
+        </Box>
+
+        {/* Notes and Totals Section */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Box sx={{ flex: 1 }}>
+            <Box sx={{ mb: 1 }}>
+              <Box sx={{ 
+                backgroundColor: '#f8f8f8',
+                p: 0.5,
+                border: '1px solid #ccc',
+                borderBottom: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.8rem',
+                color: '#000000'
+              }}>
+                Internal Notes
+              </Box>
+              <Box sx={{ 
+                border: '1px solid #ccc',
+                minHeight: 60,
+                p: 1.5,
+                fontSize: '0.8rem',
+                backgroundColor: '#ffffff',
+                color: '#000000'
+              }}>
+                {order.paymentData?.notes || ''}
+              </Box>
+            </Box>
+            <Box>
+              <Box sx={{ 
+                backgroundColor: '#f8f8f8',
+                p: 0.5,
+                border: '1px solid #ccc',
+                borderBottom: 'none',
+                fontWeight: 'bold',
+                fontSize: '0.8rem',
+                color: '#000000'
+              }}>
+                Customer's Item Notes
+              </Box>
+              <Box sx={{ 
+                border: '1px solid #ccc',
+                minHeight: 60,
+                p: 1.5,
+                fontSize: '0.8rem',
+                backgroundColor: '#ffffff',
+                color: '#000000'
+              }}>
+                {order.furnitureData?.groups?.filter(group => group.customerNote && group.customerNote.trim() !== '').map(group => (
+                  <Box key={group.id || Math.random()} sx={{ mb: 1 }}>
+                    <Box sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                      {group.furnitureType || 'Furniture Group'}:
+                    </Box>
+                    <Box sx={{ ml: 1 }}>
+                      {group.customerNote}
+                    </Box>
+                  </Box>
+                )) || ''}
+              </Box>
+            </Box>
+          </Box>
+
+          <Box sx={{ width: 300 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, fontSize: '0.8rem', color: '#000000' }}>
+              <span>Items Subtotal:</span>
+              <span>${totals.itemsSubtotal.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, fontSize: '0.8rem', color: '#000000' }}>
+              <span>Tax (13% on M&F):</span>
+              <span>${totals.taxAmount.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, fontSize: '0.8rem', color: '#000000' }}>
+              <span>Pickup & Delivery:</span>
+              <span>${totals.pickupDeliveryCost.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, fontSize: '0.9rem', fontWeight: 'bold', color: '#000000', borderTop: '1px solid #ccc', pt: 0.5 }}>
+              <span>Grand Total:</span>
+              <span>${totals.grandTotal.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, fontSize: '0.8rem', color: '#000000' }}>
+              <span>Deposit Paid:</span>
+              <span>-${totals.amountPaid.toFixed(2)}</span>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold', color: '#000000', backgroundColor: '#fff3cd', p: 0.5, borderRadius: 0.5 }}>
+              <span>Balance Due:</span>
+              <span>${totals.balanceDue.toFixed(2)}</span>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -372,13 +1123,30 @@ const EndDonePage = () => {
                          </Typography>
                        </TableCell>
                       <TableCell>
-                        <MuiIconButton
-                          size="small"
-                          onClick={() => handleRowToggle(order.id)}
-                          sx={{ color: '#b98f33' }}
-                        >
-                          {expandedRows.has(order.id) ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                        </MuiIconButton>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
+                          <Tooltip title="Review Invoice">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleReviewInvoice(order)}
+                              sx={{ 
+                                color: '#b98f33',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                  color: '#d4af5a'
+                                }
+                              }}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <MuiIconButton
+                            size="small"
+                            onClick={() => handleRowToggle(order.id)}
+                            sx={{ color: '#b98f33' }}
+                          >
+                            {expandedRows.has(order.id) ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                          </MuiIconButton>
+                        </Box>
                       </TableCell>
                     </TableRow>
                     <TableRow>
@@ -619,6 +1387,117 @@ const EndDonePage = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Invoice Preview Dialog */}
+      <Dialog 
+        open={previewDialogOpen} 
+        onClose={() => setPreviewDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #b98f33',
+            borderRadius: '10px',
+            color: '#ffffff',
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid #b98f33'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <ReceiptIcon sx={{ color: '#000000', fontSize: 28 }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+              Invoice Preview - {previewOrder?.orderDetails?.billInvoice || 'N/A'}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => setPreviewDialogOpen(false)}
+            sx={{
+              color: '#000000',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.1)'
+              }
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ 
+          p: 2,
+          backgroundColor: '#3a3a3a',
+          overflow: 'auto',
+          display: 'flex',
+          justifyContent: 'center',
+          '&::-webkit-scrollbar': {
+            width: '8px'
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#2a2a2a'
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#b98f33',
+            borderRadius: '4px'
+          }
+        }}>
+          <Box sx={{ 
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            overflow: 'hidden'
+          }}>
+            {renderInvoiceDetails()}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ 
+          backgroundColor: '#3a3a3a',
+          borderTop: '1px solid #b98f33',
+          p: 2,
+          gap: 2
+        }}>
+          <Button
+            onClick={() => setPreviewDialogOpen(false)}
+            sx={{
+              color: '#ffffff',
+              borderColor: '#666666',
+              '&:hover': {
+                borderColor: '#b98f33',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+            variant="outlined"
+          >
+            Close
+          </Button>
+          <Button
+            onClick={handlePrint}
+            variant="contained"
+            startIcon={<PrintIcon />}
+            sx={{
+              background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+              color: '#000000',
+              fontWeight: 'bold',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            Print
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
