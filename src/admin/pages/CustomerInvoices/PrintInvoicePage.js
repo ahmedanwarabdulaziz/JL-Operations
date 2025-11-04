@@ -174,7 +174,7 @@ const PrintInvoicePage = () => {
       }
 
       // Save PDF
-      const fileName = `Invoice_${invoiceData.invoiceNumber || 'N/A'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Invoice ${invoiceData.invoiceNumber || 'N/A'}.pdf`;
       pdf.save(fileName);
       
       showSuccess('PDF saved successfully!');
