@@ -89,7 +89,7 @@ const PrintInvoicePage = () => {
         {`
           @media print {
             @page {
-              margin: 0.5in 0.75in 0.5in 0.5in;
+              margin: 0.5in 1in 0.5in 0.5in;
               size: A4;
             }
             
@@ -149,8 +149,20 @@ const PrintInvoicePage = () => {
             table {
               border-collapse: collapse !important;
               width: 100% !important;
-              max-width: 100% !important;
+              max-width: calc(100% - 0px) !important;
               table-layout: fixed !important;
+              box-sizing: border-box !important;
+            }
+            
+            /* Ensure table container respects boundaries */
+            .invoice-table-section {
+              max-width: 100% !important;
+              overflow: hidden !important;
+              box-sizing: border-box !important;
+            }
+            
+            .invoice-table-section > div {
+              max-width: 100% !important;
               box-sizing: border-box !important;
             }
             
@@ -164,6 +176,8 @@ const PrintInvoicePage = () => {
               word-wrap: break-word !important;
               overflow-wrap: break-word !important;
               box-sizing: border-box !important;
+              max-width: 100% !important;
+              overflow: hidden !important;
             }
             
             td {
@@ -175,6 +189,8 @@ const PrintInvoicePage = () => {
               word-wrap: break-word !important;
               overflow-wrap: break-word !important;
               box-sizing: border-box !important;
+              max-width: 100% !important;
+              overflow: hidden !important;
             }
             
             /* Reduce typography sizes */
@@ -270,8 +286,10 @@ const PrintInvoicePage = () => {
               padding-top: 110px !important;
               padding-bottom: 110px !important;
               padding-left: 15px !important;
-              padding-right: 25px !important;
+              padding-right: 15px !important;
               box-sizing: border-box !important;
+              max-width: 100% !important;
+              overflow-x: hidden !important;
             }
             
             /* Ensure Terms and Conditions header is visible */
@@ -320,7 +338,20 @@ const PrintInvoicePage = () => {
             
             /* Ensure totals section doesn't overflow on the right */
             .totals-section {
-              max-width: 400px !important;
+              max-width: calc(100% - 20px) !important;
+              box-sizing: border-box !important;
+            }
+            
+            /* Ensure invoice info section respects boundaries */
+            .invoice-info-section {
+              max-width: 100% !important;
+              box-sizing: border-box !important;
+            }
+            
+            /* Prevent any flex containers from overflowing */
+            .invoice-info-section > div,
+            .invoice-table-section > div > div {
+              max-width: 100% !important;
               box-sizing: border-box !important;
             }
             
@@ -332,7 +363,27 @@ const PrintInvoicePage = () => {
             /* Safari/Webkit specific fixes for Mac */
             @supports (-webkit-appearance: none) {
               .MuiPaper-root {
-                padding-right: 30px !important;
+                padding-right: 18px !important;
+              }
+              
+              table {
+                max-width: calc(100% - 2px) !important;
+              }
+              
+              .totals-section {
+                max-width: calc(100% - 30px) !important;
+              }
+            }
+            
+            /* Chrome on Mac specific fixes */
+            @media print and (-webkit-min-device-pixel-ratio: 0) {
+              .MuiPaper-root {
+                padding-right: 15px !important;
+              }
+              
+              table {
+                width: calc(100% - 0px) !important;
+                max-width: 100% !important;
               }
             }
           }
