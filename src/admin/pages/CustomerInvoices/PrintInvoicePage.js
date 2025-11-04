@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -20,12 +20,15 @@ import {
   ArrowBack as ArrowBackIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
-  LocationOn as LocationIcon
+  LocationOn as LocationIcon,
+  PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const PrintInvoicePage = () => {
   const navigate = useNavigate();
@@ -34,6 +37,7 @@ const PrintInvoicePage = () => {
   
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const invoiceRef = useRef(null);
 
   useEffect(() => {
     if (location.state?.invoiceData) {
@@ -47,6 +51,137 @@ const PrintInvoicePage = () => {
   // Handle print
   const handlePrint = () => {
     window.print();
+  };
+
+  // Handle save as PDF
+  const handleSaveAsPDF = async () => {
+    if (!invoiceRef.current) {
+      showError('Invoice content not found');
+      return;
+    }
+
+    try {
+      // Hide screen-only elements before capturing
+      const screenOnlyElements = document.querySelectorAll('.screen-only');
+      screenOnlyElements.forEach(el => {
+        el.style.display = 'none';
+      });
+
+      // Get footer element and hide it temporarily
+      const footerElement = invoiceRef.current.querySelector('.invoice-footer');
+      let footerHidden = false;
+      if (footerElement) {
+        footerElement.style.display = 'none';
+        footerHidden = true;
+      }
+
+      // Wait a bit for the DOM to update
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Capture the invoice content without footer
+      const canvas = await html2canvas(invoiceRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: invoiceRef.current.scrollWidth,
+        height: invoiceRef.current.scrollHeight,
+      });
+
+      // Capture footer separately
+      let footerCanvas = null;
+      let footerImgData = null;
+      if (footerElement) {
+        footerElement.style.display = '';
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        footerCanvas = await html2canvas(footerElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        });
+        footerImgData = footerCanvas.toDataURL('image/png');
+      }
+
+      // Show screen-only elements back
+      screenOnlyElements.forEach(el => {
+        el.style.display = '';
+      });
+
+      // Calculate PDF dimensions (Letter size)
+      const pageHeight = 279.4; // Letter height in mm (11in)
+      const pageWidth = 215.9; // Letter width in mm (8.5in)
+      const margin = 12.7; // 0.5in margin
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Calculate footer dimensions if available
+      let footerHeight = 0;
+      let footerImgWidth = contentWidth;
+      let footerImgHeight = 0;
+      if (footerCanvas && footerImgData) {
+        footerImgHeight = (footerCanvas.height * footerImgWidth) / footerCanvas.width;
+        footerHeight = footerImgHeight + 10; // Add 10mm margin
+      }
+      
+      // Calculate content dimensions
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'letter');
+      
+      // Calculate available height for content (page height minus margins and footer)
+      const availableContentHeight = pageHeight - (margin * 2) - footerHeight;
+      const contentAreaHeight = pageHeight - (margin * 2);
+      
+      // Calculate number of pages needed
+      let contentHeight = imgHeight;
+      let heightLeft = contentHeight;
+      let currentPage = 0;
+      
+      // Add pages with content
+      while (heightLeft > 0 || currentPage === 0) {
+        if (currentPage > 0) {
+          pdf.addPage();
+        }
+        
+        const isLastPage = heightLeft <= (currentPage === 0 && contentHeight <= availableContentHeight ? availableContentHeight : contentAreaHeight);
+        
+        // Calculate position and height for this page
+        let yPosition = margin;
+        let pageContentHeight = Math.min(heightLeft, isLastPage ? availableContentHeight : contentAreaHeight);
+        
+        // Add content to page
+        const contentScale = pageContentHeight / contentHeight;
+        const scaledWidth = imgWidth * (isLastPage && contentHeight > availableContentHeight ? contentScale : 1);
+        const scaledHeight = imgHeight * (isLastPage && contentHeight > availableContentHeight ? contentScale : 1);
+        const xPosition = margin + (contentWidth - scaledWidth) / 2;
+        
+        pdf.addImage(imgData, 'PNG', xPosition, yPosition, scaledWidth, scaledHeight);
+        
+        // Add footer on last page
+        if (isLastPage && footerImgData) {
+          const footerY = pageHeight - margin - footerImgHeight;
+          pdf.addImage(footerImgData, 'PNG', margin, footerY, footerImgWidth, footerImgHeight);
+        }
+        
+        heightLeft -= (isLastPage ? availableContentHeight : contentAreaHeight);
+        currentPage++;
+        
+        // Break if we've added all content
+        if (heightLeft <= 0) break;
+      }
+
+      // Save PDF
+      const fileName = `Invoice_${invoiceData.invoiceNumber || 'N/A'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      
+      showSuccess('PDF saved successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showError('Failed to generate PDF. Please try again.');
+    }
   };
 
   // Calculate paid amount
@@ -87,13 +222,13 @@ const PrintInvoicePage = () => {
       {/* Print Styles */}
       <style>
         {`
-          @media print {
+            @media print {
             @page {
-              margin: 0.5in 1in 0.5in 0.5in;
-              size: A4;
+              margin: 0.5in;
+              size: letter;
             }
             
-            body {
+            html, body {
               -webkit-print-color-adjust: exact;
               color-adjust: exact;
               print-color-adjust: exact;
@@ -101,6 +236,8 @@ const PrintInvoicePage = () => {
               margin: 0 !important;
               padding: 0 !important;
               overflow-x: hidden !important;
+              width: 100% !important;
+              max-width: 100% !important;
             }
             
             /* Ensure all elements respect boundaries */
@@ -149,7 +286,7 @@ const PrintInvoicePage = () => {
             table {
               border-collapse: collapse !important;
               width: 100% !important;
-              max-width: calc(100% - 0px) !important;
+              max-width: calc(100% - 5px) !important;
               table-layout: fixed !important;
               box-sizing: border-box !important;
             }
@@ -239,21 +376,26 @@ const PrintInvoicePage = () => {
             
             /* Reduce spacing for print */
             .invoice-header {
-              position: fixed !important;
-              top: 0 !important;
-              left: 0 !important;
-              right: 0 !important;
-              margin: 0 !important;
+              position: relative !important;
+              margin-bottom: 16px !important;
               padding: 0 !important;
               width: 100% !important;
+              max-width: 100% !important;
               background: white !important;
+              box-sizing: border-box !important;
+              display: flex !important;
+              justify-content: center !important;
+              align-items: center !important;
             }
             
             .invoice-header img {
               max-height: 100px !important;
               width: 100% !important;
+              height: auto !important;
               object-fit: contain !important;
               display: block !important;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             
             .invoice-info-section {
@@ -265,31 +407,35 @@ const PrintInvoicePage = () => {
             }
             
             .invoice-footer {
-              position: fixed !important;
-              bottom: 0 !important;
-              left: 0 !important;
-              right: 0 !important;
-              margin: 0 !important;
+              position: relative !important;
+              margin-top: 24px !important;
               padding: 0 !important;
               width: 100% !important;
+              max-width: 100% !important;
+              box-sizing: border-box !important;
+              display: flex !important;
+              justify-content: center !important;
+              align-items: center !important;
             }
             
             .invoice-footer img {
               max-height: 100px !important;
               width: 100% !important;
+              height: auto !important;
               object-fit: contain !important;
               display: block !important;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             
-            /* Add padding to main content to prevent overlap with header and footer - Mac compatible */
+            /* Add padding to main content - match screen view */
             .MuiPaper-root {
-              padding-top: 110px !important;
-              padding-bottom: 110px !important;
-              padding-left: 15px !important;
-              padding-right: 15px !important;
+              padding: 20px !important;
               box-sizing: border-box !important;
               max-width: 100% !important;
               overflow-x: hidden !important;
+              width: 100% !important;
+              margin: 0 auto !important;
             }
             
             /* Ensure Terms and Conditions header is visible */
@@ -338,7 +484,7 @@ const PrintInvoicePage = () => {
             
             /* Ensure totals section doesn't overflow on the right */
             .totals-section {
-              max-width: calc(100% - 20px) !important;
+              max-width: calc(100% - 30px) !important;
               box-sizing: border-box !important;
             }
             
@@ -363,28 +509,45 @@ const PrintInvoicePage = () => {
             /* Safari/Webkit specific fixes for Mac */
             @supports (-webkit-appearance: none) {
               .MuiPaper-root {
-                padding-right: 18px !important;
+                padding-right: 12px !important;
               }
               
               table {
-                max-width: calc(100% - 2px) !important;
+                max-width: calc(100% - 5px) !important;
               }
               
               .totals-section {
-                max-width: calc(100% - 30px) !important;
+                max-width: calc(100% - 35px) !important;
               }
             }
             
             /* Chrome on Mac specific fixes */
             @media print and (-webkit-min-device-pixel-ratio: 0) {
               .MuiPaper-root {
-                padding-right: 15px !important;
+                padding-right: 10px !important;
               }
               
               table {
-                width: calc(100% - 0px) !important;
-                max-width: 100% !important;
+                width: calc(100% - 5px) !important;
+                max-width: calc(100% - 5px) !important;
               }
+              
+              .totals-section {
+                max-width: calc(100% - 35px) !important;
+              }
+            }
+            
+            /* Additional safety for right-side content */
+            .invoice-info-section > div:last-child,
+            .totals-section {
+              padding-right: 0 !important;
+              margin-right: 0 !important;
+            }
+            
+            /* Ensure table cells don't overflow */
+            table td:last-child,
+            table th:last-child {
+              padding-right: 4px !important;
             }
           }
         `}
@@ -425,11 +588,26 @@ const PrintInvoicePage = () => {
           >
             Print Invoice
           </Button>
+          <Button
+            variant="contained"
+            startIcon={<PdfIcon />}
+            onClick={handleSaveAsPDF}
+            sx={{
+              ...buttonStyles.primaryButton,
+              backgroundColor: '#dc3545',
+              '&:hover': {
+                backgroundColor: '#c82333',
+              },
+            }}
+          >
+            Save as PDF
+          </Button>
         </Box>
       </Box>
 
       {/* Invoice Content */}
       <Paper 
+        ref={invoiceRef}
         elevation={3} 
         sx={{ 
           p: 4, 
