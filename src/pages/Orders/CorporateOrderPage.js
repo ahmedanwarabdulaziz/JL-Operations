@@ -33,13 +33,15 @@ import {
   Business as BusinessIcon,
   Person as PersonIcon,
   Email as EmailIcon,
-  Phone as PhoneIcon
+  Phone as PhoneIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
-import { collection, getDocs, query, orderBy, addDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { getNextCustomerInvoiceNumber } from '../../utils/invoiceNumberUtils';
+import CorporateCustomerDialog from '../../admin/components/CorporateCustomers/CorporateCustomerDialog';
 import Step3Furniture from './steps/Step3Furniture';
 import Step4PaymentNotes from './steps/Step4PaymentNotes';
 import Step5Review from './steps/Step5Review';
@@ -52,6 +54,14 @@ const steps = [
   'Submit'
 ];
 
+const contactPersonInitialState = {
+  name: '',
+  email: '',
+  phone: '',
+  position: '',
+  isPrimary: false
+};
+
 const CorporateOrderPage = () => {
   const [activeStep, setActiveStep] = useState(0);
   const [corporateCustomers, setCorporateCustomers] = useState([]);
@@ -63,7 +73,7 @@ const CorporateOrderPage = () => {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceNumberLoading, setInvoiceNumberLoading] = useState(false);
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
-  const [contactPersonDialogOpen, setContactPersonDialogOpen] = useState(false);
+  const [addCorporateDialogOpen, setAddCorporateDialogOpen] = useState(false);
   const [orderData, setOrderData] = useState({
     furnitureGroups: [],
     paymentDetails: {
@@ -77,6 +87,9 @@ const CorporateOrderPage = () => {
     },
     formErrors: {}
   });
+  const [contactPersonDialogOpen, setContactPersonDialogOpen] = useState(false);
+  const [contactPersonSaving, setContactPersonSaving] = useState(false);
+  const [contactPersonForm, setContactPersonForm] = useState(contactPersonInitialState);
 
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
@@ -150,6 +163,101 @@ const CorporateOrderPage = () => {
     setCustomerDialogOpen(false);
     // Move to next step
     setActiveStep(1);
+  };
+
+  const handleCorporateCustomerSaved = (savedCustomer, { isUpdate }) => {
+    setCorporateCustomers((prev) => {
+      const updatedList = isUpdate
+        ? prev.map((customer) =>
+            customer.id === savedCustomer.id ? { ...customer, ...savedCustomer } : customer
+          )
+        : [...prev, savedCustomer];
+      return updatedList.sort((a, b) =>
+        (a.corporateName || '').localeCompare(b.corporateName || '', undefined, { sensitivity: 'base' })
+      );
+    });
+
+    if (isUpdate) {
+      if (selectedCustomer?.id === savedCustomer.id) {
+        setSelectedCustomer((prev) => (prev ? { ...prev, ...savedCustomer } : prev));
+      }
+    } else {
+      setSelectedCustomer(savedCustomer);
+      setSelectedContactPerson(null);
+    }
+  };
+
+  const handleOpenAddContactPerson = () => {
+    if (!selectedCustomer) {
+      showError('Please select a corporate customer first');
+      return;
+    }
+
+    setContactPersonForm(contactPersonInitialState);
+    setContactPersonDialogOpen(true);
+    setCustomerDialogOpen(false);
+  };
+
+  const handleCancelContactPersonDialog = () => {
+    setContactPersonDialogOpen(false);
+    setContactPersonSaving(false);
+    setContactPersonForm(contactPersonInitialState);
+    setCustomerDialogOpen(true);
+  };
+
+  const handleSaveContactPerson = async () => {
+    if (!selectedCustomer) {
+      showError('Please select a corporate customer first');
+      return;
+    }
+
+    if (!contactPersonForm.name.trim()) {
+      showError('Contact person name is required');
+      return;
+    }
+
+    try {
+      setContactPersonSaving(true);
+      const newContactPerson = {
+        ...contactPersonForm,
+        id: Date.now().toString()
+      };
+      const updatedContactPersons = [
+        ...(selectedCustomer.contactPersons || []),
+        newContactPerson
+      ];
+
+      const customerRef = doc(db, 'corporateCustomers', selectedCustomer.id);
+      await updateDoc(customerRef, {
+        contactPersons: updatedContactPersons,
+        updatedAt: new Date()
+      });
+
+      setCorporateCustomers((prev) =>
+        prev.map((customer) =>
+          customer.id === selectedCustomer.id
+            ? { ...customer, contactPersons: updatedContactPersons }
+            : customer
+        )
+      );
+
+      setSelectedCustomer((prev) =>
+        prev ? { ...prev, contactPersons: updatedContactPersons } : prev
+      );
+
+      const newlySelected = newContactPerson;
+      setSelectedContactPerson(newlySelected);
+
+      showSuccess('Contact person added successfully');
+      setContactPersonDialogOpen(false);
+      setContactPersonForm(contactPersonInitialState);
+      setCustomerDialogOpen(false);
+    } catch (error) {
+      console.error('Error adding contact person:', error);
+      showError('Failed to add contact person');
+    } finally {
+      setContactPersonSaving(false);
+    }
   };
 
   const validateFurniture = () => {
@@ -269,9 +377,39 @@ const CorporateOrderPage = () => {
       case 0:
         return (
           <Box>
-            <Typography variant="h6" sx={{ mb: 3 }}>
-              Select Corporate Customer
-            </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 3,
+                flexWrap: 'wrap',
+                gap: 2
+              }}
+            >
+              <Typography variant="h6" sx={{ mb: 0 }}>
+                Select Corporate Customer
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setAddCorporateDialogOpen(true)}
+                sx={{
+                  background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                  color: '#000000',
+                  border: '3px solid #4CAF50',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                  position: 'relative',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                    border: '3px solid #45a049',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                  }
+                }}
+              >
+                Add Corporate Customer
+              </Button>
+            </Box>
             
             {/* Search */}
             <TextField
@@ -558,14 +696,246 @@ const CorporateOrderPage = () => {
               ))}
             </List>
           ) : (
-            <Alert severity="warning">
-              No contact persons available for this corporate customer.
-            </Alert>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Alert severity="warning">
+                No contact persons available for this corporate customer.
+              </Alert>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleOpenAddContactPerson}
+                sx={{
+                  background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                  color: '#000000',
+                  border: '3px solid #4CAF50',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                  position: 'relative',
+                  '&:hover': {
+                    background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                    border: '3px solid #45a049',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                  }
+                }}
+              >
+                Add Contact Person
+              </Button>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
+          {selectedCustomer?.contactPersons && selectedCustomer.contactPersons.length > 0 && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenAddContactPerson}
+              sx={{
+                background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                color: '#000000',
+                border: '3px solid #4CAF50',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                position: 'relative',
+                '&:hover': {
+                  background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                  border: '3px solid #45a049',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                }
+              }}
+            >
+              Add Contact Person
+            </Button>
+          )}
           <Button onClick={() => setCustomerDialogOpen(false)}>
             Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <CorporateCustomerDialog
+        open={addCorporateDialogOpen}
+        onClose={() => setAddCorporateDialogOpen(false)}
+        onSaved={handleCorporateCustomerSaved}
+        onSuccess={showSuccess}
+        onError={showError}
+      />
+
+      <Dialog
+        open={contactPersonDialogOpen}
+        onClose={handleCancelContactPersonDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            fontWeight: 'bold'
+          }}
+        >
+          Add Contact Person
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              fullWidth
+              label="Name"
+              value={contactPersonForm.name}
+              onChange={(e) => setContactPersonForm({ ...contactPersonForm, name: e.target.value })}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a',
+                    borderWidth: 2
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: '#d4af5a'
+                  }
+                }
+              }}
+            />
+
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={contactPersonForm.email}
+              onChange={(e) => setContactPersonForm({ ...contactPersonForm, email: e.target.value })}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a',
+                    borderWidth: 2
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: '#d4af5a'
+                  }
+                }
+              }}
+            />
+
+            <TextField
+              fullWidth
+              label="Phone"
+              value={contactPersonForm.phone}
+              onChange={(e) => setContactPersonForm({ ...contactPersonForm, phone: e.target.value })}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a',
+                    borderWidth: 2
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: '#d4af5a'
+                  }
+                }
+              }}
+            />
+
+            <TextField
+              fullWidth
+              label="Position"
+              value={contactPersonForm.position}
+              onChange={(e) => setContactPersonForm({ ...contactPersonForm, position: e.target.value })}
+              placeholder="e.g., Manager, Director, CEO..."
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#d4af5a',
+                    borderWidth: 2
+                  }
+                },
+                '& .MuiInputLabel-root': {
+                  '&.Mui-focused': {
+                    color: '#d4af5a'
+                  }
+                }
+              }}
+            />
+
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: 2,
+                border: '2px solid #e0e0e0',
+                borderRadius: 1,
+                backgroundColor: '#f9f9f9',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: '#f5f5f5'
+                }
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={contactPersonForm.isPrimary}
+                onChange={(e) =>
+                  setContactPersonForm({ ...contactPersonForm, isPrimary: e.target.checked })
+                }
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  accentColor: '#d4af5a'
+                }}
+              />
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                Primary Contact Person
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button
+            onClick={handleCancelContactPersonDialog}
+            sx={{ color: '#666666' }}
+            disabled={contactPersonSaving}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveContactPerson}
+            variant="contained"
+            disabled={contactPersonSaving}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&.Mui-disabled': {
+                background: 'linear-gradient(145deg, rgba(212,175,90,0.5) 0%, rgba(185,143,51,0.5) 50%, rgba(139,107,31,0.5) 100%)',
+                borderColor: 'rgba(76,175,80,0.5)',
+                color: 'rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            {contactPersonSaving ? 'Saving...' : 'Add'}
           </Button>
         </DialogActions>
       </Dialog>

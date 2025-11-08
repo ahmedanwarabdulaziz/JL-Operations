@@ -24,7 +24,6 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
-  Fab,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -55,8 +54,9 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
+import CorporateCustomerDialog from '../../components/CorporateCustomers/CorporateCustomerDialog';
 
 const CorporateCustomersPage = () => {
   const [corporateCustomers, setCorporateCustomers] = useState([]);
@@ -70,14 +70,6 @@ const CorporateCustomersPage = () => {
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
   // Corporate Customer Form State
-  const [customerForm, setCustomerForm] = useState({
-    corporateName: '',
-    email: '',
-    phone: '',
-    address: '',
-    notes: ''
-  });
-
   // Contact Person Form State
   const [contactPersonForm, setContactPersonForm] = useState({
     name: '',
@@ -118,70 +110,25 @@ const CorporateCustomersPage = () => {
   };
 
   const handleOpenDialog = (customer = null) => {
-    if (customer) {
-      setEditingCustomer(customer);
-      setCustomerForm({
-        corporateName: customer.corporateName || '',
-        email: customer.email || '',
-        phone: customer.phone || '',
-        address: customer.address || '',
-        notes: customer.notes || ''
-      });
-    } else {
-      setEditingCustomer(null);
-      setCustomerForm({
-        corporateName: '',
-        email: '',
-        phone: '',
-        address: '',
-        notes: ''
-      });
-    }
+    setEditingCustomer(customer);
     setDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setEditingCustomer(null);
-    setCustomerForm({
-      corporateName: '',
-      email: '',
-      phone: '',
-      address: '',
-      notes: ''
-    });
   };
 
-  const handleSaveCustomer = async () => {
-    if (!customerForm.corporateName.trim()) {
-      showNotification('Corporate name is required', 'error');
-      return;
-    }
-
-    try {
-      if (editingCustomer) {
-        const customerRef = doc(db, 'corporateCustomers', editingCustomer.id);
-        await updateDoc(customerRef, {
-          ...customerForm,
-          updatedAt: new Date()
-        });
-        showNotification('Corporate customer updated successfully', 'success');
-      } else {
-        await addDoc(collection(db, 'corporateCustomers'), {
-          ...customerForm,
-          contactPersons: [],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-        showNotification('Corporate customer created successfully', 'success');
+  const handleCustomerSaved = (savedCustomer, { isUpdate }) => {
+    setCorporateCustomers((prev) => {
+      if (isUpdate) {
+        return prev.map((customer) =>
+          customer.id === savedCustomer.id ? { ...customer, ...savedCustomer } : customer
+        );
       }
-      
-      handleCloseDialog();
-      fetchCorporateCustomers();
-    } catch (error) {
-      console.error('Error saving corporate customer:', error);
-      showNotification('Error saving corporate customer', 'error');
-    }
+      return [...prev, savedCustomer];
+    });
+    fetchCorporateCustomers();
   };
 
   const handleDeleteCustomer = async (customerId) => {
@@ -521,167 +468,14 @@ const CorporateCustomersPage = () => {
         </Grid>
       )}
 
-      {/* Corporate Customer Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-          color: '#000000',
-          fontWeight: 'bold'
-        }}>
-          {editingCustomer ? 'Edit Corporate Customer' : 'Add Corporate Customer'}
-        </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <TextField
-              fullWidth
-              label="Corporate Name"
-              value={customerForm.corporateName}
-              onChange={(e) => setCustomerForm({ ...customerForm, corporateName: e.target.value })}
-              required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: '#d4af5a'
-                  }
-                }
-              }}
-            />
-            
-            <TextField
-              fullWidth
-              label="Email"
-              type="email"
-              value={customerForm.email}
-              onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-              required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: '#d4af5a'
-                  }
-                }
-              }}
-            />
-            
-            <TextField
-              fullWidth
-              label="Phone"
-              value={customerForm.phone}
-              onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-              required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: '#d4af5a'
-                  }
-                }
-              }}
-            />
-            
-            <TextField
-              fullWidth
-              label="Address"
-              value={customerForm.address}
-              onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-              multiline
-              rows={2}
-              placeholder="Enter the corporate address..."
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: '#d4af5a'
-                  }
-                }
-              }}
-            />
-            
-            <TextField
-              fullWidth
-              label="Notes"
-              value={customerForm.notes}
-              onChange={(e) => setCustomerForm({ ...customerForm, notes: e.target.value })}
-              multiline
-              rows={3}
-              placeholder="Enter any additional notes about this corporate customer..."
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#d4af5a',
-                    borderWidth: 2
-                  }
-                },
-                '& .MuiInputLabel-root': {
-                  '&.Mui-focused': {
-                    color: '#d4af5a'
-                  }
-                }
-              }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button onClick={handleCloseDialog} sx={{ color: '#666666' }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSaveCustomer}
-            variant="contained"
-            sx={{
-              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-              color: '#000000',
-              border: '3px solid #4CAF50',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-              position: 'relative',
-              '&:hover': {
-                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                border: '3px solid #45a049',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-              }
-            }}
-          >
-            {editingCustomer ? 'Update' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CorporateCustomerDialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        customer={editingCustomer}
+        onSaved={handleCustomerSaved}
+        onSuccess={(message) => showNotification(message, 'success')}
+        onError={(message) => showNotification(message, 'error')}
+      />
 
       {/* Contact Person Dialog */}
       <Dialog open={contactPersonDialogOpen} onClose={handleCloseContactPersonDialog} maxWidth="sm" fullWidth>
