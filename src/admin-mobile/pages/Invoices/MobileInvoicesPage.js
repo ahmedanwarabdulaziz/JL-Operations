@@ -116,6 +116,22 @@ const getFinancialStatus = (order) => {
   return 'Deposit Not Paid';
 };
 
+const isOrderDone = (order) => {
+  const candidateStatuses = [
+    order?.invoiceStatus,
+    order?.status,
+    order?.orderStatus,
+    order?.orderDetails?.status,
+    order?.orderDetails?.orderStatus,
+    order?.status?.value,
+    order?.orderDetails?.status?.value
+  ];
+
+  return candidateStatuses.some(
+    (status) => typeof status === 'string' && status.trim().toLowerCase() === 'done'
+  );
+};
+
 const MobileInvoicesPage = () => {
   const { orders, loading, error, refresh } = useInvoiceOrders();
   const [searchTerm, setSearchTerm] = useState('');
@@ -342,8 +358,9 @@ const MobileInvoicesPage = () => {
             'Unknown customer';
           const status = order?.invoiceStatus || 'Pending';
           const totalAmount = formatCurrency(calculateOrderTotal(order));
-          const financialStatus = getFinancialStatus(order);
-          const financialStyles = resolveFinancialStyles(financialStatus);
+          const isDone = isOrderDone(order);
+          const financialStatus = isDone ? null : getFinancialStatus(order);
+          const financialStyles = financialStatus ? resolveFinancialStyles(financialStatus) : null;
 
           return (
             <Card
@@ -418,17 +435,19 @@ const MobileInvoicesPage = () => {
                   >
                     {status || 'Unknown'}
                   </Typography>
-                  <Chip
-                    label={financialStatus}
-                    sx={{
-                      bgcolor: financialStyles.bgcolor,
-                      color: financialStyles.color,
-                      fontFamily: 'Source Sans Pro, sans-serif',
-                      fontWeight: 600,
-                      height: 24,
-                      border: `1px solid ${financialStyles.borderColor || 'transparent'}`
-                    }}
-                  />
+                  {!isDone && financialStatus && (
+                    <Chip
+                      label={financialStatus}
+                      sx={{
+                        bgcolor: financialStyles.bgcolor,
+                        color: financialStyles.color,
+                        fontFamily: 'Source Sans Pro, sans-serif',
+                        fontWeight: 600,
+                        height: 24,
+                        border: `1px solid ${financialStyles.borderColor || 'transparent'}`
+                      }}
+                    />
+                  )}
                   <Tooltip title="Preview invoice">
                     <IconButton
                       onClick={() => handleInvoicePreview(order)}
