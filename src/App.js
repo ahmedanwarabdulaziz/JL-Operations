@@ -8,6 +8,7 @@ import { NotificationProvider } from './components/Common/NotificationSystem';
 import { FirebaseProvider } from './contexts/FirebaseContext';
 import MainLayout from './components/Layout/MainLayout';
 import AdminMainLayout from './admin/layouts/MainLayout';
+import AdminMobileLayout from './admin-mobile/layouts/AdminMobileLayout';
 import LoginPage from './components/Auth/LoginPage';
 import DashboardPage from './admin/pages/Dashboard/DashboardPage';
 import TestPage from './pages/Test/TestPage';
@@ -24,6 +25,7 @@ import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './admin/pages/Invoice/InvoicePage';
 import CorporateInvoicesPage from './admin/pages/CorporateInvoices/CorporateInvoicesPage';
 import TaxedInvoicesPage from './admin/pages/TaxedInvoices/TaxedInvoicesPage';
+import MobileInvoicesPage from './admin-mobile/pages/Invoices/MobileInvoicesPage';
 
 import FinancePage from './pages/Finance/FinancePage';
 import PLPage from './pages/Finance/PLPage';
@@ -98,6 +100,9 @@ const AppContent = () => {
   // Check if we're on a website management route (separate from main admin)
   const isWebsiteManagementRoute = location.pathname.startsWith('/admin/website');
 
+  // Check if we're on the mobile admin experience
+  const isAdminMobileRoute = location.pathname.startsWith('/admin/mobile');
+
   // Check if we're on an admin route (excluding website management)
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname === '/test' ||
@@ -155,6 +160,17 @@ const AppContent = () => {
   // If it's an admin route but user is not authenticated, redirect to login
   if (isAdminRoute && !user) {
     return <LoginPage onLoginSuccess={() => {}} />;
+  }
+
+  if (isAdminMobileRoute && user) {
+    return (
+      <AdminMobileLayout>
+        <Routes>
+          <Route path="/admin/mobile" element={<Navigate to="/admin/mobile/invoices" replace />} />
+          <Route path="/admin/mobile/invoices" element={<MobileInvoicesPage />} />
+        </Routes>
+      </AdminMobileLayout>
+    );
   }
 
   // If it's an admin route and user is authenticated, render admin layout
