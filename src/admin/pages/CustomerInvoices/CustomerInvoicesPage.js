@@ -41,8 +41,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
-import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc, getDoc } from 'firebase/firestore';
-import { validateCustomerInvoiceNumber } from '../../../utils/invoiceNumberUtils';
+import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { validateCustomerInvoiceNumber, getNextCustomerInvoiceNumber } from '../../../utils/invoiceNumberUtils';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
@@ -258,6 +258,8 @@ const CustomerInvoicesPage = () => {
       
       setInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToDelete.id));
       setFilteredInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToDelete.id));
+
+      await clearInvoiceNumberReferences(invoiceToDelete);
       
       showSuccess('Invoice deleted successfully');
       setDeleteDialogOpen(false);
@@ -269,6 +271,76 @@ const CustomerInvoicesPage = () => {
       setDeleting(false);
     }
   };
+
+  const parseInvoiceNumberValue = (value) => {
+    if (value === null || value === undefined) return null;
+    const match = String(value).match(/\d+/);
+    if (!match) return null;
+    const parsed = parseInt(match[0], 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const clearInvoiceNumberReferences = useCallback(async (invoice) => {
+    const invoiceNumber = parseInvoiceNumberValue(invoice?.invoiceNumber);
+    const originalOrderId = invoice?.originalOrderId;
+
+    if (!invoiceNumber) {
+      return;
+    }
+
+    const collectionsToCheck = [
+      { name: 'orders', id: originalOrderId },
+      { name: 'corporate-orders', id: originalOrderId },
+      { name: 'done-orders', id: originalOrderId },
+      { name: 'closed-corporate-orders', id: originalOrderId }
+    ];
+
+    let referencesCleared = 0;
+
+    for (const { name, id } of collectionsToCheck) {
+      if (!id) continue;
+
+      try {
+        const referenceDocRef = doc(db, name, id);
+        const referenceSnapshot = await getDoc(referenceDocRef);
+
+        if (referenceSnapshot.exists()) {
+          const data = referenceSnapshot.data();
+          const existingNumber = parseInvoiceNumberValue(data?.orderDetails?.billInvoice);
+
+          if (existingNumber === invoiceNumber) {
+            await updateDoc(referenceDocRef, {
+              'orderDetails.billInvoice': null,
+              'orderDetails.lastUpdated': new Date()
+            });
+            referencesCleared += 1;
+          }
+        }
+      } catch (error) {
+        console.error(`Error clearing invoice number from ${name}/${id}:`, error);
+      }
+    }
+
+    if (referencesCleared > 0) {
+      setOrders(prevOrders =>
+        prevOrders.map(order => {
+          if (order.id !== originalOrderId) return order;
+
+          const currentNumber = parseInvoiceNumberValue(order.orderDetails?.billInvoice);
+          if (currentNumber !== invoiceNumber) return order;
+
+          return {
+            ...order,
+            orderDetails: {
+              ...order.orderDetails,
+              billInvoice: null,
+              lastUpdated: new Date()
+            }
+          };
+        })
+      );
+    }
+  }, []);
 
   // Handle close invoice (move to taxed invoices)
   const handleCloseInvoice = async () => {
@@ -347,19 +419,59 @@ const CustomerInvoicesPage = () => {
   // Handle create invoice from order
   const handleCreateInvoice = async (order) => {
     try {
+      let workingOrder = order;
       // Validate that the customer invoice number is available
-      const invoiceNumber = order.orderDetails?.billInvoice;
+      let invoiceNumber = order.orderDetails?.billInvoice;
+
+      if (!invoiceNumber) {
+        invoiceNumber = await getNextCustomerInvoiceNumber();
+      }
+
       if (invoiceNumber) {
-        const isAvailable = await validateCustomerInvoiceNumber(invoiceNumber);
+        let isAvailable = await validateCustomerInvoiceNumber(invoiceNumber);
         if (!isAvailable) {
-          showError(`Customer invoice number ${invoiceNumber} is already used in taxed invoices. Please use a different order.`);
-          return;
+          // Get the next available number and update the order before proceeding
+          const nextInvoiceNumber = await getNextCustomerInvoiceNumber();
+
+          if (!nextInvoiceNumber) {
+            showError('Unable to determine the next available invoice number. Please try again later.');
+            return;
+          }
+
+          const orderCollectionName = order.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+          const orderRef = doc(db, orderCollectionName, order.id);
+
+          await updateDoc(orderRef, {
+            'orderDetails.billInvoice': nextInvoiceNumber,
+            'orderDetails.lastUpdated': new Date()
+          });
+
+          invoiceNumber = nextInvoiceNumber;
+          workingOrder = {
+            ...order,
+            orderDetails: {
+              ...order.orderDetails,
+              billInvoice: nextInvoiceNumber,
+              lastUpdated: new Date()
+            }
+          };
+
+          // Update local state so UI reflects the new invoice number
+          setOrders(prevOrders =>
+            prevOrders.map(existingOrder =>
+              existingOrder.id === order.id
+                ? workingOrder
+                : existingOrder
+            )
+          );
+
+          showSuccess(`Invoice number was already used. Order updated to #${nextInvoiceNumber}.`);
         }
       }
-      
-    navigate('/admin/customer-invoices/create', { 
-      state: { orderData: order } 
-    });
+
+      navigate('/admin/customer-invoices/create', { 
+        state: { orderData: workingOrder } 
+      });
     } catch (error) {
       console.error('Error validating invoice number:', error);
       showError('Failed to validate invoice number');

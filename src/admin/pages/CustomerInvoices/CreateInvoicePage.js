@@ -255,8 +255,13 @@ const CreateInvoicePage = () => {
     const setDefaultInvoiceNumber = async () => {
       // Only set default if invoice number is empty or just whitespace
       if (!invoiceNumber || !invoiceNumber.trim()) {
-        const nextNumber = await getNextInvoiceNumber();
-        setInvoiceNumber(nextNumber);
+          const orderInvoiceNumber = orderData?.orderDetails?.billInvoice;
+          if (orderInvoiceNumber) {
+            setInvoiceNumber(String(orderInvoiceNumber));
+          } else {
+            const nextNumber = await getNextInvoiceNumber();
+            setInvoiceNumber(nextNumber);
+          }
       }
     };
     setDefaultInvoiceNumber();

@@ -1,40 +1,102 @@
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
+const fetchAllDocs = async (path) => {
+  const collectionRef = collection(db, path);
+  return getDocs(collectionRef);
+};
+
+const parseInvoiceNumber = (value) => {
+  if (value === null || value === undefined) return null;
+
+  const valueStr = String(value).trim();
+  if (valueStr.length === 0) return null;
+
+  const match = valueStr.match(/\d+/);
+  if (!match) return null;
+
+  const parsed = parseInt(match[0], 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const extractInvoiceNumbers = (snapshot, accessor) => {
+  if (!snapshot) return [];
+  return snapshot.docs
+    .map(doc => {
+      const data = doc.data();
+      if (!data) return null;
+
+      let value = null;
+      if (accessor) {
+        value = accessor(data);
+      } else {
+        value =
+          data.invoiceNumber ??
+          data.billInvoice;
+      }
+
+      return parseInvoiceNumber(value);
+    })
+    .filter(number => number !== null);
+};
+
+const extractCorporateBillInvoices = (snapshot) => {
+  if (!snapshot) return [];
+  return snapshot.docs
+    .map(doc => {
+      const data = doc.data();
+      if (!data) return null;
+      const value =
+        data.orderDetails?.billInvoice ??
+        data.billInvoice ??
+        data.invoiceNumber;
+      return parseInvoiceNumber(value);
+    })
+    .filter(number => number !== null);
+};
+
+const getAllInvoiceNumbers = async () => {
+  const [customerInvoicesSnapshot, corporateOrdersSnapshot] = await Promise.all([
+    fetchAllDocs('customer-invoices'),
+    fetchAllDocs('corporate-orders')
+  ]);
+
+  return [
+    ...extractInvoiceNumbers(customerInvoicesSnapshot),
+    ...extractCorporateBillInvoices(corporateOrdersSnapshot)
+  ];
+};
+
 /**
  * Get the next available customer invoice number considering both customer-invoices and taxed invoices
  * This ensures no gaps in the customer invoice number sequence (like 101660, 101661, etc.)
  */
 export const getNextCustomerInvoiceNumber = async () => {
   try {
-    // Get all customer invoice numbers from both collections
-    const [customerInvoicesSnapshot, taxedInvoicesSnapshot] = await Promise.all([
-      getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc'))),
-      getDocs(query(collection(db, 'taxedInvoices'), orderBy('invoiceNumber', 'desc')))
-    ]);
+    // Get invoice numbers from all relevant collections to keep a single shared sequence
+    const allNumbers = await getAllInvoiceNumbers();
+    const numbersSet = new Set(allNumbers);
 
-    // Extract invoice numbers from customer-invoices
-    const customerInvoiceNumbers = customerInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill && !isNaN(parseInt(bill)))
-      .map(bill => parseInt(bill));
-
-    // Extract invoice numbers from taxed invoices
-    const taxedNumbers = taxedInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill && !isNaN(parseInt(bill)))
-      .map(bill => parseInt(bill));
-
-    // Combine all numbers and find the maximum
-    const allNumbers = [...customerInvoiceNumbers, ...taxedNumbers];
-    
     if (allNumbers.length === 0) {
       return '101660'; // Starting number for customer invoices
     }
 
     const maxNumber = Math.max(...allNumbers, 101659);
-    const nextNumber = maxNumber + 1;
-    
+    let nextNumber = maxNumber + 1;
+
+    // Skip any numbers already present in the fetched dataset
+    while (numbersSet.has(nextNumber)) {
+      nextNumber += 1;
+    }
+
+  // Ensure the number we return is truly available by double-checking against validation
+  // This guards against any missed datasets or timing differences.
+  // Continue incrementing until a free number is found.
+  while (!(await validateCustomerInvoiceNumber(nextNumber.toString(), numbersSet))) {
+    numbersSet.add(nextNumber);
+      nextNumber += 1;
+    }
+
     return nextNumber.toString();
     
   } catch (error) {
@@ -47,25 +109,30 @@ export const getNextCustomerInvoiceNumber = async () => {
  * Validate that a customer invoice number is available (not used in customer-invoices or taxed invoices)
  * This prevents duplicate customer invoice numbers
  */
-export const validateCustomerInvoiceNumber = async (invoiceNumber) => {
+export const validateCustomerInvoiceNumber = async (invoiceNumber, existingNumbersSet = null) => {
   try {
-    const [customerInvoicesSnapshot, taxedInvoicesSnapshot] = await Promise.all([
-      getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc'))),
-      getDocs(query(collection(db, 'taxedInvoices'), orderBy('invoiceNumber', 'desc')))
-    ]);
+    let invoiceNumbers = existingNumbersSet;
+    if (!invoiceNumbers) {
+      invoiceNumbers = new Set(await getAllInvoiceNumbers());
+    }
 
-    // Check customer-invoices collection
-    const customerInvoiceNumbers = customerInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill === invoiceNumber);
+    const parsed = parseInvoiceNumber(invoiceNumber);
 
-    // Check taxed invoices collection
-    const taxedNumbers = taxedInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill === invoiceNumber);
+    if (parsed === null) {
+      return false;
+    }
 
-    // If found in either collection, it's not available
-    return customerInvoiceNumbers.length === 0 && taxedNumbers.length === 0;
+    if (!invoiceNumbers.has(parsed)) {
+      // If the provided set does not contain the number, double-check by refetching
+      const refreshedNumbers = new Set(await getAllInvoiceNumbers());
+      if (existingNumbersSet) {
+        // Keep the provided set in sync so callers can reuse it
+        refreshedNumbers.forEach(num => existingNumbersSet.add(num));
+      }
+      invoiceNumbers = refreshedNumbers;
+    }
+
+    return !invoiceNumbers.has(parsed);
     
   } catch (error) {
     console.error('Error validating customer invoice number:', error);
@@ -79,23 +146,20 @@ export const validateCustomerInvoiceNumber = async (invoiceNumber) => {
  */
 export const getCustomerInvoiceSequenceStatus = async () => {
   try {
-    const [customerInvoicesSnapshot, taxedInvoicesSnapshot] = await Promise.all([
-      getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'asc'))),
-      getDocs(query(collection(db, 'taxedInvoices'), orderBy('invoiceNumber', 'asc')))
+    const [
+      customerInvoicesSnapshot,
+      corporateOrdersSnapshot
+    ] = await Promise.all([
+      fetchAllDocs('customer-invoices'),
+      fetchAllDocs('corporate-orders')
     ]);
 
-    // Get all used customer invoice numbers
-    const customerInvoiceNumbers = customerInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill && !isNaN(parseInt(bill)))
-      .map(bill => parseInt(bill));
-
-    const taxedNumbers = taxedInvoicesSnapshot.docs
-      .map(doc => doc.data().invoiceNumber)
-      .filter(bill => bill && !isNaN(parseInt(bill)))
-      .map(bill => parseInt(bill));
-
-    const allUsedNumbers = [...new Set([...customerInvoiceNumbers, ...taxedNumbers])].sort((a, b) => a - b);
+    const customerInvoiceNumbers = extractInvoiceNumbers(customerInvoicesSnapshot);
+    const corporateOrderNumbers = extractCorporateBillInvoices(corporateOrdersSnapshot);
+    const allUsedNumbers = [...new Set([
+      ...customerInvoiceNumbers,
+      ...corporateOrderNumbers
+    ])].sort((a, b) => a - b);
     
     // Find gaps
     const gaps = [];
