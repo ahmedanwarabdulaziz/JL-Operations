@@ -68,12 +68,6 @@ const CorporateCustomerDialog = ({
     if (!formValues.corporateName.trim()) {
       validationErrors.corporateName = 'Corporate name is required';
     }
-    if (!formValues.email.trim()) {
-      validationErrors.email = 'Email is required';
-    }
-    if (!formValues.phone.trim()) {
-      validationErrors.phone = 'Phone is required';
-    }
 
     setErrors(validationErrors);
     return Object.keys(validationErrors).length === 0;
@@ -179,7 +173,6 @@ const CorporateCustomerDialog = ({
             type="email"
             value={formValues.email}
             onChange={handleInputChange('email')}
-            required
             error={Boolean(errors.email)}
             helperText={errors.email}
             sx={{
@@ -205,7 +198,6 @@ const CorporateCustomerDialog = ({
             label="Phone"
             value={formValues.phone}
             onChange={handleInputChange('phone')}
-            required
             error={Boolean(errors.phone)}
             helperText={errors.phone}
             sx={{
