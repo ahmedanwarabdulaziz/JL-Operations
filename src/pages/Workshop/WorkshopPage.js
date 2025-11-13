@@ -78,7 +78,7 @@ import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWit
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
 import { useTreatments } from '../../hooks/useTreatments';
-import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, where, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
@@ -511,6 +511,10 @@ const WorkshopPage = () => {
     return { totalPercentage, totalRevenue: calculatedRevenue, totalCost: calculatedCost, totalProfit: calculatedProfit };
   };
 
+  const getOrderCollectionName = (order) => {
+    return order?.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+  };
+
   // Get allocation status for display
   const getAllocationStatus = () => {
     const totals = calculateTotals(monthlyAllocations);
@@ -671,7 +675,7 @@ const WorkshopPage = () => {
 
     try {
       // Update order dates in database
-      const orderRef = doc(db, 'orders', selectedOrderForStandaloneAllocation.id);
+      const orderRef = doc(db, getOrderCollectionName(selectedOrderForStandaloneAllocation), selectedOrderForStandaloneAllocation.id);
       await updateDoc(orderRef, {
         'orderDetails.startDate': standaloneStartDate,
         'orderDetails.endDate': standaloneEndDate,
@@ -812,7 +816,7 @@ const WorkshopPage = () => {
         return; // User cancelled
       }
       
-      const orderRef = doc(db, 'orders', selectedOrderForStandaloneAllocation.id);
+      const orderRef = doc(db, getOrderCollectionName(selectedOrderForStandaloneAllocation), selectedOrderForStandaloneAllocation.id);
       await updateDoc(orderRef, updateData);
       
       // Update local state
@@ -986,9 +990,13 @@ const WorkshopPage = () => {
         `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
       ).join(', ');
 
-      // Check if customer has email
-      const customerEmail = selectedOrderForAllocation.personalInfo?.email;
-      const hasEmail = customerEmail && customerEmail.trim() !== '';
+      // Determine email + collection handling
+      const isCorporateOrder = selectedOrderForAllocation.orderType === 'corporate';
+      const rawCustomerEmail = isCorporateOrder
+        ? (selectedOrderForAllocation.contactPerson?.email || selectedOrderForAllocation.corporateCustomer?.email || '')
+        : (selectedOrderForAllocation.personalInfo?.email || '');
+      const customerEmail = rawCustomerEmail.trim();
+      const hasEmail = !isCorporateOrder && customerEmail !== '';
 
       const confirmed = await showEnhancedConfirm(
         'Confirm Order Completion & Email',
@@ -997,82 +1005,139 @@ const WorkshopPage = () => {
         includeReviewRequest
       );
 
-      if (!confirmed) {
+      if (!confirmed || !confirmed.confirmed) {
         // Reopen allocation dialog if user cancels
         setAllocationDialogHidden(false);
         setAllocationDialogOpen(true);
         return; // User cancelled
       }
       
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
+      const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
+
+      const sanitizedOrderData = {
+        ...selectedOrderForAllocation,
+        allocation: allocationData,
+        orderDetails: updateData.orderDetails,
+        invoiceStatus: updateData.invoiceStatus,
+        startDate: firestoreStartDate,
+        endDate: firestoreEndDate
+      };
+      delete sanitizedOrderData.newStatus;
       
-      // Send completion email if customer has email and user confirmed
-      console.log('🔍 Workshop Debug - Email sending conditions:', {
-        hasCustomerEmail: !!customerEmail,
-        customerEmail: customerEmail,
-        confirmedSendEmail: confirmed.sendEmail,
-        confirmedIncludeReview: confirmed.includeReviewRequest
-      });
-      
-      if (customerEmail && confirmed.sendEmail) {
-        try {
-          setSendingCompletionEmail(true);
-          
-          // Prepare order data for email
-          const orderDataForEmail = {
-            personalInfo: selectedOrderForAllocation.personalInfo,
-            orderDetails: selectedOrderForAllocation.orderDetails,
-            furnitureData: {
-              groups: selectedOrderForAllocation.furnitureData?.groups || []
-            },
-            paymentData: selectedOrderForAllocation.paymentData
-          };
+      if (isCorporateOrder) {
+        const closedAtDate = new Date();
 
-          console.log('🔍 Workshop Debug - Order data prepared for email:', {
-            hasPersonalInfo: !!orderDataForEmail.personalInfo,
-            hasOrderDetails: !!orderDataForEmail.orderDetails,
-            hasFurnitureData: !!orderDataForEmail.furnitureData,
-            furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
-          });
+        const doneOrderData = {
+          ...sanitizedOrderData,
+          orderType: 'corporate',
+          source: 'corporate_order',
+          closedAt: closedAtDate,
+          status: 'done'
+        };
 
-          // Progress callback for email sending
-          const onEmailProgress = (message) => {
-            console.log('🔍 Workshop Debug - Email progress:', message);
-            showSuccess(`📧 ${message}`);
-          };
+        const taxedInvoiceData = {
+          ...sanitizedOrderData,
+          orderType: 'corporate',
+          source: 'corporate_order',
+          closedAt: closedAtDate,
+          originalInvoiceId: sanitizedOrderData.id
+        };
 
-          console.log('🔍 Workshop Debug - Calling sendCompletionEmailWithGmail...');
-          
-          // Send the completion email
-          const emailResult = await sendCompletionEmailWithGmail(
-            orderDataForEmail, 
-            customerEmail, 
-            confirmed.includeReviewRequest, 
-            onEmailProgress
-          );
-          
-          console.log('🔍 Workshop Debug - Email result:', emailResult);
-          
-          if (emailResult.success) {
-            showSuccess('✅ Completion email sent successfully!');
-          } else {
-            showError(`❌ Failed to send completion email: ${emailResult.message}`);
+        const closedOrderData = {
+          ...sanitizedOrderData,
+          closedAt: closedAtDate,
+          status: 'closed'
+        };
+
+        await addDoc(collection(db, 'done-orders'), doneOrderData);
+        await addDoc(collection(db, 'taxedInvoices'), taxedInvoiceData);
+        await addDoc(collection(db, 'closed-corporate-orders'), closedOrderData);
+        await deleteDoc(orderRef);
+
+        const remainingOrders = orders.filter(order => order.id !== selectedOrderForAllocation.id);
+        const remainingFilteredOrders = filteredOrders.filter(order => order.id !== selectedOrderForAllocation.id);
+
+        setOrders(remainingOrders);
+        setFilteredOrders(remainingFilteredOrders);
+        setSelectedOrder(prev => {
+          if (!prev || prev.id !== selectedOrderForAllocation.id) {
+            return prev;
           }
-        } catch (error) {
-          console.error('🔍 Workshop Debug - Error sending completion email:', error);
-          showError(`Failed to send completion email: ${error.message}`);
-        } finally {
-          setSendingCompletionEmail(false);
-        }
-      } else {
-        console.log('🔍 Workshop Debug - Email not sent because:', {
-          noCustomerEmail: !customerEmail,
-          userDidNotConfirm: !confirmed.sendEmail
+          return remainingFilteredOrders[0] || remainingOrders[0] || null;
         });
+
+        showSuccess('Corporate order completed, allocated, and closed successfully');
+      } else {
+        // Send completion email if customer has email and user confirmed
+        console.log('🔍 Workshop Debug - Email sending conditions:', {
+          hasCustomerEmail: !!customerEmail,
+          customerEmail: customerEmail,
+          confirmedSendEmail: Boolean(confirmed.sendEmail),
+          confirmedIncludeReview: Boolean(confirmed.includeReviewRequest)
+        });
+        
+        if (customerEmail && confirmed.sendEmail) {
+          try {
+            setSendingCompletionEmail(true);
+            
+            // Prepare order data for email
+            const orderDataForEmail = {
+              personalInfo: sanitizedOrderData.personalInfo,
+              orderDetails: sanitizedOrderData.orderDetails,
+              furnitureData: {
+                groups: sanitizedOrderData.furnitureData?.groups || []
+              },
+              paymentData: sanitizedOrderData.paymentData
+            };
+
+            console.log('🔍 Workshop Debug - Order data prepared for email:', {
+              hasPersonalInfo: !!orderDataForEmail.personalInfo,
+              hasOrderDetails: !!orderDataForEmail.orderDetails,
+              hasFurnitureData: !!orderDataForEmail.furnitureData,
+              furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
+            });
+
+            // Progress callback for email sending
+            const onEmailProgress = (message) => {
+              console.log('🔍 Workshop Debug - Email progress:', message);
+              showSuccess(`📧 ${message}`);
+            };
+
+            console.log('🔍 Workshop Debug - Calling sendCompletionEmailWithGmail...');
+            
+            // Send the completion email
+            const emailResult = await sendCompletionEmailWithGmail(
+              orderDataForEmail, 
+              customerEmail, 
+              Boolean(confirmed.includeReviewRequest), 
+              onEmailProgress
+            );
+            
+            console.log('🔍 Workshop Debug - Email result:', emailResult);
+            
+            if (emailResult.success) {
+              showSuccess('✅ Completion email sent successfully!');
+            } else {
+              showError(`❌ Failed to send completion email: ${emailResult.message}`);
+            }
+          } catch (error) {
+            console.error('🔍 Workshop Debug - Error sending completion email:', error);
+            showError(`Failed to send completion email: ${error.message}`);
+          } finally {
+            setSendingCompletionEmail(false);
+          }
+        } else {
+          console.log('🔍 Workshop Debug - Email not sent because:', {
+            noCustomerEmail: !customerEmail,
+            userDidNotConfirm: !confirmed.sendEmail
+          });
+        }
+        
+        showSuccess('Order completed and allocated successfully');
       }
       
-      showSuccess('Order completed and allocated successfully');
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
       setSelectedOrderForAllocation(null);
@@ -3346,17 +3411,12 @@ const WorkshopPage = () => {
                   size="medium"
                   startIcon={<BarChartIcon />}
                   onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
-                  disabled={selectedOrder?.orderType === 'corporate'}
                   sx={{
-                    background: selectedOrder?.orderType === 'corporate' 
-                      ? 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)'
-                      : 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: selectedOrder?.orderType === 'corporate' ? '#666666' : '#000000',
-                    border: selectedOrder?.orderType === 'corporate' 
-                      ? '2px solid #999999'
-                      : '2px solid #f27921',
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '2px solid #f27921',
                     fontWeight: 'bold',
-                    '&:hover': selectedOrder?.orderType === 'corporate' ? {} : {
+                    '&:hover': {
                       background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
                       border: '2px solid #e06810'
                     }

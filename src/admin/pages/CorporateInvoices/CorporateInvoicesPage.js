@@ -493,7 +493,7 @@ const CorporateInvoicesPage = () => {
               <!-- Right Side - Invoice Details -->
               <div style="min-width: 250px; flex-shrink: 0;">
                 <div style="color: black; margin-bottom: 4px;">
-                  <strong>Date:</strong> ${formatDate(new Date())}
+                  <strong>Date:</strong> ${formatDateOnly(new Date())}
                 </div>
                 <div style="color: black; margin-bottom: 4px;">
                   <strong>Invoice #</strong> ${selectedOrder.orderDetails?.billInvoice || 'N/A'}
