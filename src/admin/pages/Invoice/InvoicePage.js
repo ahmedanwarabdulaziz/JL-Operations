@@ -199,12 +199,15 @@ const InvoicePage = () => {
     try {
       showNotification('Opening print preview...', 'info');
       
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      // openInvoicePreview handles window creation internally
       openInvoicePreview(selectedOrder, { materialTaxRates });
+      
+      // Success notification will only show if no error was thrown
       showNotification('Print preview opened successfully', 'success');
     } catch (error) {
       console.error('Error generating print preview:', error);
-      showNotification('Error generating print preview', 'error');
+      const errorMessage = error.message || 'Error generating print preview';
+      showNotification(errorMessage, 'error');
     }
   };
 
