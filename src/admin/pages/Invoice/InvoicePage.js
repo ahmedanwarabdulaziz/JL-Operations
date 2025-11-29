@@ -185,6 +185,30 @@ const InvoicePage = () => {
     });
   };
 
+  // Helper function to format deadline date
+  const formatDeadline = (deadline) => {
+    if (!deadline) return null;
+    try {
+      let dateObj;
+      if (deadline && typeof deadline === 'object' && deadline.toDate) {
+        dateObj = deadline.toDate();
+      } else if (deadline && typeof deadline === 'object' && deadline.seconds) {
+        dateObj = new Date(deadline.seconds * 1000);
+      } else {
+        dateObj = new Date(deadline);
+      }
+      if (isNaN(dateObj.getTime())) return null;
+      return dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting deadline:', error);
+      return null;
+    }
+  };
+
   // Use consistent calculation functions from orderCalculations
   const handleSelectOrder = (order) => {
     setSelectedOrder(order);
@@ -266,6 +290,32 @@ const InvoicePage = () => {
       const printWindow = window.open('', '_blank', 'width=900,height=1200');
       
       const furnitureGroups = selectedOrder.furnitureData.groups || [];
+      
+      // Helper function to format deadline date
+      const formatDeadline = (deadline) => {
+        if (!deadline) return null;
+        try {
+          let dateObj;
+          if (deadline && typeof deadline === 'object' && deadline.toDate) {
+            dateObj = deadline.toDate();
+          } else if (deadline && typeof deadline === 'object' && deadline.seconds) {
+            dateObj = new Date(deadline.seconds * 1000);
+          } else {
+            dateObj = new Date(deadline);
+          }
+          if (isNaN(dateObj.getTime())) return null;
+          return dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        } catch (error) {
+          console.error('Error formatting deadline:', error);
+          return null;
+        }
+      };
+      
+      const deadlineFormatted = formatDeadline(selectedOrder.orderDetails?.deadline);
       
       // Generate HTML content for work order with separate pages for each furniture group
       const htmlContent = `
@@ -351,6 +401,14 @@ const InvoicePage = () => {
               font-size: 0.8rem;
               color: #888888;
               margin-top: 2px;
+            }
+            
+            .deadline-display {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #cc0000;
+              margin-top: 8px;
+              text-align: center;
             }
             
             .order-details {
@@ -815,8 +873,9 @@ const InvoicePage = () => {
                                             </div>
                                             <div class="furniture-group-title">
                                                 <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                                                ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
                                                 <div class="furniture-details">
-                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}</div>` : ''}
+                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialQnty ? ` ${group.materialQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
                                                     ${(group.foamThickness || group.foamNote) ? `
                                                         <div class="foam-details">
                                                             Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
@@ -871,8 +930,9 @@ const InvoicePage = () => {
                 </div>
                 <div class="furniture-group-title">
                   <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                  ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
                   <div class="furniture-details">
-                    ${group.materialCode ? `<div class="material-code">${group.materialCode}</div>` : ''}
+                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialQnty ? ` ${group.materialQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
                     ${(group.foamThickness || group.foamNote) ? `
                       <div class="foam-details">
                         Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
@@ -1373,9 +1433,16 @@ const InvoicePage = () => {
                 p: 1.5,
                 fontSize: '0.8rem',
                 backgroundColor: '#ffffff',
-                color: '#000000'
+                color: '#000000',
+                whiteSpace: 'pre-wrap'
               }}>
-                {selectedOrder.paymentData?.notes || ''}
+                {(() => {
+                  const deadlineFormatted = formatDeadline(selectedOrder.orderDetails?.deadline);
+                  const notes = selectedOrder.paymentData?.notes || '';
+                  return deadlineFormatted 
+                    ? `Deadline: ${deadlineFormatted}${notes ? '\n\n' + notes : ''}`
+                    : notes;
+                })()}
               </Box>
             </Box>
             {/* Customer Notes */}
