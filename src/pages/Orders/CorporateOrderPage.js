@@ -40,7 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { getNextCustomerInvoiceNumber } from '../../utils/invoiceNumberUtils';
+import { getNextCorporateInvoiceNumber, validateCorporateInvoiceNumber } from '../../utils/invoiceNumberUtils';
 import CorporateCustomerDialog from '../../admin/components/CorporateCustomers/CorporateCustomerDialog';
 import Step3Furniture from './steps/Step3Furniture';
 import Step4PaymentNotes from './steps/Step4PaymentNotes';
@@ -118,13 +118,42 @@ const CorporateOrderPage = () => {
   const getNextInvoiceNumber = async () => {
     try {
       setInvoiceNumberLoading(true);
-      const nextNumber = await getNextCustomerInvoiceNumber();
+      const nextNumber = await getNextCorporateInvoiceNumber();
       setInvoiceNumber(nextNumber);
     } catch (error) {
       console.error('Error getting next invoice number:', error);
       showError('Failed to get next invoice number');
     } finally {
       setInvoiceNumberLoading(false);
+    }
+  };
+
+  // Handle invoice number change (only number part, T- prefix is locked)
+  const handleInvoiceNumberChange = async (newValue) => {
+    // Remove any T- prefix if user tries to type it
+    let numberPart = newValue.replace(/^T-?/i, '');
+    
+    // Only allow digits
+    numberPart = numberPart.replace(/\D/g, '');
+    
+    // Limit to 6 digits maximum
+    if (numberPart.length > 6) {
+      numberPart = numberPart.substring(0, 6);
+    }
+    
+    // Don't auto-pad - let user type freely
+    const fullNumber = numberPart ? `T-${numberPart}` : 'T-';
+    
+    // Update the value immediately for responsive editing
+    setInvoiceNumber(fullNumber);
+    
+    // Only validate for duplicates when we have a complete 6-digit number
+    if (numberPart.length === 6) {
+      const isValid = await validateCorporateInvoiceNumber(fullNumber);
+      if (!isValid && fullNumber !== invoiceNumber) {
+        showError(`Invoice number ${fullNumber} is already in use. Please choose a different number.`);
+        // Don't prevent setting - just warn the user
+      }
     }
   };
 
@@ -279,7 +308,7 @@ const CorporateOrderPage = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (activeStep === 0 && !selectedCustomer) {
       showError('Please select a corporate customer');
       return;
@@ -288,6 +317,44 @@ const CorporateOrderPage = () => {
       showError('Please select a contact person');
       return;
     }
+    
+    // Validate invoice number before proceeding from step 0
+    if (activeStep === 0) {
+      if (!invoiceNumber || !invoiceNumber.startsWith('T-')) {
+        showError('Invoice number must be in T-XXXXXX format');
+        return;
+      }
+
+      const numberPart = invoiceNumber.substring(2);
+      
+      // Ensure it's exactly 6 digits - pad if needed
+      let finalNumberPart = numberPart;
+      if (numberPart.length > 0 && numberPart.length < 6) {
+        finalNumberPart = numberPart.padStart(6, '0');
+        const updatedInvoiceNumber = `T-${finalNumberPart}`;
+        setInvoiceNumber(updatedInvoiceNumber);
+      }
+      
+      if (finalNumberPart.length !== 6 || isNaN(parseInt(finalNumberPart))) {
+        showError('Invoice number must be 6 digits (e.g., T-100001)');
+        return;
+      }
+
+      const finalInvoiceNumber = `T-${finalNumberPart}`;
+      
+      // Check for duplicates in both corporate-orders and customer-invoices
+      const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
+      if (!isValid) {
+        showError(`Invoice number ${finalInvoiceNumber} already exists in corporate orders or customer invoices. Please choose a different number.`);
+        return;
+      }
+      
+      // Update invoice number if it was padded
+      if (finalInvoiceNumber !== invoiceNumber) {
+        setInvoiceNumber(finalInvoiceNumber);
+      }
+    }
+    
     if (activeStep === 1) {
       // Validate furniture step
       if (!validateFurniture()) {
@@ -329,6 +396,36 @@ const CorporateOrderPage = () => {
 
   const handleSubmit = async () => {
     try {
+      // Validate invoice number format
+      if (!invoiceNumber || !invoiceNumber.startsWith('T-')) {
+        showError('Invoice number must be in T-XXXXXX format');
+        return;
+      }
+
+      const numberPart = invoiceNumber.substring(2);
+      
+      // Ensure it's exactly 6 digits - pad if needed
+      let finalNumberPart = numberPart;
+      if (numberPart.length > 0 && numberPart.length < 6) {
+        finalNumberPart = numberPart.padStart(6, '0');
+        const updatedInvoiceNumber = `T-${finalNumberPart}`;
+        setInvoiceNumber(updatedInvoiceNumber);
+      }
+      
+      if (finalNumberPart.length !== 6 || isNaN(parseInt(finalNumberPart))) {
+        showError('Invoice number must be 6 digits (e.g., T-100001)');
+        return;
+      }
+
+      const finalInvoiceNumber = `T-${finalNumberPart}`;
+      
+      // Only check for duplicates - allow manual number assignment
+      const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
+      if (!isValid) {
+        showError(`Invoice number ${finalInvoiceNumber} is already in use. Please choose a different number.`);
+        return;
+      }
+
       // Create corporate order data
       const corporateOrderData = {
         // Corporate customer info
@@ -349,7 +446,7 @@ const CorporateOrderPage = () => {
         },
         // Order details
         orderDetails: {
-          billInvoice: invoiceNumber,
+          billInvoice: finalInvoiceNumber,
           orderType: 'corporate',
           status: 'pending'
         },
@@ -569,22 +666,91 @@ const CorporateOrderPage = () => {
           ))}
         </Stepper>
 
-        {/* Invoice Number Display */}
+        {/* Invoice Number Display and Edit */}
         <Box sx={{ mb: 3 }}>
           <Alert severity="info">
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'nowrap' }}>
-              <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-                <strong>Invoice Number:</strong> {invoiceNumberLoading ? 'Loading...' : invoiceNumber}
-              </Typography>
-              {selectedCustomer && (
-                <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                  Corporate: {selectedCustomer.corporateName}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+                  Invoice Number:
                 </Typography>
-              )}
-              {selectedContactPerson && (
-                <Typography variant="body2" sx={{ color: 'secondary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                  Contact: {selectedContactPerson.name}
-                </Typography>
+                {invoiceNumberLoading ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        fontWeight: 'bold', 
+                        color: '#b98f33',
+                        px: 1.5,
+                        border: '1px solid',
+                        borderColor: '#555555',
+                        borderRight: 'none',
+                        borderTopLeftRadius: 1,
+                        borderBottomLeftRadius: 1,
+                        backgroundColor: '#2a2a2a',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        minWidth: '40px',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      T-
+                    </Typography>
+                    <TextField
+                      value={invoiceNumber.startsWith('T-') ? invoiceNumber.substring(2) : invoiceNumber}
+                      onChange={(e) => handleInvoiceNumberChange(e.target.value)}
+                      placeholder="100001"
+                      size="small"
+                      disabled={invoiceNumberLoading}
+                      sx={{
+                        width: 120,
+                        '& .MuiOutlinedInput-root': {
+                          borderTopLeftRadius: 0,
+                          borderBottomLeftRadius: 0,
+                          backgroundColor: '#2a2a2a',
+                          '& fieldset': {
+                            borderColor: '#333333',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#b98f33',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#b98f33',
+                          },
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
+                          '&::placeholder': {
+                            color: '#cccccc',
+                            opacity: 1
+                          }
+                        }
+                      }}
+                      inputProps={{
+                        maxLength: 6,
+                        inputMode: 'numeric',
+                        pattern: '[0-9]*'
+                      }}
+                    />
+                  </Box>
+                )}
+              </Box>
+              {(selectedCustomer || selectedContactPerson) && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                  {selectedCustomer && (
+                    <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                      Corporate: {selectedCustomer.corporateName}
+                    </Typography>
+                  )}
+                  {selectedContactPerson && (
+                    <Typography variant="body2" sx={{ color: 'secondary.main', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                      Contact: {selectedContactPerson.name}
+                    </Typography>
+                  )}
+                </Box>
               )}
             </Box>
           </Alert>

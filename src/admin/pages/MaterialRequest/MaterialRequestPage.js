@@ -106,6 +106,20 @@ const MaterialRequestPage = () => {
     }
   }, []);
 
+  // Helper function to parse ordered quantity from materialStatus
+  const parseOrderedQuantity = (materialStatus) => {
+    if (!materialStatus || typeof materialStatus !== 'string') return null;
+    if (materialStatus.startsWith('Ordered:')) {
+      const quantity = parseFloat(materialStatus.split(':')[1]);
+      return isNaN(quantity) ? null : quantity;
+    }
+    // Support old format where status is just "Ordered"
+    if (materialStatus === 'Ordered') {
+      return null; // No quantity stored in old format
+    }
+    return null;
+  };
+
   // Extract materials from orders (excluding completed/canceled orders)
   const extractMaterialsFromOrders = useCallback((ordersList) => {
     const materials = [];
@@ -137,22 +151,83 @@ const MaterialRequestPage = () => {
           
           // Only add materials with actual quantities (> 0)
           if (materialQntyJL > 0) {
-            materials.push({
-              id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
-              orderId: order.id,
-              invoiceNo: order.orderDetails?.billInvoice || 'N/A',
-              materialCompany: group.materialCompany,
-              materialCode: group.materialCode,
-              materialName: group.materialName || group.materialCode,
-              quantity: materialQntyJL,
-              materialQntyJL: materialQntyJL,
-              unit: group.unit || 'Yard',
-              materialStatus: group.materialStatus || null,
-              materialNote: group.materialNote || '',
-              orderDate: order.createdAt,
-              customerName: order.personalInfo?.customerName || 'N/A',
-              orderStatus: orderStatus
-            });
+            const materialStatus = group.materialStatus || null;
+            let orderedQnty = parseOrderedQuantity(materialStatus);
+            const currentQnty = materialQntyJL;
+            
+            // Handle old format where status is just "Ordered" without quantity
+            // In this case, treat current quantity as ordered quantity
+            if (materialStatus === 'Ordered' && orderedQnty === null) {
+              orderedQnty = currentQnty;
+            }
+            
+            if (orderedQnty !== null && orderedQnty > 0) {
+              // Material was ordered - always add to ordered materials
+              materials.push({
+                id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
+                orderId: order.id,
+                invoiceNo: order.orderDetails?.billInvoice || 'N/A',
+                materialCompany: group.materialCompany,
+                materialCode: group.materialCode,
+                materialName: group.materialName || group.materialCode,
+                quantity: orderedQnty,
+                materialQntyJL: currentQnty,
+                orderedQntyJL: orderedQnty,
+                unit: group.unit || 'Yard',
+                materialStatus: materialStatus,
+                materialNote: group.materialNote || '',
+                orderDate: order.createdAt,
+                customerName: order.personalInfo?.customerName || 'N/A',
+                orderStatus: orderStatus,
+                isAdditional: false
+              });
+              
+              // Check if there's additional quantity needed
+              const additionalQnty = currentQnty - orderedQnty;
+              if (additionalQnty > 0) {
+                // Add additional quantity to required materials
+                materials.push({
+                  id: `${order.id}_${group.materialCode}_${group.materialCompany}_additional`,
+                  orderId: order.id,
+                  invoiceNo: order.orderDetails?.billInvoice || 'N/A',
+                  materialCompany: group.materialCompany,
+                  materialCode: group.materialCode,
+                  materialName: group.materialName || group.materialCode,
+                  quantity: additionalQnty,
+                  materialQntyJL: currentQnty,
+                  orderedQntyJL: orderedQnty,
+                  unit: group.unit || 'Yard',
+                  materialStatus: null, // Additional quantity is not ordered yet
+                  materialNote: group.materialNote || '',
+                  orderDate: order.createdAt,
+                  customerName: order.personalInfo?.customerName || 'N/A',
+                  orderStatus: orderStatus,
+                  isAdditional: true,
+                  additionalQnty: additionalQnty
+                });
+              }
+              // If additionalQnty <= 0, don't add to required (quantity decreased)
+            } else {
+              // Material not ordered yet - add to required materials
+              materials.push({
+                id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
+                orderId: order.id,
+                invoiceNo: order.orderDetails?.billInvoice || 'N/A',
+                materialCompany: group.materialCompany,
+                materialCode: group.materialCode,
+                materialName: group.materialName || group.materialCode,
+                quantity: currentQnty,
+                materialQntyJL: currentQnty,
+                orderedQntyJL: null,
+                unit: group.unit || 'Yard',
+                materialStatus: materialStatus,
+                materialNote: group.materialNote || '',
+                orderDate: order.createdAt,
+                customerName: order.personalInfo?.customerName || 'N/A',
+                orderStatus: orderStatus,
+                isAdditional: false
+              });
+            }
           }
         }
       });
@@ -283,8 +358,22 @@ const MaterialRequestPage = () => {
       // Combine order materials with general expense materials
       const combinedMaterials = [...allMaterials, ...generalExpenseMaterials];
       
-      const requiredMaterials = combinedMaterials.filter(m => !m.materialStatus || m.materialStatus === null);
-      const orderedMaterials = combinedMaterials.filter(m => m.materialStatus === 'Ordered');
+      // Filter ordered materials: status starts with "Ordered:" or equals "Ordered" (old format)
+      const orderedMaterials = combinedMaterials.filter(m => {
+        const status = m.materialStatus;
+        if (!status) return false;
+        if (typeof status === 'string') {
+          return status.startsWith('Ordered:') || status === 'Ordered';
+        }
+        return false;
+      });
+      
+      // Filter required materials: status is null OR isAdditional is true
+      const requiredMaterials = combinedMaterials.filter(m => {
+        if (m.isAdditional === true) return true; // Additional quantities always in required
+        const status = m.materialStatus;
+        return !status || status === null;
+      });
       
       setMaterialsRequired(requiredMaterials);
       setMaterialsOrdered(orderedMaterials);
@@ -322,8 +411,15 @@ const MaterialRequestPage = () => {
         const generalExpenseId = material.id.replace('general_', '');
         const generalExpenseRef = doc(db, 'generalExpenses', generalExpenseId);
         
+        // When marking as "Ordered", store the quantity in the status
+        let statusToStore = newStatus;
+        if (newStatus === 'Ordered') {
+          const currentQuantity = material.materialQntyJL || material.quantity || 0;
+          statusToStore = `Ordered:${currentQuantity}`;
+        }
+        
         await updateDoc(generalExpenseRef, {
-          materialStatus: newStatus,
+          materialStatus: statusToStore,
           note: note || material.materialNote || ''
         });
         
@@ -368,13 +464,28 @@ const MaterialRequestPage = () => {
         return;
       }
 
+      // When marking as "Ordered", store the quantity in the status
+      let statusToStore = newStatus;
+      if (newStatus === 'Ordered') {
+        // If this is additional material, add it to the existing ordered quantity
+        if (material.isAdditional && material.orderedQntyJL) {
+          // Add additional quantity to existing ordered quantity
+          const newTotalOrdered = material.orderedQntyJL + (material.quantity || material.additionalQnty || 0);
+          statusToStore = `Ordered:${newTotalOrdered}`;
+        } else {
+          // Store quantity in format "Ordered:10"
+          const currentQuantity = material.materialQntyJL || material.quantity || 0;
+          statusToStore = `Ordered:${currentQuantity}`;
+        }
+      }
+
       // Update the specific material status and note in the order
       const updatedFurnitureGroups = order.furnitureData.groups.map(group => {
         if (group.materialCode === material.materialCode && 
             group.materialCompany === material.materialCompany) {
           return { 
             ...group, 
-            materialStatus: newStatus,
+            materialStatus: statusToStore,
             materialNote: note || group.materialNote || ''
           };
         }
@@ -453,6 +564,12 @@ const MaterialRequestPage = () => {
       }
 
       showSuccess(`Material status updated to ${newStatus || 'Required'}`);
+      
+      // Refresh materials to ensure correct state, especially for additional materials
+      // Use setTimeout to allow UI updates to complete first
+      setTimeout(() => {
+        fetchMaterials();
+      }, 500);
       
     } catch (error) {
       console.error('Error updating material status:', error);
@@ -920,15 +1037,36 @@ const MaterialRequestPage = () => {
                     <Card key={material.id} sx={{ 
                       mb: 2, 
                       backgroundColor: '#000000',
-                      border: '2px solid #b98f33',
+                      border: material.isAdditional ? '2px solid #ff9800' : '2px solid #b98f33',
                       color: '#b98f33',
+                      position: 'relative',
                       '&:hover': {
                         backgroundColor: '#1a1a1a',
                         transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
+                        boxShadow: material.isAdditional 
+                          ? '0 4px 20px rgba(255, 152, 0, 0.4)' 
+                          : '0 4px 20px rgba(185, 143, 51, 0.3)'
                       },
                       transition: 'all 0.3s ease'
                     }}>
+                      {/* Additional Quantity Badge */}
+                      {material.isAdditional && (
+                        <Chip
+                          label="Additional"
+                          size="small"
+                          sx={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 8,
+                            backgroundColor: '#ff9800',
+                            color: '#000000',
+                            fontWeight: 'bold',
+                            fontSize: '0.65rem',
+                            height: '20px',
+                            zIndex: 1
+                          }}
+                        />
+                      )}
                       <CardContent sx={{ p: 2 }}>
                         {/* Three Column Layout */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
@@ -946,10 +1084,19 @@ const MaterialRequestPage = () => {
                           </Box>
                           
                           {/* Middle Column - Quantity */}
-                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
-                              {material.isGeneralExpense ? material.materialQntyJL : `${material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80, flexDirection: 'column' }}>
+                            <Typography variant="h6" sx={{ fontWeight: 'bold', color: material.isAdditional ? '#ff9800' : '#b98f33', textAlign: 'center' }}>
+                              {material.isAdditional 
+                                ? `+${material.quantity || material.additionalQnty} ${material.unit?.toLowerCase() || 'yards'}`
+                                : material.isGeneralExpense 
+                                  ? material.materialQntyJL 
+                                  : `${material.quantity || material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
                             </Typography>
+                            {material.isAdditional && (
+                              <Typography variant="caption" sx={{ color: '#ff9800', fontSize: '0.65rem', textAlign: 'center', fontStyle: 'italic' }}>
+                                Extra Quantity
+                              </Typography>
+                            )}
                           </Box>
                           
                           {/* Right Column - Action Buttons */}
@@ -1143,9 +1290,14 @@ const MaterialRequestPage = () => {
                           </Box>
                           
                           {/* Middle Column - Quantity */}
-                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 80, flexDirection: 'column' }}>
                             <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', textAlign: 'center' }}>
-                              {material.isGeneralExpense ? material.materialQntyJL : `${material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
+                              {material.isGeneralExpense 
+                                ? material.orderedQntyJL || material.materialQntyJL
+                                : `${material.orderedQntyJL || material.quantity || material.materialQntyJL} ${material.unit?.toLowerCase() || 'yards'}`}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.65rem', textAlign: 'center', fontStyle: 'italic' }}>
+                              Ordered
                             </Typography>
                           </Box>
                           

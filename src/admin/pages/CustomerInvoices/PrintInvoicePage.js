@@ -27,6 +27,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
+import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -178,7 +179,7 @@ const PrintInvoicePage = () => {
       }
 
       // Save PDF
-      const fileName = `Invoice ${invoiceData.invoiceNumber || 'N/A'}.pdf`;
+      const fileName = `Invoice ${formatCorporateInvoiceForInvoice(invoiceData.invoiceNumber) || 'N/A'}.pdf`;
       pdf.save(fileName);
       
       showSuccess('PDF saved successfully!');
@@ -579,7 +580,7 @@ const PrintInvoicePage = () => {
               Invoice Print View
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Invoice #{invoiceData.invoiceNumber}
+              Invoice #{formatCorporateInvoiceForInvoice(invoiceData.invoiceNumber)}
             </Typography>
           </Box>
         </Box>
@@ -716,7 +717,7 @@ const PrintInvoicePage = () => {
               <strong>Date:</strong> {formatDateOnly(invoiceData.createdAt)}
             </Typography>
             <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
-              <strong>Invoice #</strong> {invoiceData.invoiceNumber}
+              <strong>Invoice #</strong> {formatCorporateInvoiceForInvoice(invoiceData.invoiceNumber)}
             </Typography>
             <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
               <strong>Tax #</strong> {companyInfo.taxNumber}

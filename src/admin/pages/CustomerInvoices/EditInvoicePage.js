@@ -33,6 +33,7 @@ import { useNotification } from '../../../components/Common/NotificationSystem';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
+import { validateCorporateInvoiceNumber } from '../../../utils/invoiceNumberUtils';
 
 const EditInvoicePage = () => {
   const navigate = useNavigate();
@@ -259,11 +260,72 @@ const EditInvoicePage = () => {
     return calculateTotal() - paidAmount;
   };
 
+  // Handle invoice number change (only number part, T- prefix is locked)
+  const handleInvoiceNumberChange = async (newValue) => {
+    // Remove any T- prefix if user tries to type it
+    let numberPart = newValue.replace(/^T-?/i, '');
+    
+    // Only allow digits
+    numberPart = numberPart.replace(/\D/g, '');
+    
+    // Limit to 6 digits maximum
+    if (numberPart.length > 6) {
+      numberPart = numberPart.substring(0, 6);
+    }
+    
+    // Don't auto-pad - let user type freely
+    const fullNumber = numberPart ? `T-${numberPart}` : 'T-';
+    
+    // Update the value immediately for responsive editing
+    setInvoiceNumber(fullNumber);
+    
+    // Only validate for duplicates when we have a complete 6-digit number
+    if (numberPart.length === 6) {
+      const isValid = await validateCorporateInvoiceNumber(fullNumber);
+      // Don't check against current invoice number (allow keeping same number)
+      const currentInvoiceNumber = invoiceData?.invoiceNumber;
+      if (!isValid && fullNumber !== currentInvoiceNumber) {
+        showError(`Invoice number ${fullNumber} is already in use. Please choose a different number.`);
+        // Don't prevent setting - just warn the user
+      }
+    }
+  };
+
   // Validate form
-  const validateForm = () => {
+  const validateForm = async () => {
     if (!invoiceNumber.trim()) {
       showError('Invoice number is required');
       return false;
+    }
+    
+    // If it's T- format, validate it
+    if (invoiceNumber.startsWith('T-')) {
+      const numberPart = invoiceNumber.substring(2);
+      
+      // Ensure it's exactly 6 digits - pad if needed
+      let finalNumberPart = numberPart;
+      if (numberPart.length > 0 && numberPart.length < 6) {
+        finalNumberPart = numberPart.padStart(6, '0');
+        const updatedInvoiceNumber = `T-${finalNumberPart}`;
+        setInvoiceNumber(updatedInvoiceNumber);
+      }
+      
+      if (finalNumberPart.length !== 6 || isNaN(parseInt(finalNumberPart))) {
+        showError('Invoice number must be 6 digits (e.g., T-100001)');
+        return false;
+      }
+
+      const finalInvoiceNumber = `T-${finalNumberPart}`;
+      
+      // Check for duplicates (excluding current invoice)
+      const currentInvoiceNumber = invoiceData?.invoiceNumber;
+      if (finalInvoiceNumber !== currentInvoiceNumber) {
+        const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
+        if (!isValid) {
+          showError(`Invoice number ${finalInvoiceNumber} already exists in corporate orders or customer invoices. Please choose a different number.`);
+          return false;
+        }
+      }
     }
     
     if (!customerInfo.customerName.trim()) {
@@ -300,13 +362,22 @@ const EditInvoicePage = () => {
 
   // Save invoice
   const handleSave = async () => {
-    if (!validateForm() || !invoiceData) return;
+    const isValid = await validateForm();
+    if (!isValid || !invoiceData) return;
     
     try {
       setLoading(true);
       
+      // Ensure invoice number is properly formatted if T- format
+      let finalInvoiceNumber = invoiceNumber;
+      if (invoiceNumber.startsWith('T-')) {
+        const numberPart = invoiceNumber.substring(2);
+        const finalNumberPart = numberPart.length === 6 ? numberPart : numberPart.padStart(6, '0');
+        finalInvoiceNumber = `T-${finalNumberPart}`;
+      }
+      
       const updatedInvoiceData = {
-        invoiceNumber,
+        invoiceNumber: finalInvoiceNumber,
         headerSettings: {
           taxPercentage,
           creditCardFeeEnabled,
@@ -413,14 +484,83 @@ const EditInvoicePage = () => {
                 Invoice Settings
               </Typography>
               
-              <TextField
-                fullWidth
-                label="Invoice Number"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                sx={{ mb: 2 }}
-                helperText="Customize the invoice number"
-              />
+              {invoiceNumber.startsWith('T-') ? (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 'bold', color: '#274290' }}>
+                    Invoice Number
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <Typography 
+                      variant="body1" 
+                      sx={{ 
+                        fontWeight: 'bold', 
+                        color: '#b98f33',
+                        px: 1.5,
+                        border: '1px solid',
+                        borderColor: '#555555',
+                        borderRight: 'none',
+                        borderTopLeftRadius: 1,
+                        borderBottomLeftRadius: 1,
+                        backgroundColor: '#2a2a2a',
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        minWidth: '40px',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      T-
+                    </Typography>
+                    <TextField
+                      value={invoiceNumber.startsWith('T-') ? invoiceNumber.substring(2) : invoiceNumber}
+                      onChange={(e) => handleInvoiceNumberChange(e.target.value)}
+                      placeholder="100001"
+                      size="small"
+                      sx={{
+                        flex: 1,
+                        '& .MuiOutlinedInput-root': {
+                          borderTopLeftRadius: 0,
+                          borderBottomLeftRadius: 0,
+                          backgroundColor: '#2a2a2a',
+                          '& fieldset': {
+                            borderColor: '#333333',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#b98f33',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#b98f33',
+                          },
+                        },
+                        '& .MuiInputBase-input': {
+                          color: '#ffffff',
+                          '&::placeholder': {
+                            color: '#cccccc',
+                            opacity: 1
+                          }
+                        }
+                      }}
+                      inputProps={{
+                        maxLength: 6,
+                        inputMode: 'numeric',
+                        pattern: '[0-9]*'
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Customize the invoice number (T- prefix is permanent)
+                  </Typography>
+                </Box>
+              ) : (
+                <TextField
+                  fullWidth
+                  label="Invoice Number"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  sx={{ mb: 2 }}
+                  helperText="Customize the invoice number (old format - will be converted to T- format on save)"
+                />
+              )}
               
               <TextField
                 fullWidth

@@ -165,68 +165,34 @@ const ImageGalleryPage = () => {
 
 
   const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    
-    // Limit to 10 files
-    if (files.length > 10) {
-      setError(`You can only upload up to 10 images at once. Please select 10 or fewer images.`);
-      event.target.value = ''; // Reset input
-      return;
-    }
-    
-    if (files.length === 0) return;
-    
-    setError(null);
-    
-    // Initialize upload tracking for all files
-    const initialUploads = files.map((file, index) => ({
-      id: `upload-${Date.now()}-${index}`,
-      file,
-      fileName: file.name,
-      progress: 0,
-      status: 'uploading', // 'uploading', 'processing', 'completed', 'error'
-      error: null
-    }));
-    
-    setUploadingFiles(initialUploads);
-    setUploading(true);
-    
-    // Upload all files in parallel
-    const uploadPromises = initialUploads.map(async (uploadItem) => {
+    const files = event.target.files;
+    if (files.length > 0) {
+      setUploading(true);
+      setUploadProgress(0);
+      setError(null);
+      
       try {
-        // Update progress during upload
+        const file = files[0];
+        
+        // Upload to Cloudinary with real progress tracking
         const cloudinaryResult = await uploadImageToCloudinary(
-          uploadItem.file,
+          file,
           {
             folder: 'website-images'
           },
+          // Progress callback function
           (progress) => {
-            setUploadingFiles(prev => 
-              prev.map(item => 
-                item.id === uploadItem.id 
-                  ? { ...item, progress, status: 'uploading' }
-                  : item
-              )
-            );
+            setUploadProgress(progress);
           }
         );
         
-        // Update status to processing
-        setUploadingFiles(prev => 
-          prev.map(item => 
-            item.id === uploadItem.id 
-              ? { ...item, progress: 100, status: 'processing' }
-              : item
-          )
-        );
-        
         // Prepare metadata for Firebase
-        const nameWithoutExt = uploadItem.file.name.replace(/\.[^/.]+$/, "");
+        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
         const imageMetadata = {
           ...cloudinaryResult,
-          originalName: uploadItem.file.name,
-          name: uploadItem.file.name,
-          alt: nameWithoutExt,
+          originalName: file.name,
+          name: file.name,
+          alt: nameWithoutExt, // Alt text without extension
           uploadedBy: user?.email || 'unknown',
           description: ''
         };
@@ -234,47 +200,23 @@ const ImageGalleryPage = () => {
         // Save metadata to Firebase
         const savedImage = await saveImageMetadata(imageMetadata);
         
-        // Update local state with new image
+        // Update local state
         setImages(prev => [savedImage, ...prev]);
         
-        // Mark as completed
-        setUploadingFiles(prev => 
-          prev.map(item => 
-            item.id === uploadItem.id 
-              ? { ...item, progress: 100, status: 'completed' }
-              : item
-          )
-        );
+        // Show completion for a moment
+        setUploadProgress(100);
+        setTimeout(() => {
+          setUploading(false);
+          setUploadProgress(0);
+        }, 1000);
         
-        return { success: true, uploadItem };
       } catch (error) {
-        console.error(`Upload error for ${uploadItem.fileName}:`, error);
-        
-        // Mark as error
-        setUploadingFiles(prev => 
-          prev.map(item => 
-            item.id === uploadItem.id 
-              ? { ...item, status: 'error', error: error.message }
-              : item
-          )
-        );
-        
-        return { success: false, uploadItem, error };
+        console.error('Upload error:', error);
+        setError(`Failed to upload image: ${error.message}`);
+        setUploading(false);
+        setUploadProgress(0);
       }
-    });
-    
-    // Wait for all uploads to complete
-    await Promise.all(uploadPromises);
-    
-    // Clear uploads after a delay
-    setTimeout(() => {
-      setUploadingFiles([]);
-      setUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }, 2000);
+    }
   };
 
   const handleDeleteImage = async (imageId) => {
@@ -679,79 +621,31 @@ const ImageGalleryPage = () => {
         </Paper>
 
 
-        {/* Bulk Upload Progress */}
-        {uploadingFiles.length > 0 && (
-          <Paper sx={{ mb: 2, p: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
-            <Typography variant="h6" sx={{ color: '#b98f33', mb: 2, fontWeight: 600 }}>
-              Uploading {uploadingFiles.length} image{uploadingFiles.length > 1 ? 's' : ''}
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {uploadingFiles.map((uploadItem) => (
-                <Box key={uploadItem.id}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        color: '#ffffff',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        flex: 1,
-                        mr: 2
-                      }}
-                    >
-                      {uploadItem.fileName}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
-                      {uploadItem.status === 'uploading' && (
-                        <CircularProgress size={16} sx={{ color: '#b98f33' }} />
-                      )}
-                      {uploadItem.status === 'processing' && (
-                        <CircularProgress size={16} sx={{ color: '#f27921' }} />
-                      )}
-                      {uploadItem.status === 'completed' && (
-                        <Typography variant="caption" sx={{ color: '#10B981', fontWeight: 600 }}>
-                          ✓ Complete
-                        </Typography>
-                      )}
-                      {uploadItem.status === 'error' && (
-                        <Typography variant="caption" sx={{ color: '#EF4444', fontWeight: 600 }}>
-                          ✗ Failed
-                        </Typography>
-                      )}
-                      <Typography variant="caption" sx={{ color: '#b98f33', minWidth: 45 }}>
-                        {Math.round(uploadItem.progress)}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={uploadItem.progress} 
-                    sx={{ 
-                      height: 8, 
-                      borderRadius: 4,
-                      backgroundColor: 'rgba(0,0,0,0.3)',
-                      '& .MuiLinearProgress-bar': {
-                        borderRadius: 4,
-                        backgroundColor: uploadItem.status === 'error' 
-                          ? '#EF4444' 
-                          : uploadItem.status === 'completed' 
-                          ? '#10B981' 
-                          : uploadItem.status === 'processing'
-                          ? '#f27921'
-                          : '#b98f33'
-                      }
-                    }} 
-                  />
-                  {uploadItem.error && (
-                    <Typography variant="caption" sx={{ color: '#EF4444', mt: 0.5, display: 'block' }}>
-                      {uploadItem.error}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
+        {/* Upload Progress */}
+        {uploading && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Box sx={{ width: '100%' }}>
+              <Typography variant="body2" gutterBottom>
+                Uploading image... {Math.round(uploadProgress)}%
+              </Typography>
+              <LinearProgress 
+                variant="determinate" 
+                value={uploadProgress} 
+                sx={{ 
+                  height: 8, 
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(0,0,0,0.1)',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 4,
+                    backgroundColor: '#f27921'
+                  }
+                }} 
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                {uploadProgress < 100 ? 'Uploading to Cloudinary...' : 'Processing...'}
+              </Typography>
             </Box>
-          </Paper>
+          </Alert>
         )}
 
         {/* Error Display */}

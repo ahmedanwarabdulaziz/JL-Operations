@@ -55,6 +55,7 @@ import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../.
 import autoTable from 'jspdf-autotable';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
+import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
 
 // Register the autoTable plugin
 jsPDF.API.autoTable = autoTable;
@@ -324,7 +325,7 @@ const CorporateInvoicesPage = () => {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Corporate Invoice - ${selectedOrder.orderDetails?.billInvoice || 'N/A'}</title>
+          <title>Corporate Invoice - ${formatCorporateInvoiceForInvoice(selectedOrder.orderDetails?.billInvoice) || 'N/A'}</title>
           <style>
             @media print {
               @page {
@@ -496,7 +497,7 @@ const CorporateInvoicesPage = () => {
                   <strong>Date:</strong> ${formatDateOnly(new Date())}
                 </div>
                 <div style="color: black; margin-bottom: 4px;">
-                  <strong>Invoice #</strong> ${selectedOrder.orderDetails?.billInvoice || 'N/A'}
+                  <strong>Invoice #</strong> ${formatCorporateInvoiceForInvoice(selectedOrder.orderDetails?.billInvoice) || 'N/A'}
                 </div>
                 <div style="color: black; margin-bottom: 4px;">
                   <strong>Tax #</strong> 798633319-RT0001
@@ -1158,7 +1159,7 @@ const CorporateInvoicesPage = () => {
                           <strong>Date:</strong> {formatDateOnly(selectedOrder.createdAt)}
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
-                          <strong>Invoice #</strong> {selectedOrder.orderDetails?.billInvoice}
+                          <strong>Invoice #</strong> {formatCorporateInvoiceForInvoice(selectedOrder.orderDetails?.billInvoice)}
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
                           <strong>Tax #</strong> 798633319-RT0001

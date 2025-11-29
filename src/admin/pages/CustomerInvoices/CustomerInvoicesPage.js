@@ -68,11 +68,22 @@ const CustomerInvoicesPage = () => {
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
 
+  // Parse invoice number for sorting (handles both T- format and old format)
+  const parseInvoiceNumberForSort = (invoiceNumber) => {
+    if (!invoiceNumber) return 0;
+    const str = String(invoiceNumber);
+    if (str.startsWith('T-')) {
+      const numPart = str.substring(2);
+      return parseInt(numPart, 10) || 0;
+    }
+    return parseInt(str, 10) || 0;
+  };
+
   // Sort invoices by invoice number (highest to lowest)
   const sortInvoicesByNumber = (invoicesList) => {
     return invoicesList.sort((a, b) => {
-      const invoiceA = parseInt(a.invoiceNumber || '0', 10);
-      const invoiceB = parseInt(b.invoiceNumber || '0', 10);
+      const invoiceA = parseInvoiceNumberForSort(a.invoiceNumber);
+      const invoiceB = parseInvoiceNumberForSort(b.invoiceNumber);
       return invoiceB - invoiceA; // Descending order (highest first)
     });
   };
@@ -419,6 +430,12 @@ const CustomerInvoicesPage = () => {
   // Handle create invoice from order
   const handleCreateInvoice = async (order) => {
     try {
+      // Corporate orders should not use customer invoices - they have their own system
+      if (order.orderType === 'corporate') {
+        showError('Corporate orders use a separate invoice system. Please use Corporate Invoices page.');
+        return;
+      }
+
       let workingOrder = order;
       // Validate that the customer invoice number is available
       let invoiceNumber = order.orderDetails?.billInvoice;

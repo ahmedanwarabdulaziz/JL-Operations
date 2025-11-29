@@ -25,6 +25,7 @@ import PlatformsPage from './pages/Platforms/PlatformsPage';
 import InvoicePage from './admin/pages/Invoice/InvoicePage';
 import CorporateInvoicesPage from './admin/pages/CorporateInvoices/CorporateInvoicesPage';
 import TaxedInvoicesPage from './admin/pages/TaxedInvoices/TaxedInvoicesPage';
+import DeleteTInvoicesPage from './admin/pages/TaxedInvoices/DeleteTInvoicesPage';
 import MobileInvoicesPage from './admin-mobile/pages/Invoices/MobileInvoicesPage';
 
 import FinancePage from './pages/Finance/FinancePage';
@@ -206,6 +207,7 @@ const AppContent = () => {
           <Route path="/admin/invoices" element={<InvoicePage />} />
           <Route path="/admin/corporate-invoices" element={<CorporateInvoicesPage />} />
           <Route path="/admin/taxed-invoices" element={<TaxedInvoicesPage />} />
+          <Route path="/admin/taxed-invoices/delete-t-invoices" element={<DeleteTInvoicesPage />} />
           
           {/* Customer Invoices Routes */}
           <Route path="/customer-invoices" element={<Navigate to="/admin/customer-invoices" replace />} />
