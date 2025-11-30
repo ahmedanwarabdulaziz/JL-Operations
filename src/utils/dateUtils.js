@@ -25,7 +25,13 @@ export const formatDate = (dateValue, options = {}) => {
     else if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
       dateObj = new Date(dateValue.seconds * 1000);
     }
-    // Handle regular Date objects or date strings/numbers
+    // Handle date-only strings (YYYY-MM-DD format) - parse in local timezone
+    else if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      // Parse YYYY-MM-DD format as local date (not UTC)
+      const [year, month, day] = dateValue.split('-').map(Number);
+      dateObj = new Date(year, month - 1, day); // month is 0-indexed
+    }
+    // Handle regular Date objects or other date strings/numbers
     else {
       dateObj = new Date(dateValue);
     }
@@ -73,7 +79,13 @@ export const formatDateOnly = (dateValue) => {
     else if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
       dateObj = new Date(dateValue.seconds * 1000);
     }
-    // Handle regular Date objects or date strings/numbers
+    // Handle date-only strings (YYYY-MM-DD format) - parse in local timezone
+    else if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      // Parse YYYY-MM-DD format as local date (not UTC)
+      const [year, month, day] = dateValue.split('-').map(Number);
+      dateObj = new Date(year, month - 1, day); // month is 0-indexed
+    }
+    // Handle regular Date objects or other date strings/numbers
     else {
       dateObj = new Date(dateValue);
     }
@@ -173,7 +185,14 @@ export const toDateObject = (dateValue) => {
     else if (dateValue && typeof dateValue === 'object' && dateValue.seconds) {
       return new Date(dateValue.seconds * 1000);
     }
-    // Handle regular Date objects or date strings/numbers
+    // Handle date-only strings (YYYY-MM-DD format) - parse in local timezone
+    else if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      // Parse YYYY-MM-DD format as local date (not UTC)
+      const [year, month, day] = dateValue.split('-').map(Number);
+      const dateObj = new Date(year, month - 1, day); // month is 0-indexed
+      return isNaN(dateObj.getTime()) ? null : dateObj;
+    }
+    // Handle regular Date objects or other date strings/numbers
     else {
       const dateObj = new Date(dateValue);
       return isNaN(dateObj.getTime()) ? null : dateObj;

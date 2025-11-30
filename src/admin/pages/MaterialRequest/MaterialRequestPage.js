@@ -37,7 +37,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon
 } from '@mui/icons-material';
-import { collection, getDocs, updateDoc, doc, query, orderBy, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, addDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useNotification } from '../../../components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
@@ -144,8 +144,19 @@ const MaterialRequestPage = () => {
 
       const furnitureGroups = order.furnitureData?.groups || [];
       
-      furnitureGroups.forEach(group => {
+      // Track duplicate groups to make IDs unique
+      const groupCounts = {};
+      
+      furnitureGroups.forEach((group, groupIndex) => {
         if (group.materialCode && group.materialCompany) {
+          // Create a key to track duplicates
+          const groupKey = `${group.materialCode}_${group.materialCompany}`;
+          if (!groupCounts[groupKey]) {
+            groupCounts[groupKey] = 0;
+          }
+          const duplicateIndex = groupCounts[groupKey];
+          groupCounts[groupKey]++;
+          
           // Get quantity from the correct field - use the same logic as materialQntyJL
           const materialQntyJL = group.materialJLQnty || 0;
           
@@ -161,11 +172,16 @@ const MaterialRequestPage = () => {
               orderedQnty = currentQnty;
             }
             
+            // Create unique ID: include groupIndex if there are duplicates
+            const baseId = `${order.id}_${group.materialCode}_${group.materialCompany}`;
+            const uniqueId = duplicateIndex > 0 ? `${baseId}_${duplicateIndex}` : baseId;
+            
             if (orderedQnty !== null && orderedQnty > 0) {
               // Material was ordered - always add to ordered materials
               materials.push({
-                id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
+                id: uniqueId,
                 orderId: order.id,
+                groupIndex: groupIndex, // Store group index for updates
                 invoiceNo: order.orderDetails?.billInvoice || 'N/A',
                 materialCompany: group.materialCompany,
                 materialCode: group.materialCode,
@@ -187,8 +203,9 @@ const MaterialRequestPage = () => {
               if (additionalQnty > 0) {
                 // Add additional quantity to required materials
                 materials.push({
-                  id: `${order.id}_${group.materialCode}_${group.materialCompany}_additional`,
+                  id: `${uniqueId}_additional`,
                   orderId: order.id,
+                  groupIndex: groupIndex,
                   invoiceNo: order.orderDetails?.billInvoice || 'N/A',
                   materialCompany: group.materialCompany,
                   materialCode: group.materialCode,
@@ -210,8 +227,9 @@ const MaterialRequestPage = () => {
             } else {
               // Material not ordered yet - add to required materials
               materials.push({
-                id: `${order.id}_${group.materialCode}_${group.materialCompany}`,
+                id: uniqueId,
                 orderId: order.id,
+                groupIndex: groupIndex, // Store group index for updates
                 invoiceNo: order.orderDetails?.billInvoice || 'N/A',
                 materialCompany: group.materialCompany,
                 materialCode: group.materialCode,
@@ -259,6 +277,72 @@ const MaterialRequestPage = () => {
     });
     
     return grouped;
+  };
+
+  // Group materials by materialCode + materialCompany within a company
+  const groupMaterialsByCodeAndCompany = (materials) => {
+    const grouped = {};
+    materials.forEach(material => {
+      const groupKey = `${material.materialCode}_${material.materialCompany}`;
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = [];
+      }
+      grouped[groupKey].push(material);
+    });
+    
+    // Calculate group totals - must match exactly what's displayed in individual items
+    const groupsWithTotals = Object.entries(grouped).map(([key, items]) => {
+      const totalQuantity = items.reduce((sum, item) => {
+        // Check if this is an ordered material (status starts with "Ordered:")
+        const isOrdered = item.materialStatus && typeof item.materialStatus === 'string' && item.materialStatus.startsWith('Ordered:');
+        
+        if (isOrdered) {
+          // For ordered materials, match display: orderedQntyJL || quantity || materialQntyJL
+          if (item.isGeneralExpense) {
+            return sum + (parseFloat(item.orderedQntyJL || item.materialQntyJL || 0));
+          }
+          return sum + (parseFloat(item.orderedQntyJL || item.quantity || item.materialQntyJL || 0));
+        }
+        
+        // For required materials, match display logic exactly
+        if (item.isAdditional) {
+          // Additional: quantity || additionalQnty
+          return sum + (parseFloat(item.quantity || item.additionalQnty || 0));
+        }
+        
+        if (item.isGeneralExpense) {
+          // General expense: materialQntyJL
+          return sum + (parseFloat(item.materialQntyJL || 0));
+        }
+        
+        // Regular required material: quantity || materialQntyJL
+        return sum + (parseFloat(item.quantity || item.materialQntyJL || 0));
+      }, 0);
+      
+      const uniqueInvoices = new Set(items.map(item => item.invoiceNo));
+      const orderCount = uniqueInvoices.size;
+      
+      return {
+        key,
+        materialCode: items[0].materialCode,
+        materialCompany: items[0].materialCompany,
+        items,
+        totalQuantity,
+        orderCount,
+        unit: items[0].unit || 'Yard'
+      };
+    });
+    
+    // Sort by material code
+    groupsWithTotals.sort((a, b) => {
+      const codeA = a.materialCode.toLowerCase();
+      const codeB = b.materialCode.toLowerCase();
+      if (codeA < codeB) return -1;
+      if (codeA > codeB) return 1;
+      return 0;
+    });
+    
+    return groupsWithTotals;
   };
 
   // Sort companies by their order from Material Companies page
@@ -386,7 +470,7 @@ const MaterialRequestPage = () => {
     }
   }, [extractMaterialsFromOrders]);
 
-  // Update material status and note
+  // Update material status and note - handles individual material updates only
   const updateMaterialStatus = async (materialId, newStatus, note = '') => {
     try {
       setUpdating(true);
@@ -403,6 +487,7 @@ const MaterialRequestPage = () => {
       
       if (!material) {
         showError('Material not found');
+        setUpdating(false);
         return;
       }
 
@@ -423,66 +508,212 @@ const MaterialRequestPage = () => {
           note: note || material.materialNote || ''
         });
         
-        showSuccess(`General expense status updated to ${newStatus || 'Required'}`);
-        
-        // Update local state without refreshing the entire page
+        // Update local state directly to preserve scroll position
         if (newStatus === 'Ordered') {
           const materialToMove = materialsRequired.find(m => m.id === materialId);
           if (materialToMove) {
-            const updatedMaterial = { 
-              ...materialToMove, 
-              materialStatus: 'Ordered',
-              materialNote: note || materialToMove.materialNote || ''
-            };
             setMaterialsRequired(prev => prev.filter(m => m.id !== materialId));
-            setMaterialsOrdered(prev => [...prev, updatedMaterial]);
+            setMaterialsOrdered(prev => [...prev, {
+              ...materialToMove,
+              materialStatus: statusToStore,
+              materialNote: note || materialToMove.materialNote || ''
+            }]);
           }
         } else if (newStatus === 'Received') {
           setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
         } else if (newStatus === null) {
           const materialToMove = materialsOrdered.find(m => m.id === materialId);
           if (materialToMove) {
-            const updatedMaterial = { 
-              ...materialToMove, 
+            setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
+            setMaterialsRequired(prev => [...prev, {
+              ...materialToMove,
               materialStatus: null,
               materialNote: note || materialToMove.materialNote || ''
-            };
-            setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
-            setMaterialsRequired(prev => [...prev, updatedMaterial]);
+            }]);
           }
         }
         
+        showSuccess(`General expense status updated to ${newStatus || 'Required'}`);
+        setUpdating(false);
         return;
       }
 
       // Handle regular order materials
+      // IMPORTANT: Only update the specific material's order - do NOT affect other orders with same materialCode
+      // Fetch fresh order data from Firebase to ensure we have the latest state
       const orderRef = doc(db, 'orders', material.orderId);
-      const order = orders.find(o => o.id === material.orderId);
+      const orderDoc = await getDoc(orderRef);
       
-      if (!order) {
-        showError('Order not found');
+      if (!orderDoc.exists()) {
+        showError('Order not found in database');
+        setUpdating(false);
+        return;
+      }
+      
+      const order = { id: orderDoc.id, ...orderDoc.data() };
+      
+      // Verify the material belongs to this order by checking the material ID format
+      // Material ID should be: `${orderId}_${materialCode}_${materialCompany}` or with `_additional`
+      if (!material.id.startsWith(`${material.orderId}_`)) {
+        showError('Material does not belong to this order');
+        setUpdating(false);
         return;
       }
 
-      // When marking as "Ordered", store the quantity in the status
-      let statusToStore = newStatus;
-      if (newStatus === 'Ordered') {
-        // If this is additional material, add it to the existing ordered quantity
-        if (material.isAdditional && material.orderedQntyJL) {
-          // Add additional quantity to existing ordered quantity
-          const newTotalOrdered = material.orderedQntyJL + (material.quantity || material.additionalQnty || 0);
-          statusToStore = `Ordered:${newTotalOrdered}`;
-        } else {
-          // Store quantity in format "Ordered:10"
-          const currentQuantity = material.materialQntyJL || material.quantity || 0;
-          statusToStore = `Ordered:${currentQuantity}`;
+      // Find the specific group in this specific order that matches this material
+      // If material has groupIndex, use it to find the exact group (handles duplicates)
+      // Otherwise, find the first matching group
+      let targetGroup;
+      let targetGroupIndex = -1;
+      
+      if (material.groupIndex !== undefined && material.groupIndex !== null) {
+        // Use the stored groupIndex to find the exact group
+        targetGroup = order.furnitureData?.groups?.[material.groupIndex];
+        targetGroupIndex = material.groupIndex;
+        
+        // Verify it's the correct group
+        if (!targetGroup || 
+            targetGroup.materialCode !== material.materialCode || 
+            targetGroup.materialCompany !== material.materialCompany) {
+          console.warn(`[WARNING] Group at index ${material.groupIndex} doesn't match material. Falling back to search.`);
+          targetGroup = null;
         }
       }
+      
+      // Fallback: search for matching group if groupIndex didn't work
+      if (!targetGroup) {
+        const matchingGroups = order.furnitureData?.groups?.filter(
+          (g, idx) => g.materialCode === material.materialCode && 
+                      g.materialCompany === material.materialCompany
+        ) || [];
+        
+        if (matchingGroups.length === 0) {
+          showError('Material group not found in order');
+          setUpdating(false);
+          return;
+        }
+        
+        if (matchingGroups.length === 1) {
+          // Only one match - use it
+          targetGroup = matchingGroups[0];
+          targetGroupIndex = order.furnitureData.groups.indexOf(targetGroup);
+        } else {
+          // Multiple matches - this is the duplicate groups issue
+          // For now, update the first one, but log a warning
+          console.warn(`[WARNING] Found ${matchingGroups.length} groups with same materialCode/materialCompany in order ${material.orderId}. ` +
+                      `Updating the first one. Consider using groupIndex for precise updates.`);
+          targetGroup = matchingGroups[0];
+          targetGroupIndex = order.furnitureData.groups.indexOf(targetGroup);
+        }
+      }
+      
+      if (!targetGroup) {
+        showError('Material group not found in order');
+        setUpdating(false);
+        return;
+      }
+      
+      // Verify we're updating the correct order (for debugging/safety)
+      console.log(`Updating material ${material.id} in order ${material.orderId}, materialCode: ${material.materialCode}`);
 
-      // Update the specific material status and note in the order
-      const updatedFurnitureGroups = order.furnitureData.groups.map(group => {
-        if (group.materialCode === material.materialCode && 
-            group.materialCompany === material.materialCompany) {
+      // Calculate the new ordered quantity based on what's being ordered
+      // CRITICAL: Use ONLY values from targetGroup (the actual Firebase data) - NOT from material object
+      // The material object might have stale data or data from a different order with same materialCode
+      let newOrderedQuantity = 0;
+      let statusToStore = newStatus;
+      
+      // ALWAYS use values from targetGroup (the source of truth from Firebase)
+      const currentTotalQty = targetGroup.materialJLQnty || 0;
+      const existingOrderedQty = parseOrderedQuantity(targetGroup.materialStatus || null) || 0;
+      
+      if (newStatus === 'Ordered') {
+        if (material.isAdditional) {
+          // Ordering additional quantity - add this material's quantity to existing ordered quantity
+          // Use the material's quantity which represents the additional amount needed
+          const additionalQty = material.quantity || material.additionalQnty || 0;
+          newOrderedQuantity = existingOrderedQty + additionalQty;
+          // Ensure we don't exceed the total quantity for THIS order
+          newOrderedQuantity = Math.min(newOrderedQuantity, currentTotalQty);
+        } else {
+          // Ordering a base material (not additional)
+          // CRITICAL: Use ONLY the targetGroup's total quantity - this is the ONLY source of truth
+          // Do NOT use material.materialQntyJL as it might be from a different order with same materialCode
+          newOrderedQuantity = currentTotalQty;
+          
+          // Verify the material's quantity matches (for debugging)
+          if (Math.abs((material.quantity || 0) - currentTotalQty) > 0.01 && 
+              Math.abs((material.materialQntyJL || 0) - currentTotalQty) > 0.01) {
+            console.warn(`[WARNING] Material quantity mismatch for ${material.id}: ` +
+                        `material.quantity=${material.quantity}, material.materialQntyJL=${material.materialQntyJL}, ` +
+                        `but targetGroup.materialJLQnty=${currentTotalQty}. Using targetGroup value.`);
+          }
+        }
+        statusToStore = `Ordered:${newOrderedQuantity}`;
+        
+        // Log for debugging to verify we're only updating the correct order
+        console.log(`[ORDER UPDATE] Material ID: ${material.id}`);
+        console.log(`[ORDER UPDATE] Order ID: ${material.orderId}`);
+        console.log(`[ORDER UPDATE] Material Code: ${material.materialCode}, Company: ${material.materialCompany}`);
+        console.log(`[ORDER UPDATE] TargetGroup Total: ${currentTotalQty}, Existing Ordered: ${existingOrderedQty}, New Ordered: ${newOrderedQuantity}`);
+        console.log(`[ORDER UPDATE] Is Additional: ${material.isAdditional}`);
+      } else if (newStatus === null) {
+        // Setting back to required - calculate new ordered quantity
+        if (material.isAdditional) {
+          // Removing additional from ordered - just keep existing ordered quantity
+          newOrderedQuantity = existingOrderedQty;
+        } else {
+          // Setting back to required - set ordered quantity to 0 for THIS order
+          newOrderedQuantity = 0;
+        }
+        statusToStore = null;
+      } else {
+        statusToStore = newStatus;
+      }
+
+      // Update only the specific group in Firebase
+      // CRITICAL: Verify this is the correct order before updating
+      // The material.id format: `${orderId}_${materialCode}_${materialCompany}` or 
+      // `${orderId}_${materialCode}_${materialCompany}_${index}` or with `_additional`
+      const expectedMaterialIdPrefix = `${material.orderId}_${material.materialCode}_${material.materialCompany}`;
+      if (!material.id.startsWith(expectedMaterialIdPrefix)) {
+        console.error(`Material ID mismatch! Expected to start with "${expectedMaterialIdPrefix}", but got "${material.id}"`);
+        showError('Material ID does not match order. Cannot update safely.');
+        setUpdating(false);
+        return;
+      }
+      
+      // Material ID is valid - proceed with update using groupIndex
+      
+      // Update only the specific group at targetGroupIndex in THIS specific order
+      // This ensures we update the exact group, even if there are duplicates
+      if (targetGroupIndex < 0 || targetGroupIndex >= order.furnitureData.groups.length) {
+        console.error(`[ERROR] Invalid group index ${targetGroupIndex} for order ${material.orderId}`);
+        showError('Invalid group index. Cannot update.');
+        setUpdating(false);
+        return;
+      }
+      
+      const groupToUpdate = order.furnitureData.groups[targetGroupIndex];
+      
+      // Verify this is the correct group
+      if (groupToUpdate.materialCode !== material.materialCode || 
+          groupToUpdate.materialCompany !== material.materialCompany) {
+        console.error(`[ERROR] Group at index ${targetGroupIndex} doesn't match material. ` +
+                     `Expected: ${material.materialCode}/${material.materialCompany}, ` +
+                     `Found: ${groupToUpdate.materialCode}/${groupToUpdate.materialCompany}`);
+        showError('Group mismatch. Cannot update safely.');
+        setUpdating(false);
+        return;
+      }
+      
+      console.log(`[GROUP UPDATE] Updating group at index ${targetGroupIndex} in order ${material.orderId}: ` +
+                 `materialCode=${groupToUpdate.materialCode}, materialCompany=${groupToUpdate.materialCompany}, ` +
+                 `currentStatus=${groupToUpdate.materialStatus}, newStatus=${statusToStore}, ` +
+                 `totalQty=${groupToUpdate.materialJLQnty}`);
+      
+      // Update only the specific group at the target index
+      const updatedFurnitureGroups = order.furnitureData.groups.map((group, index) => {
+        if (index === targetGroupIndex) {
           return { 
             ...group, 
             materialStatus: statusToStore,
@@ -492,88 +723,207 @@ const MaterialRequestPage = () => {
         return group;
       });
 
+      // Final verification: ensure we're updating the correct order document
+      if (orderRef.id !== material.orderId) {
+        console.error(`CRITICAL: Order ref ID (${orderRef.id}) does not match material orderId (${material.orderId})`);
+        showError('Order ID mismatch. Cannot update safely.');
+        setUpdating(false);
+        return;
+      }
+      
+      console.log(`[FIREBASE UPDATE] Updating order document: ${orderRef.id}`);
+      console.log(`[FIREBASE UPDATE] Material Code: ${material.materialCode}, Status: ${statusToStore}`);
+      
+      // Update ONLY this specific order's Firebase document
+      // This will NOT affect any other orders, even if they have the same materialCode
       await updateDoc(orderRef, {
         'furnitureData.groups': updatedFurnitureGroups
       });
+      
+      console.log(`[FIREBASE UPDATE] Successfully updated order ${orderRef.id}`);
+      console.log(`[FIREBASE UPDATE] Summary: Order ${material.orderId}, Material ${material.materialCode}, ` +
+                 `Set status to "${statusToStore}" (ordered ${newOrderedQuantity} out of ${currentTotalQty} total)`);
 
-      // Update local state - handle ALL materials with the same orderId, materialCode, and materialCompany
-      // This is important because Firebase updates all groups with the same materialCode/materialCompany
-      const matchKey = (m) => 
-        m.orderId === material.orderId && 
-        m.materialCode === material.materialCode && 
-        m.materialCompany === material.materialCompany;
-
-      // Use a single batch update to avoid nested state update issues
+      // Update local state directly instead of full refresh to preserve scroll position
+      // This keeps the user's focus and position on the page
       if (newStatus === 'Ordered') {
-        // Update both states in sequence (React will batch these)
-        setMaterialsRequired(prevRequired => {
-          const materialsToMove = prevRequired.filter(matchKey);
-          return materialsToMove.length > 0 
-            ? prevRequired.filter(m => !matchKey(m))
-            : prevRequired;
-        });
-        
-        setMaterialsOrdered(prevOrdered => {
-          // Get current required state to find materials to move
-          // Since we can't access it directly, we'll use a callback that runs after state update
-          // But for now, let's get materials from the order we already have
-          const materialsToMove = materialsRequired.filter(matchKey);
+        // Move material from required to ordered
+        const materialToMove = materialsRequired.find(m => m.id === materialId);
+        if (materialToMove) {
+          // Calculate ordered quantity - use the newOrderedQuantity from Firebase calculation
+          let orderedQnty = newOrderedQuantity;
           
-          if (materialsToMove.length > 0) {
-            const updatedMaterials = materialsToMove.map(m => ({
-              ...m,
-              materialStatus: 'Ordered',
-              materialNote: note || m.materialNote || ''
-            }));
+          // Remove from required (including any additional materials for this order/group if ordering base)
+          setMaterialsRequired(prevRequired => {
+            let updatedRequired = prevRequired.filter(m => {
+              // Remove the material being ordered
+              if (m.id === materialId) return false;
+              // If ordering a base material, also remove any additional materials for the same order/group
+              if (!materialToMove.isAdditional && 
+                  m.orderId === materialToMove.orderId &&
+                  m.materialCode === materialToMove.materialCode &&
+                  m.materialCompany === materialToMove.materialCompany &&
+                  m.isAdditional) {
+                return false; // Remove additional materials when base is ordered
+              }
+              return true;
+            });
             
-            // Remove any existing materials with the same combination to avoid duplicates
-            const filtered = prevOrdered.filter(m => !matchKey(m));
-            return [...filtered, ...updatedMaterials];
+            // If ordering a base material and there's remaining quantity, create additional material
+            if (!materialToMove.isAdditional) {
+              const remainingQty = currentTotalQty - newOrderedQuantity;
+              if (remainingQty > 0) {
+                const groupIndex = materialToMove.groupIndex || 0;
+                const baseId = `${materialToMove.orderId}_${materialToMove.materialCode}_${materialToMove.materialCompany}`;
+                const additionalId = groupIndex > 0 ? `${baseId}_${groupIndex}_additional` : `${baseId}_additional`;
+                
+                // Check if additional already exists
+                const exists = updatedRequired.some(m => m.id === additionalId);
+                if (!exists) {
+                  updatedRequired.push({
+                    id: additionalId,
+                    orderId: materialToMove.orderId,
+                    groupIndex: groupIndex,
+                    invoiceNo: materialToMove.invoiceNo,
+                    materialCompany: materialToMove.materialCompany,
+                    materialCode: materialToMove.materialCode,
+                    materialName: materialToMove.materialName,
+                    quantity: remainingQty,
+                    materialQntyJL: currentTotalQty,
+                    orderedQntyJL: newOrderedQuantity,
+                    unit: materialToMove.unit,
+                    materialStatus: null,
+                    materialNote: note || materialToMove.materialNote || '',
+                    orderDate: materialToMove.orderDate,
+                    customerName: materialToMove.customerName,
+                    orderStatus: materialToMove.orderStatus,
+                    isAdditional: true,
+                    additionalQnty: remainingQty
+                  });
+                }
+              }
+            }
+            
+            return updatedRequired;
+          });
+          
+          // Update ordered materials - handle both new orders and updating existing ones
+          setMaterialsOrdered(prevOrdered => {
+            // Check if there's already an ordered material for this order/group
+            // This happens when ordering additional quantity - we need to update the existing one, not create a new one
+            const existingOrderedMaterial = prevOrdered.find(m => 
+              m.orderId === materialToMove.orderId &&
+              m.materialCode === materialToMove.materialCode &&
+              m.materialCompany === materialToMove.materialCompany &&
+              !m.isAdditional // The base ordered material (not additional)
+            );
+            
+            if (existingOrderedMaterial && materialToMove.isAdditional) {
+              // Updating existing ordered material with additional quantity
+              // Update the existing one with the new total quantity
+              return prevOrdered.map(m => {
+                if (m.id === existingOrderedMaterial.id) {
+                  return {
+                    ...m,
+                    materialStatus: statusToStore,
+                    materialNote: note || m.materialNote || '',
+                    orderedQntyJL: orderedQnty,
+                    quantity: orderedQnty
+                  };
+                }
+                return m;
+              });
+            } else {
+              // New order or base material - add new ordered material
+              // Remove if already exists (shouldn't happen but just in case)
+              const filtered = prevOrdered.filter(m => m.id !== materialId);
+              
+              return [...filtered, {
+                ...materialToMove,
+                materialStatus: statusToStore,
+                materialNote: note || materialToMove.materialNote || '',
+                orderedQntyJL: orderedQnty,
+                quantity: orderedQnty,
+                isAdditional: false
+              }];
+            }
+          });
+        }
+      } else if (newStatus === 'Received') {
+        // Remove from ordered (received materials disappear)
+        setMaterialsOrdered(prev => prev.filter(m => m.id !== materialId));
+      } else if (newStatus === null) {
+        // Move material back from ordered to required
+        setMaterialsOrdered(prevOrdered => {
+          const materialToMove = prevOrdered.find(m => m.id === materialId);
+          if (materialToMove) {
+            // Remove from ordered
+            const updatedOrdered = prevOrdered.filter(m => m.id !== materialId);
+            
+            // Add back to required
+            setMaterialsRequired(prevRequired => {
+              // Remove if already exists (shouldn't happen)
+              const filtered = prevRequired.filter(m => m.id !== materialId);
+              
+              return [...filtered, {
+                ...materialToMove,
+                materialStatus: null,
+                materialNote: note || materialToMove.materialNote || '',
+                orderedQntyJL: null
+              }];
+            });
+            
+            return updatedOrdered;
           }
           return prevOrdered;
         });
-      } else if (newStatus === 'Received') {
-        // Remove all matching materials from ordered (they're received, so they disappear)
-        setMaterialsOrdered(prev => prev.filter(m => !matchKey(m)));
-      } else if (newStatus === null) {
-        // Update both states in sequence (React will batch these)
-        setMaterialsOrdered(prevOrdered => {
-          const materialsToMove = prevOrdered.filter(matchKey);
-          return materialsToMove.length > 0
-            ? prevOrdered.filter(m => !matchKey(m))
-            : prevOrdered;
-        });
-        
-        setMaterialsRequired(prevRequired => {
-          // Get materials to move from ordered state (using closure value)
-          const materialsToMove = materialsOrdered.filter(matchKey);
-          
-          if (materialsToMove.length > 0) {
-            const updatedMaterials = materialsToMove.map(m => ({
-              ...m,
-              materialStatus: null,
-              materialNote: note || m.materialNote || ''
-            }));
-            
-            // Remove any existing materials with the same combination to avoid duplicates
-            const filtered = prevRequired.filter(m => !matchKey(m));
-            return [...filtered, ...updatedMaterials];
-          }
-          return prevRequired;
-        });
       }
-
-      showSuccess(`Material status updated to ${newStatus || 'Required'}`);
       
-      // Refresh materials to ensure correct state, especially for additional materials
-      // Use setTimeout to allow UI updates to complete first
-      setTimeout(() => {
-        fetchMaterials();
-      }, 500);
+      showSuccess(`Material status updated to ${newStatus || 'Required'}`);
       
     } catch (error) {
       console.error('Error updating material status:', error);
-      showError('Failed to update material status');
+      showError('Failed to update material status: ' + (error.message || 'Unknown error'));
+    } finally {
+      setUpdating(false);
+      
+      // Restore scroll positions immediately (no delay needed since we're not refreshing)
+      if (pendingScrollPositions.current) {
+        if (requiredScrollRef.current && pendingScrollPositions.current.required !== undefined) {
+          requiredScrollRef.current.scrollTop = pendingScrollPositions.current.required;
+        }
+        if (orderedScrollRef.current && pendingScrollPositions.current.ordered !== undefined) {
+          orderedScrollRef.current.scrollTop = pendingScrollPositions.current.ordered;
+        }
+        pendingScrollPositions.current = null;
+      }
+    }
+  };
+
+  // Bulk update material status for a group
+  const bulkUpdateMaterialStatus = async (groupItems, newStatus) => {
+    if (!groupItems || groupItems.length === 0) return;
+    
+    try {
+      setUpdating(true);
+      
+      // Save current scroll positions
+      pendingScrollPositions.current = {
+        required: requiredScrollRef.current?.scrollTop || 0,
+        ordered: orderedScrollRef.current?.scrollTop || 0
+      };
+      
+      // Update each material in the group sequentially to avoid race conditions
+      for (const material of groupItems) {
+        const note = materialNotes[material.id] || material.materialNote || '';
+        await updateMaterialStatus(material.id, newStatus, note);
+      }
+      
+      showSuccess(`Bulk updated ${groupItems.length} material(s) to ${newStatus || 'Required'}`);
+      
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      showError('Failed to bulk update materials');
     } finally {
       setUpdating(false);
     }
@@ -1033,22 +1383,93 @@ const MaterialRequestPage = () => {
                     />
                   </Box>
                   
-                  {materials.map((material) => (
-                    <Card key={material.id} sx={{ 
-                      mb: 2, 
-                      backgroundColor: '#000000',
-                      border: material.isAdditional ? '2px solid #ff9800' : '2px solid #b98f33',
-                      color: '#b98f33',
-                      position: 'relative',
-                      '&:hover': {
-                        backgroundColor: '#1a1a1a',
-                        transform: 'translateY(-2px)',
-                        boxShadow: material.isAdditional 
-                          ? '0 4px 20px rgba(255, 152, 0, 0.4)' 
-                          : '0 4px 20px rgba(185, 143, 51, 0.3)'
-                      },
-                      transition: 'all 0.3s ease'
-                    }}>
+                  {(() => {
+                    // Group materials by materialCode + materialCompany
+                    const materialGroups = groupMaterialsByCodeAndCompany(materials);
+                    
+                    return materialGroups.map((group) => {
+                      // If only one item in group, skip group summary card and show item directly
+                      const isSingleItem = group.items.length === 1;
+                      
+                      return (
+                        <Box key={group.key} sx={{ mb: 3 }}>
+                          {/* Group Summary Card - Only show if more than one item */}
+                          {!isSingleItem && (
+                            <Card sx={{ 
+                              mb: 1.5,
+                              backgroundColor: '#1a1a1a',
+                              border: '2px solid #b98f33',
+                              color: '#b98f33',
+                              '&:hover': {
+                                backgroundColor: '#2a2a2a',
+                                boxShadow: '0 4px 20px rgba(185, 143, 51, 0.4)'
+                              },
+                              transition: 'all 0.3s ease'
+                            }}>
+                              <CardContent sx={{ p: 1.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                                  {/* Left - Material Info */}
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', mb: 0.5 }}>
+                                      {group.materialCode}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.75rem' }}>
+                                      {group.materialCompany} • {group.orderCount} {group.orderCount === 1 ? 'order' : 'orders'}
+                                    </Typography>
+                                  </Box>
+                                  
+                                  {/* Middle - Total Quantity */}
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 100 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                                      {group.totalQuantity} {group.unit?.toLowerCase() || 'yards'}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#b98f33', fontSize: '0.65rem' }}>
+                                      Total
+                                    </Typography>
+                                  </Box>
+                                  
+                                  {/* Right - Bulk Actions */}
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button
+                                      variant="contained"
+                                      size="small"
+                                      startIcon={<LocalShippingIcon />}
+                                      onClick={() => bulkUpdateMaterialStatus(group.items, 'Ordered')}
+                                      disabled={updating}
+                                      sx={{
+                                        ...buttonStyles.primaryButton,
+                                        fontSize: '0.7rem',
+                                        padding: '4px 10px',
+                                        minWidth: 'auto'
+                                      }}
+                                    >
+                                      Order All
+                                    </Button>
+                                  </Box>
+                                </Box>
+                              </CardContent>
+                            </Card>
+                          )}
+                          
+                          {/* Individual Items */}
+                          {group.items.map((material) => (
+                            <Card key={material.id} sx={{ 
+                              mb: 1.5,
+                              ml: isSingleItem ? 0 : 3,
+                            backgroundColor: '#000000',
+                            border: material.isAdditional ? '2px solid #ff9800' : '2px solid #b98f33',
+                            color: '#b98f33',
+                            position: 'relative',
+                            borderLeft: '4px solid #b98f33',
+                            '&:hover': {
+                              backgroundColor: '#1a1a1a',
+                              transform: 'translateY(-2px)',
+                              boxShadow: material.isAdditional 
+                                ? '0 4px 20px rgba(255, 152, 0, 0.4)' 
+                                : '0 4px 20px rgba(185, 143, 51, 0.3)'
+                            },
+                            transition: 'all 0.3s ease'
+                          }}>
                       {/* Additional Quantity Badge */}
                       {material.isAdditional && (
                         <Chip
@@ -1204,7 +1625,11 @@ const MaterialRequestPage = () => {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                        ))}
+                      </Box>
+                      );
+                    });
+                  })()}
                 </Box>
               ))
             )}
@@ -1260,19 +1685,105 @@ const MaterialRequestPage = () => {
                     />
                   </Box>
                   
-                  {materials.map((material) => (
-                    <Card key={material.id} sx={{ 
-                      mb: 2, 
-                      backgroundColor: '#000000',
-                      border: '2px solid #b98f33',
-                      color: '#b98f33',
-                      '&:hover': {
-                        backgroundColor: '#1a1a1a',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
-                      },
-                      transition: 'all 0.3s ease'
-                    }}>
+                  {(() => {
+                    // Group materials by materialCode + materialCompany
+                    const materialGroups = groupMaterialsByCodeAndCompany(materials);
+                    
+                    return materialGroups.map((group) => {
+                      // If only one item in group, skip group summary card and show item directly
+                      const isSingleItem = group.items.length === 1;
+                      
+                      return (
+                        <Box key={group.key} sx={{ mb: 3 }}>
+                          {/* Group Summary Card - Only show if more than one item */}
+                          {!isSingleItem && (
+                            <Card sx={{ 
+                              mb: 1.5,
+                              backgroundColor: '#1a1a1a',
+                              border: '2px solid #feca57',
+                              color: '#feca57',
+                              '&:hover': {
+                                backgroundColor: '#2a2a2a',
+                                boxShadow: '0 4px 20px rgba(254, 202, 87, 0.4)'
+                              },
+                              transition: 'all 0.3s ease'
+                            }}>
+                              <CardContent sx={{ p: 1.5 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                                  {/* Left - Material Info */}
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#feca57', mb: 0.5 }}>
+                                      {group.materialCode}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#feca57', fontSize: '0.75rem' }}>
+                                      {group.materialCompany} • {group.orderCount} {group.orderCount === 1 ? 'order' : 'orders'}
+                                    </Typography>
+                                  </Box>
+                                  
+                                  {/* Middle - Total Quantity */}
+                                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 100 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#feca57' }}>
+                                      {group.totalQuantity} {group.unit?.toLowerCase() || 'yards'}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: '#feca57', fontSize: '0.65rem' }}>
+                                      Total Ordered
+                                    </Typography>
+                                  </Box>
+                                  
+                                  {/* Right - Bulk Actions */}
+                                  <Box sx={{ display: 'flex', gap: 1 }}>
+                                    <Button
+                                      variant="contained"
+                                      size="small"
+                                      startIcon={<CheckCircleIcon />}
+                                      onClick={() => bulkUpdateMaterialStatus(group.items, 'Received')}
+                                      disabled={updating}
+                                      sx={{
+                                        ...buttonStyles.primaryButton,
+                                        fontSize: '0.7rem',
+                                        padding: '4px 10px',
+                                        minWidth: 'auto'
+                                      }}
+                                    >
+                                      Receive All
+                                    </Button>
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      startIcon={<ArrowBackIcon />}
+                                      onClick={() => bulkUpdateMaterialStatus(group.items, null)}
+                                      disabled={updating}
+                                      sx={{
+                                        ...buttonStyles.cancelButton,
+                                        fontSize: '0.7rem',
+                                        padding: '4px 10px',
+                                        minWidth: 'auto'
+                                      }}
+                                    >
+                                      Back All
+                                    </Button>
+                                  </Box>
+                                </Box>
+                              </CardContent>
+                            </Card>
+                          )}
+                          
+                          {/* Individual Items */}
+                          {group.items.map((material) => (
+                            <Card key={material.id} sx={{ 
+                              mb: 1.5,
+                              ml: isSingleItem ? 0 : 3,
+                            backgroundColor: '#000000',
+                            border: '2px solid #b98f33',
+                            color: '#b98f33',
+                            borderLeft: '4px solid #feca57',
+                            '&:hover': {
+                              backgroundColor: '#1a1a1a',
+                              transform: 'translateY(-2px)',
+                              boxShadow: '0 4px 20px rgba(185, 143, 51, 0.3)'
+                            },
+                            transition: 'all 0.3s ease'
+                          }}>
                       <CardContent sx={{ p: 2 }}>
                         {/* Three Column Layout */}
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
@@ -1426,7 +1937,11 @@ const MaterialRequestPage = () => {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                        ))}
+                      </Box>
+                      );
+                    });
+                  })()}
                 </Box>
               ))
             )}
