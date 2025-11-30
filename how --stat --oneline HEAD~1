@@ -1,0 +1,15 @@
+[33m710c008[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update multiple features across the application - Update App.js routing - Enhance CorporateInvoicesPage functionality - Improve CustomerInvoices pages (Create, Edit, Print, List) - Update MaterialRequestPage features - Add DeleteTInvoicesPage and deleteTInvoices utility - Major updates to TaxedInvoicesPage - Update ImageGalleryPage - Enhance CorporateOrderPage - Update invoiceNumberUtils
+ src/App.js                                         |    2 [32m+[m
+ .../CorporateInvoices/CorporateInvoicesPage.js     |    7 [32m+[m[31m-[m
+ .../pages/CustomerInvoices/CreateInvoicePage.js    |  163 [32m++[m[31m-[m
+ .../pages/CustomerInvoices/CustomerInvoicesPage.js |   21 [32m+[m[31m-[m
+ .../pages/CustomerInvoices/EditInvoicePage.js      |  162 [32m+[m[31m-[m
+ .../pages/CustomerInvoices/PrintInvoicePage.js     |    7 [32m+[m[31m-[m
+ .../pages/MaterialRequest/MaterialRequestPage.js   |  206 [32m++[m[31m-[m
+ .../pages/TaxedInvoices/DeleteTInvoicesPage.js     |  240 [32m+++[m
+ src/admin/pages/TaxedInvoices/TaxedInvoicesPage.js | 1542 [32m+++++++++++++++++++[m[31m-[m
+ src/admin/pages/Website/ImageGalleryPage.js        |  210 [32m+[m[31m--[m
+ src/pages/Orders/CorporateOrderPage.js             |  200 [32m++[m[31m-[m
+ src/utils/deleteTInvoices.js                       |  110 [32m++[m
+ src/utils/invoiceNumberUtils.js                    |  182 [32m++[m[31m-[m
+ 13 files changed, 2766 insertions(+), 286 deletions(-)
