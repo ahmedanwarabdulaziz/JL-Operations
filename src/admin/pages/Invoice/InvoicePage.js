@@ -875,7 +875,7 @@ const InvoicePage = () => {
                                                 <h2>${group.furnitureType || 'Furniture Group'}</h2>
                                                 ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
                                                 <div class="furniture-details">
-                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialQnty ? ` ${group.materialQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
+                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialJLQnty ? ` ${group.materialJLQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
                                                     ${(group.foamThickness || group.foamNote) ? `
                                                         <div class="foam-details">
                                                             Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
@@ -932,7 +932,7 @@ const InvoicePage = () => {
                   <h2>${group.furnitureType || 'Furniture Group'}</h2>
                   ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
                   <div class="furniture-details">
-                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialQnty ? ` ${group.materialQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
+                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialJLQnty ? ` ${group.materialJLQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
                     ${(group.foamThickness || group.foamNote) ? `
                       <div class="foam-details">
                         Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
@@ -986,7 +986,7 @@ const InvoicePage = () => {
               <table class="measurement-table">
                 <thead>
                   <tr>
-                    <th>Quantity<br/>الكمية</th>
+                    <th>JL Qnty<br/>الكمية</th>
                     <th>Measurements<br/>القياس</th>
                     <th>Details<br/>تفاصيل الكنبة</th>
                   </tr>
