@@ -6,17 +6,25 @@ import {
   DialogActions,
   TextField,
   Box,
-  Button
+  Button,
+  Typography,
+  Divider
 } from '@mui/material';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 
 const defaultFormState = {
   corporateName: '',
-  email: '',
-  phone: '',
   address: '',
   notes: ''
+};
+
+const defaultContactPersonState = {
+  name: '',
+  email: '',
+  phone: '',
+  position: '',
+  isPrimary: true
 };
 
 const CorporateCustomerDialog = ({
@@ -28,6 +36,7 @@ const CorporateCustomerDialog = ({
   onError
 }) => {
   const [formValues, setFormValues] = useState(defaultFormState);
+  const [contactPerson, setContactPerson] = useState(defaultContactPersonState);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -37,14 +46,14 @@ const CorporateCustomerDialog = ({
     if (open) {
       setFormValues({
         corporateName: customer?.corporateName || '',
-        email: customer?.email || '',
-        phone: customer?.phone || '',
         address: customer?.address || '',
         notes: customer?.notes || ''
       });
+      setContactPerson(defaultContactPersonState);
       setErrors({});
     } else {
       setFormValues(defaultFormState);
+      setContactPerson(defaultContactPersonState);
       setErrors({});
     }
   }, [open, customer]);
@@ -63,10 +72,47 @@ const CorporateCustomerDialog = ({
     }
   };
 
+  const handleContactPersonChange = (field) => (event) => {
+    const value = field === 'isPrimary' ? event.target.checked : event.target.value;
+    setContactPerson((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+    if (errors[`contactPerson_${field}`]) {
+      setErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[`contactPerson_${field}`];
+        return newErrors;
+      });
+    }
+  };
+
   const validate = () => {
     const validationErrors = {};
     if (!formValues.corporateName.trim()) {
       validationErrors.corporateName = 'Corporate name is required';
+    }
+
+    // Only validate contact person when creating (not editing)
+    if (!isEditMode) {
+      // Contact person fields are optional, but if any field is filled, validate all required fields
+      const hasAnyContactPersonData = 
+        contactPerson.name.trim() || 
+        contactPerson.email.trim() || 
+        contactPerson.phone.trim() || 
+        contactPerson.position.trim();
+      
+      if (hasAnyContactPersonData) {
+        if (!contactPerson.name.trim()) {
+          validationErrors.contactPerson_name = 'Contact person name is required';
+        }
+        if (!contactPerson.email.trim()) {
+          validationErrors.contactPerson_email = 'Contact person email is required';
+        }
+        if (!contactPerson.phone.trim()) {
+          validationErrors.contactPerson_phone = 'Contact person phone is required';
+        }
+      }
     }
 
     setErrors(validationErrors);
@@ -100,9 +146,21 @@ const CorporateCustomerDialog = ({
         onSuccess?.('Corporate customer updated successfully');
         onSaved?.(updatedCustomer, { isUpdate: true });
       } else {
+        // Check if contact person data is provided
+        const hasContactPersonData = 
+          contactPerson.name.trim() || 
+          contactPerson.email.trim() || 
+          contactPerson.phone.trim() || 
+          contactPerson.position.trim();
+        
+        const contactPersons = hasContactPersonData ? [{
+          ...contactPerson,
+          id: Date.now().toString()
+        }] : [];
+
         const docRef = await addDoc(collection(db, 'corporateCustomers'), {
           ...formValues,
-          contactPersons: [],
+          contactPersons: contactPersons,
           createdAt: new Date(),
           updatedAt: new Date()
         });
@@ -110,7 +168,7 @@ const CorporateCustomerDialog = ({
         const createdCustomer = {
           id: docRef.id,
           ...formValues,
-          contactPersons: [],
+          contactPersons: contactPersons,
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -149,57 +207,6 @@ const CorporateCustomerDialog = ({
             required
             error={Boolean(errors.corporateName)}
             helperText={errors.corporateName}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#d4af5a'
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#d4af5a',
-                  borderWidth: 2
-                }
-              },
-              '& .MuiInputLabel-root': {
-                '&.Mui-focused': {
-                  color: '#d4af5a'
-                }
-              }
-            }}
-          />
-
-          <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={formValues.email}
-            onChange={handleInputChange('email')}
-            error={Boolean(errors.email)}
-            helperText={errors.email}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#d4af5a'
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#d4af5a',
-                  borderWidth: 2
-                }
-              },
-              '& .MuiInputLabel-root': {
-                '&.Mui-focused': {
-                  color: '#d4af5a'
-                }
-              }
-            }}
-          />
-
-          <TextField
-            fullWidth
-            label="Phone"
-            value={formValues.phone}
-            onChange={handleInputChange('phone')}
-            error={Boolean(errors.phone)}
-            helperText={errors.phone}
             sx={{
               '& .MuiOutlinedInput-root': {
                 '&:hover .MuiOutlinedInput-notchedOutline': {
@@ -269,6 +276,146 @@ const CorporateCustomerDialog = ({
               }
             }}
           />
+
+          {!isEditMode && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="h6" sx={{ color: '#d4af5a', fontWeight: 'bold', mb: 1 }}>
+                First Contact Person (Optional)
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                You can add the first contact person now, or add them later.
+              </Typography>
+
+              <TextField
+                fullWidth
+                label="Contact Person Name"
+                value={contactPerson.name}
+                onChange={handleContactPersonChange('name')}
+                error={Boolean(errors.contactPerson_name)}
+                helperText={errors.contactPerson_name}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a'
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a',
+                      borderWidth: 2
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: '#d4af5a'
+                    }
+                  }
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Contact Person Email"
+                type="email"
+                value={contactPerson.email}
+                onChange={handleContactPersonChange('email')}
+                error={Boolean(errors.contactPerson_email)}
+                helperText={errors.contactPerson_email}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a'
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a',
+                      borderWidth: 2
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: '#d4af5a'
+                    }
+                  }
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Contact Person Phone"
+                value={contactPerson.phone}
+                onChange={handleContactPersonChange('phone')}
+                error={Boolean(errors.contactPerson_phone)}
+                helperText={errors.contactPerson_phone}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a'
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a',
+                      borderWidth: 2
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: '#d4af5a'
+                    }
+                  }
+                }}
+              />
+
+              <TextField
+                fullWidth
+                label="Position"
+                value={contactPerson.position}
+                onChange={handleContactPersonChange('position')}
+                placeholder="e.g., Manager, Director, CEO..."
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a'
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#d4af5a',
+                      borderWidth: 2
+                    }
+                  },
+                  '& .MuiInputLabel-root': {
+                    '&.Mui-focused': {
+                      color: '#d4af5a'
+                    }
+                  }
+                }}
+              />
+
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 2,
+                p: 2,
+                border: '2px solid #e0e0e0',
+                borderRadius: 1,
+                backgroundColor: '#f9f9f9',
+                '&:hover': {
+                  borderColor: '#d4af5a',
+                  backgroundColor: '#f5f5f5'
+                }
+              }}>
+                <input
+                  type="checkbox"
+                  checked={contactPerson.isPrimary}
+                  onChange={handleContactPersonChange('isPrimary')}
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    accentColor: '#d4af5a'
+                  }}
+                />
+                <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                  Primary Contact Person
+                </Typography>
+              </Box>
+            </>
+          )}
         </Box>
       </DialogContent>
       <DialogActions sx={{ p: 3 }}>

@@ -26,7 +26,10 @@ import {
   Step,
   StepLabel,
   Container,
-  Paper
+  Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -34,7 +37,9 @@ import {
   Person as PersonIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  LocationOn as LocationIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
@@ -527,51 +532,31 @@ const CorporateOrderPage = () => {
             {/* Customer Cards */}
             <Grid container spacing={2}>
               {filteredCustomers.map((customer) => (
-                <Grid item xs={12} md={6} lg={4} key={customer.id}>
+                <Grid item xs={12} sm={6} md={4} lg={3} key={customer.id} sx={{ display: 'flex', minWidth: 0 }}>
                   <Card 
                     sx={{ 
+                      width: '100%',
+                      maxWidth: '100%',
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      borderRadius: 2,
+                      boxShadow: 2,
+                      boxSizing: 'border-box',
                       cursor: 'pointer',
                       '&:hover': { 
-                        boxShadow: 3,
+                        boxShadow: 4,
                         transform: 'translateY(-2px)',
-                        transition: 'all 0.2s ease-in-out'
+                        transition: 'all 0.2s ease-in-out',
+                        border: '2px solid #d4af5a'
                       }
                     }}
                     onClick={() => handleCustomerSelect(customer)}
                   >
-                    <CardContent>
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                        <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                          <BusinessIcon />
-                        </Avatar>
-                        <Box>
-                          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                            {customer.corporateName}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {customer.email}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <PhoneIcon sx={{ fontSize: 16, mr: 1 }} />
-                          {customer.phone}
-                        </Typography>
-                        <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <EmailIcon sx={{ fontSize: 16, mr: 1 }} />
-                          {customer.email}
-                        </Typography>
-                      </Box>
-
-                      {customer.contactPersons && customer.contactPersons.length > 0 && (
-                        <Chip 
-                          label={`${customer.contactPersons.length} Contact Person${customer.contactPersons.length > 1 ? 's' : ''}`}
-                          size="small"
-                          color="primary"
-                        />
-                      )}
+                    <CardContent sx={{ p: 2, textAlign: 'center' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                        {customer.corporateName}
+                      </Typography>
                     </CardContent>
                   </Card>
                 </Grid>

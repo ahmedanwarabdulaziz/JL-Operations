@@ -293,20 +293,25 @@ const CorporateCustomersPage = () => {
       ) : (
         <Grid container spacing={3}>
           {corporateCustomers.map((customer) => (
-            <Grid item xs={12} md={6} lg={4} key={customer.id}>
+            <Grid item xs={12} md={6} lg={4} key={customer.id} sx={{ display: 'flex', minWidth: 0 }}>
               <Card sx={{ 
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
+                minHeight: '450px',
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 borderRadius: 2,
                 boxShadow: 2,
+                boxSizing: 'border-box',
                 '&:hover': {
                   boxShadow: 4
                 }
               }}>
-                <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                <CardContent sx={{ flexGrow: 1, p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {customer.corporateName}
                     </Typography>
                     <IconButton
@@ -326,31 +331,94 @@ const CorporateCustomersPage = () => {
                     </IconButton>
                   </Box>
 
-                  <Box sx={{ mb: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <EmailIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {customer.email}
+                  {/* Primary Contact Person */}
+                  <Divider sx={{ my: 2 }} />
+                  {customer.contactPersons && customer.contactPersons.length > 0 ? (
+                    (() => {
+                      const primaryContact = customer.contactPersons.find(cp => cp.isPrimary) || customer.contactPersons[0];
+                      return (
+                        <Box sx={{ 
+                          mb: 2,
+                          p: 2.5,
+                          border: '2px solid #d4af5a',
+                          borderRadius: 2,
+                          backgroundColor: 'rgba(212, 175, 90, 0.05)',
+                          position: 'relative',
+                          boxShadow: '0 2px 8px rgba(212, 175, 90, 0.15)',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '3px',
+                            background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
+                            borderRadius: '2px 2px 0 0'
+                          }
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                            <PersonIcon sx={{ fontSize: 20, color: '#d4af5a' }} />
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
+                              {primaryContact.name}
+                            </Typography>
+                            {primaryContact.isPrimary && (
+                              <Chip 
+                                label="Primary" 
+                                size="small" 
+                                sx={{ 
+                                  backgroundColor: '#d4af5a', 
+                                  color: '#000000',
+                                  fontSize: '0.7rem',
+                                  height: '20px',
+                                  fontWeight: 'bold'
+                                }} 
+                              />
+                            )}
+                          </Box>
+                          {primaryContact.position && (
+                            <Typography variant="body2" sx={{ color: '#666666', mb: 1.5, ml: 4 }}>
+                              {primaryContact.position}
+                            </Typography>
+                          )}
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, ml: 4 }}>
+                            {primaryContact.email && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <EmailIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
+                                <Typography variant="body2" color="text.secondary">
+                                  {primaryContact.email}
+                                </Typography>
+                              </Box>
+                            )}
+                            {primaryContact.phone && (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <PhoneIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
+                                <Typography variant="body2" color="text.secondary">
+                                  {primaryContact.phone}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
+                        </Box>
+                      );
+                    })()
+                  ) : (
+                    <Box sx={{ 
+                      mb: 2, 
+                      textAlign: 'center', 
+                      py: 2,
+                      border: '2px dashed #d4af5a',
+                      borderRadius: 2,
+                      backgroundColor: 'rgba(212, 175, 90, 0.03)'
+                    }}>
+                      <Typography variant="body2" sx={{ color: '#999999', fontStyle: 'italic' }}>
+                        No contact person added yet
                       </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {customer.phone}
-                      </Typography>
-                    </Box>
-                    {customer.address && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                        <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Typography variant="body2" color="text.secondary">
-                          {customer.address}
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
+                  )}
 
-                  {customer.contactPersons && customer.contactPersons.length > 0 && (
-                    <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' } }}>
+                  {/* Other Contact Persons (if more than one) */}
+                  {customer.contactPersons && customer.contactPersons.length > 1 && (
+                    <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' }, mb: 2 }}>
                       <AccordionSummary
                         expandIcon={<ExpandMoreIcon sx={{ color: '#d4af5a' }} />}
                         sx={{ 
@@ -360,12 +428,17 @@ const CorporateCustomersPage = () => {
                         }}
                       >
                         <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold' }}>
-                          Contact Persons ({customer.contactPersons.length})
+                          Other Contacts ({customer.contactPersons.length - 1})
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails sx={{ pt: 0 }}>
                         <List dense>
-                          {customer.contactPersons.map((contactPerson) => (
+                          {customer.contactPersons
+                            .filter(cp => {
+                              const primaryContact = customer.contactPersons.find(c => c.isPrimary) || customer.contactPersons[0];
+                              return cp.id !== primaryContact.id;
+                            })
+                            .map((contactPerson) => (
                             <ListItem key={contactPerson.id} sx={{ px: 0 }}>
                               <ListItemButton
                                 onClick={() => handleOpenContactPersonDialog(customer, contactPerson)}
@@ -420,47 +493,55 @@ const CorporateCustomersPage = () => {
                             </ListItem>
                           ))}
                         </List>
-                        <Button
-                          startIcon={<PersonAddIcon />}
-                          onClick={() => handleOpenContactPersonDialog(customer)}
-                          sx={{
-                            mt: 1,
-                            color: '#d4af5a',
-                            borderColor: '#d4af5a',
-                            '&:hover': {
-                              backgroundColor: '#f5f5f5',
-                              borderColor: '#b98f33'
-                            }
-                          }}
-                          variant="outlined"
-                          size="small"
-                        >
-                          Add Contact Person
-                        </Button>
                       </AccordionDetails>
                     </Accordion>
                   )}
 
-                  {(!customer.contactPersons || customer.contactPersons.length === 0) && (
+                  {/* Address (if exists) */}
+                  {customer.address && (
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
+                      <LocationIcon sx={{ fontSize: 16, color: 'text.secondary', mt: 0.5 }} />
+                      <Typography variant="body2" color="text.secondary">
+                        {customer.address}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Add Contact Person Button - Always at bottom */}
+                  <Box sx={{ mt: 'auto', pt: 2 }}>
                     <Button
                       startIcon={<PersonAddIcon />}
                       onClick={() => handleOpenContactPersonDialog(customer)}
+                      variant="contained"
                       sx={{
-                        mt: 2,
-                        color: '#d4af5a',
-                        borderColor: '#d4af5a',
+                        width: '100%',
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '3px solid #4CAF50',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                        position: 'relative',
+                        fontWeight: 'bold',
                         '&:hover': {
-                          backgroundColor: '#f5f5f5',
-                          borderColor: '#b98f33'
+                          background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                          border: '3px solid #45a049',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        },
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '50%',
+                          background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                          borderRadius: '4px 4px 0 0',
+                          pointerEvents: 'none'
                         }
                       }}
-                      variant="outlined"
-                      size="small"
-                      fullWidth
                     >
                       Add Contact Person
                     </Button>
-                  )}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
