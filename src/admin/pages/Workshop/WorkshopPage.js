@@ -1066,6 +1066,7 @@ const WorkshopPage = () => {
       amountPaid: selectedOrder.paymentData?.amountPaid || '',
       pickupDeliveryEnabled: selectedOrder.paymentData?.pickupDeliveryEnabled || false,
       pickupDeliveryCost: selectedOrder.paymentData?.pickupDeliveryCost || '',
+      pickupDeliveryServiceType: selectedOrder.paymentData?.pickupDeliveryServiceType || 'both',
       notes: selectedOrder.paymentData?.notes || ''
     });
     setEditPaymentDialog(true);
@@ -1218,22 +1219,83 @@ const WorkshopPage = () => {
       if (amountPaid >= deposit && deposit > 0) {
         financialStatus = 'Deposit Paid';
       }
+      
+      // Merge with existing payment data to preserve any fields not being edited
+      // Include all fields from editPaymentData - save exactly as entered in the form
+      // This matches the structure saved by NewOrderPage
+      // Handle pickupDeliveryCost: convert number to string to match NewOrderPage format
+      let pickupDeliveryCostValue = editPaymentData.pickupDeliveryCost;
+      if (pickupDeliveryCostValue !== undefined) {
+        // If it's a number (from TextField parseFloat), convert to string
+        // If it's 0, save as '0' string, if empty/undefined, save as empty string
+        if (typeof pickupDeliveryCostValue === 'number') {
+          pickupDeliveryCostValue = pickupDeliveryCostValue === 0 ? '0' : String(pickupDeliveryCostValue);
+        } else if (pickupDeliveryCostValue === '' || pickupDeliveryCostValue === null) {
+          pickupDeliveryCostValue = '';
+        } else {
+          pickupDeliveryCostValue = String(pickupDeliveryCostValue);
+        }
+      } else {
+        pickupDeliveryCostValue = selectedOrder.paymentData?.pickupDeliveryCost || '';
+      }
+      
+      // Auto-enable pickup/delivery if cost is greater than 0
+      const pickupDeliveryCostNum = parseFloat(pickupDeliveryCostValue) || 0;
+      let pickupDeliveryEnabledValue = editPaymentData.pickupDeliveryEnabled;
+      if (pickupDeliveryCostNum > 0) {
+        // If cost > 0, automatically enable pickup/delivery
+        pickupDeliveryEnabledValue = true;
+      } else if (pickupDeliveryEnabledValue === undefined) {
+        // If not explicitly set and cost is 0, use existing value or false
+        pickupDeliveryEnabledValue = selectedOrder.paymentData?.pickupDeliveryEnabled || false;
+      } else {
+        // Use the value from the form
+        pickupDeliveryEnabledValue = Boolean(pickupDeliveryEnabledValue);
+      }
+      
+      const updatedPaymentData = {
+        ...selectedOrder.paymentData, // Preserve existing fields like paymentHistory, payments, etc.
+        // Update with form values - ensure all edited fields are included
+        deposit: editPaymentData.deposit !== undefined ? String(editPaymentData.deposit) : (selectedOrder.paymentData?.deposit || ''),
+        amountPaid: editPaymentData.amountPaid !== undefined ? String(editPaymentData.amountPaid) : (selectedOrder.paymentData?.amountPaid || ''),
+        pickupDeliveryEnabled: pickupDeliveryEnabledValue,
+        pickupDeliveryCost: pickupDeliveryCostValue,
+        pickupDeliveryServiceType: editPaymentData.pickupDeliveryServiceType || (selectedOrder.paymentData?.pickupDeliveryServiceType || 'both'),
+        notes: editPaymentData.notes !== undefined ? String(editPaymentData.notes) : (selectedOrder.paymentData?.notes || ''),
+      };
+      
+      // Update orderDetails with financialStatus - preserve all existing orderDetails fields
+      const updatedOrderDetails = {
+        ...selectedOrder.orderDetails,
+        financialStatus,
+      };
+      
       const updatedOrder = {
         ...selectedOrder,
-        paymentData: editPaymentData,
-        orderDetails: {
-          ...selectedOrder.orderDetails,
-          financialStatus,
-        },
+        paymentData: updatedPaymentData,
+        orderDetails: updatedOrderDetails,
       };
+      
+      // Update in Firebase - use the same pattern as NewOrderPage
+      // Update the full objects to ensure all fields are preserved
       const orderRef = doc(db, 'orders', selectedOrder.id);
-      await updateDoc(orderRef, {
-        paymentData: editPaymentData,
-        orderDetails: {
-          ...selectedOrder.orderDetails,
-          financialStatus,
-        },
+      
+      // Debug: Log what we're saving
+      console.log('Saving payment data:', {
+        orderId: selectedOrder.id,
+        paymentData: updatedPaymentData,
+        pickupDeliveryEnabled: updatedPaymentData.pickupDeliveryEnabled,
+        pickupDeliveryCost: updatedPaymentData.pickupDeliveryCost,
+        pickupDeliveryServiceType: updatedPaymentData.pickupDeliveryServiceType
       });
+      
+      await updateDoc(orderRef, {
+        paymentData: updatedPaymentData,
+        orderDetails: updatedOrderDetails,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
       setSelectedOrder(updatedOrder);
       setOrders(orders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
       setFilteredOrders(filteredOrders.map(order => order.id === selectedOrder.id ? updatedOrder : order));
@@ -3209,9 +3271,13 @@ const WorkshopPage = () => {
                   type="number"
                   value={editPaymentData.pickupDeliveryCost || 0}
                   onChange={(e) => {
+                    const costValue = parseFloat(e.target.value) || 0;
+                    // Auto-enable pickup/delivery if cost > 0
+                    const shouldEnable = costValue > 0;
                     setEditPaymentData({ 
                       ...editPaymentData, 
-                      pickupDeliveryCost: parseFloat(e.target.value) || 0
+                      pickupDeliveryCost: costValue,
+                      pickupDeliveryEnabled: shouldEnable || editPaymentData.pickupDeliveryEnabled
                     });
                   }}
                   onFocus={handleAutoSelect}

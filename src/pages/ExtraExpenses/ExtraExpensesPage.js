@@ -159,29 +159,44 @@ const ExtraExpensesPage = () => {
         const orderData = { id: doc.id, ...doc.data(), orderType: 'corporate' };
         ordersData.push(orderData);
         
-        // Extract extra expenses with order context
-        if (orderData.extraExpenses && Array.isArray(orderData.extraExpenses)) {
-          orderData.extraExpenses.forEach((expense, index) => {
-            allExpenses.push({
-              id: `corporate_${orderData.id}_${index}`,
-              orderId: orderData.id,
-              orderBillNumber: orderData.orderDetails?.billInvoice || 'N/A',
-              customerName: orderData.corporateCustomer?.corporateName || 'Corporate Customer',
-              customerEmail: orderData.contactPerson?.email || orderData.corporateCustomer?.email || '',
-              orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
-              orderStatus: orderData.invoiceStatus || 'Unknown',
-              description: expense.description || 'Extra Expense',
-              price: parseFloat(expense.price) || 0,
-              unit: expense.unit || '',
-              tax: parseFloat(expense.tax) || 0,
-              taxType: expense.taxType || 'fixed',
-              total: (parseFloat(expense.price) || 0) + (parseFloat(expense.tax) || 0),
-              originalExpense: expense,
-              expenseType: 'order-specific',
-              orderType: 'corporate'
+          // Extract extra expenses with order context
+          if (orderData.extraExpenses && Array.isArray(orderData.extraExpenses)) {
+            orderData.extraExpenses.forEach((expense, index) => {
+              const price = parseFloat(expense.price) || 0;
+              const quantity = parseFloat(expense.quantity) || parseFloat(expense.unit) || 1;
+              const tax = parseFloat(expense.tax) || 0;
+              const taxType = expense.taxType || 'fixed';
+              
+              // Calculate tax amount based on tax type
+              let taxAmount = 0;
+              if (taxType === 'percent') {
+                taxAmount = (price * quantity * tax) / 100;
+              } else {
+                taxAmount = tax;
+              }
+              
+              const total = (price * quantity) + taxAmount;
+              
+              allExpenses.push({
+                id: `corporate_${orderData.id}_${index}`,
+                orderId: orderData.id,
+                orderBillNumber: orderData.orderDetails?.billInvoice || 'N/A',
+                customerName: orderData.corporateCustomer?.corporateName || 'Corporate Customer',
+                customerEmail: orderData.contactPerson?.email || orderData.corporateCustomer?.email || '',
+                orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
+                orderStatus: orderData.invoiceStatus || 'Unknown',
+                description: expense.description || 'Extra Expense',
+                price: price,
+                unit: expense.unit || '',
+                tax: tax,
+                taxType: taxType,
+                total: total,
+                originalExpense: expense,
+                expenseType: 'order-specific',
+                orderType: 'corporate'
+              });
             });
-          });
-        }
+          }
       });
       
       // Extract order-based extra expenses from done orders (closed corporate orders)
@@ -194,6 +209,21 @@ const ExtraExpensesPage = () => {
           // Extract extra expenses with order context
           if (orderData.extraExpenses && Array.isArray(orderData.extraExpenses)) {
             orderData.extraExpenses.forEach((expense, index) => {
+              const price = parseFloat(expense.price) || 0;
+              const quantity = parseFloat(expense.quantity) || parseFloat(expense.unit) || 1;
+              const tax = parseFloat(expense.tax) || 0;
+              const taxType = expense.taxType || 'fixed';
+              
+              // Calculate tax amount based on tax type
+              let taxAmount = 0;
+              if (taxType === 'percent') {
+                taxAmount = (price * quantity * tax) / 100;
+              } else {
+                taxAmount = tax;
+              }
+              
+              const total = (price * quantity) + taxAmount;
+              
               allExpenses.push({
                 id: `done_corporate_${orderData.id}_${index}`,
                 orderId: orderData.id,
@@ -203,11 +233,11 @@ const ExtraExpensesPage = () => {
                 orderDate: orderData.createdAt || orderData.orderDetails?.orderDate || '',
                 orderStatus: 'Completed',
                 description: expense.description || 'Extra Expense',
-                price: parseFloat(expense.price) || 0,
+                price: price,
                 unit: expense.unit || '',
-                tax: parseFloat(expense.tax) || 0,
-                taxType: expense.taxType || 'fixed',
-                total: (parseFloat(expense.price) || 0) + (parseFloat(expense.tax) || 0),
+                tax: tax,
+                taxType: taxType,
+                total: total,
                 category: expense.category || 'Other',
                 date: expense.date || orderData.createdAt || '',
                 originalExpense: expense,
