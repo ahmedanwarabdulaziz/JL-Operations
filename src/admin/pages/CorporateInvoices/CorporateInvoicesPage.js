@@ -31,6 +31,7 @@ import {
   InputAdornment,
   Switch,
   FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import {
   FileDownload as DownloadIcon,
@@ -71,6 +72,7 @@ const CorporateInvoicesPage = () => {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [notification, setNotification] = useState({ open: false, message: '', type: 'info' });
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  const [groupByNote, setGroupByNote] = useState(false);
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
 
@@ -238,9 +240,9 @@ const CorporateInvoicesPage = () => {
 
   // Corporate invoice calculations
   const calculateCorporateInvoiceTotals = (order) => {
-    if (!order) return { subtotal: 0, tax: 0, creditCardFee: 0, total: 0 };
+    if (!order) return { subtotal: 0, delivery: 0, tax: 0, creditCardFee: 0, total: 0 };
 
-    // Calculate subtotal from furniture groups (create items from groups)
+    // Calculate subtotal from furniture groups (without delivery)
     const furnitureGroups = order.furnitureGroups || [];
     let subtotal = 0;
 
@@ -274,29 +276,31 @@ const CorporateInvoicesPage = () => {
       }
     });
 
-    // Add pickup/delivery cost if enabled
+    // Calculate pickup/delivery cost separately
     const paymentDetails = order.paymentDetails || {};
+    let delivery = 0;
     if (paymentDetails.pickupDeliveryEnabled) {
       const pickupCost = parseFloat(paymentDetails.pickupDeliveryCost) || 0;
       const serviceType = paymentDetails.pickupDeliveryServiceType;
       if (serviceType === 'both') {
-        subtotal += pickupCost * 2;
+        delivery = pickupCost * 2;
       } else {
-        subtotal += pickupCost;
+        delivery = pickupCost;
       }
     }
 
-    // Calculate tax (13% on subtotal)
-    const tax = subtotal * 0.13;
+    // Calculate tax (13% on subtotal + delivery)
+    const tax = (subtotal + delivery) * 0.13;
 
-    // Calculate credit card fee (2.5% on subtotal + tax) if enabled
-    const creditCardFee = creditCardFeeEnabled ? (subtotal + tax) * 0.025 : 0;
+    // Calculate credit card fee (2.5% on subtotal + delivery + tax) if enabled
+    const creditCardFee = creditCardFeeEnabled ? (subtotal + delivery + tax) * 0.025 : 0;
 
-    // Calculate total
-    const total = subtotal + tax + creditCardFee;
+    // Calculate total (subtotal + delivery + tax + credit card fee)
+    const total = subtotal + delivery + tax + creditCardFee;
 
     return {
       subtotal: parseFloat(subtotal.toFixed(2)),
+      delivery: parseFloat(delivery.toFixed(2)),
       tax: parseFloat(tax.toFixed(2)),
       creditCardFee: parseFloat(creditCardFee.toFixed(2)),
       total: parseFloat(total.toFixed(2))
@@ -618,6 +622,19 @@ const CorporateInvoicesPage = () => {
                           // Create items from furniture group data
                           const groupItems = [];
                           
+                          // Add individual furniture items if they exist
+                          if (group.furniture && Array.isArray(group.furniture)) {
+                            group.furniture.forEach((furniture, furnitureIndex) => {
+                              if (furniture.price && furniture.quantity) {
+                                groupItems.push({
+                                  name: furniture.name || `Furniture Item ${furnitureIndex + 1}`,
+                                  price: parseFloat(furniture.price) || 0,
+                                  quantity: parseFloat(furniture.quantity) || 0
+                                });
+                              }
+                            });
+                          }
+                          
                           // Add material item
                           if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
                             groupItems.push({
@@ -745,6 +762,15 @@ const CorporateInvoicesPage = () => {
                       </span>
                     </div>
                     
+                    ${totals.delivery > 0 ? `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                      <span style="color: black; font-size: 14px;">Delivery:</span>
+                      <span style="font-weight: bold; color: black; font-size: 14px;">
+                        $${totals.delivery.toFixed(2)}
+                      </span>
+                    </div>
+                    ` : ''}
+                    
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                       <span style="color: black; font-size: 14px;">Tax Rate:</span>
                       <span style="font-weight: bold; color: black; font-size: 14px;">
@@ -868,6 +894,52 @@ const CorporateInvoicesPage = () => {
     return order.orderDetails?.status || 'Unknown';
   };
 
+  const getMaterialSummary = (order) => {
+    if (!order.furnitureGroups || order.furnitureGroups.length === 0) {
+      return 'No materials';
+    }
+
+    const materials = [];
+    order.furnitureGroups.forEach(group => {
+      if (group.materialCompany && group.materialCode) {
+        const materialKey = `${group.materialCompany} - ${group.materialCode}`;
+        if (!materials.includes(materialKey)) {
+          materials.push(materialKey);
+        }
+      }
+    });
+
+    if (materials.length === 0) {
+      return 'No materials';
+    }
+
+    return materials.join(', ');
+  };
+
+  const getGroupedOrders = () => {
+    if (!groupByNote) {
+      return filteredOrders;
+    }
+
+    // Group orders by note value
+    const grouped = {};
+    filteredOrders.forEach(order => {
+      const noteValue = order.orderDetails?.note?.value || 'No Note';
+      if (!grouped[noteValue]) {
+        grouped[noteValue] = [];
+      }
+      grouped[noteValue].push(order);
+    });
+
+    // Flatten grouped orders, maintaining order within each group
+    const result = [];
+    Object.keys(grouped).sort().forEach(note => {
+      result.push(...grouped[note]);
+    });
+
+    return result;
+  };
+
   return (
     <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -915,6 +987,24 @@ const CorporateInvoicesPage = () => {
               ),
             }}
             sx={{ mb: 2 }}
+          />
+
+          {/* Group By Note Toggle */}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={groupByNote}
+                onChange={(e) => setGroupByNote(e.target.checked)}
+                sx={{
+                  color: '#f27921',
+                  '&.Mui-checked': {
+                    color: '#f27921'
+                  }
+                }}
+              />
+            }
+            label="Group by Note"
+            sx={{ color: '#f27921', fontWeight: 'bold', fontSize: '0.875rem' }}
           />
 
         </Box>
@@ -1047,9 +1137,290 @@ const CorporateInvoicesPage = () => {
                 </Box>
               </Box>
               
-              <Typography variant="body2" sx={{ color: '#b98f33' }}>
+              <Typography variant="body2" sx={{ color: '#b98f33', mb: 2 }}>
                 {selectedOrder.corporateCustomer?.corporateName} • {selectedOrder.contactPerson?.name}
               </Typography>
+
+              {/* Internal JL Cost Analysis */}
+              {(() => {
+                const furnitureGroups = selectedOrder.furnitureGroups || [];
+                
+                // Calculate JL costs from all items in the table
+                // Grand Total = sum of all Line Totals shown in the table
+                let jlSubtotalBeforeTax = 0;
+                let jlGrandTotal = 0;
+                
+                // Calculate from furniture groups
+                furnitureGroups.forEach(group => {
+                  // Material costs
+                  if (group.materialJLPrice && parseFloat(group.materialJLPrice) > 0) {
+                    const materialSubtotal = (parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0);
+                    jlSubtotalBeforeTax += materialSubtotal;
+                    const materialTaxRate = getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates);
+                    // Line Total = Subtotal * (1 + taxRate)
+                    const materialLineTotal = materialSubtotal * (1 + materialTaxRate);
+                    jlGrandTotal += materialLineTotal;
+                  }
+                  
+                  // Foam costs (no tax)
+                  if (group.foamJLPrice && parseFloat(group.foamJLPrice) > 0) {
+                    const foamSubtotal = (parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0);
+                    jlSubtotalBeforeTax += foamSubtotal;
+                    // Line Total = Subtotal (no tax)
+                    jlGrandTotal += foamSubtotal;
+                  }
+                });
+                
+                // Calculate from extra expenses
+                if (selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0) {
+                  selectedOrder.extraExpenses.forEach(expense => {
+                    const expenseQty = parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1;
+                    const expenseSubtotal = expenseQty * (parseFloat(expense.price) || 0);
+                    jlSubtotalBeforeTax += expenseSubtotal;
+                    
+                    // Line Total = expense.total (which already includes tax)
+                    // If total is not available, calculate it
+                    let expenseLineTotal = 0;
+                    if (expense.total !== undefined && expense.total !== null) {
+                      expenseLineTotal = parseFloat(expense.total) || 0;
+                    } else {
+                      // Calculate total if not stored
+                      let expenseTax = 0;
+                      if (expense.taxRate !== undefined && expense.taxRate !== null) {
+                        expenseTax = expenseSubtotal * (parseFloat(expense.taxRate) || 0);
+                      } else if (expense.tax !== undefined && expense.tax !== null) {
+                        const taxType = expense.taxType || 'fixed';
+                        if (taxType === 'percent') {
+                          const taxPercent = parseFloat(expense.tax) || 0;
+                          expenseTax = expenseSubtotal * (taxPercent / 100);
+                        } else {
+                          expenseTax = parseFloat(expense.tax) || 0;
+                        }
+                      } else {
+                        // Default to 13% if no tax info
+                        expenseTax = expenseSubtotal * 0.13;
+                      }
+                      expenseLineTotal = expenseSubtotal + expenseTax;
+                    }
+                    jlGrandTotal += expenseLineTotal;
+                  });
+                }
+                
+                return (
+                  <Box sx={{ mt: 2, mb: 2 }}>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 'bold', 
+                      mb: 1.5,
+                      color: '#000000'
+                    }}>
+                      Internal JL Cost Analysis
+                    </Typography>
+
+                    {/* JL Table Header */}
+                    <Box sx={{ 
+                      display: 'flex',
+                      backgroundColor: '#f0f0f0',
+                      border: '1px solid #ccc',
+                      fontWeight: 'bold',
+                      fontSize: '0.8rem',
+                      color: '#000000'
+                    }}>
+                      <Box sx={{ flex: 2, p: 0.5, borderRight: '1px solid #ccc' }}>Component</Box>
+                      <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Qty</Box>
+                      <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Unit Price</Box>
+                      <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>Subtotal</Box>
+                      <Box sx={{ flex: 1, p: 0.5, borderRight: '1px solid #ccc', textAlign: 'right' }}>TAX</Box>
+                      <Box sx={{ flex: 1, p: 0.5, textAlign: 'right' }}>Line Total</Box>
+                    </Box>
+
+                    {/* JL Table Content */}
+                    {furnitureGroups.map((group, groupIndex) => {
+                      // Check if this group has any records (Material, Foam, etc.)
+                      const hasMaterial = group.materialJLPrice && parseFloat(group.materialJLPrice) > 0;
+                      const hasFoam = group.foamJLPrice && parseFloat(group.foamJLPrice) > 0;
+                      const hasRecords = hasMaterial || hasFoam;
+                      
+                      // Only render the group if it has records
+                      if (!hasRecords) return null;
+                      
+                      return (
+                        <Box key={groupIndex}>
+                          {/* Furniture Type Header */}
+                          <Box sx={{ 
+                            display: 'flex',
+                            backgroundColor: '#f8f8f8',
+                            border: '1px solid #ccc',
+                            borderTop: 'none',
+                            fontWeight: 'bold',
+                            fontSize: '0.8rem',
+                            color: '#000000',
+                            minHeight: '24px'
+                          }}>
+                            <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
+                              {group.furnitureType || 'Furniture Group'}
+                            </Box>
+                          </Box>
+
+                          {/* JL Material */}
+                          {group.materialJLPrice && parseFloat(group.materialJLPrice) > 0 && (
+                            <Box sx={{ 
+                              display: 'flex',
+                              border: '1px solid #ccc',
+                              borderTop: 'none',
+                              fontSize: '0.8rem',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              minHeight: '24px'
+                            }}>
+                              <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                                Material ({group.materialCode || 'N/A'})
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                {(parseFloat(group.materialJLQnty) || 0).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${(parseFloat(group.materialJLPrice) || 0).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates)).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${(((parseFloat(group.materialJLQnty) || 0) * (parseFloat(group.materialJLPrice) || 0)) * (1 + getMaterialCompanyTaxRate(group.materialCompany, materialTaxRates))).toFixed(2)}
+                              </Box>
+                            </Box>
+                          )}
+
+                          {/* JL Foam */}
+                          {group.foamJLPrice && parseFloat(group.foamJLPrice) > 0 && (
+                            <Box sx={{ 
+                              display: 'flex',
+                              border: '1px solid #ccc',
+                              borderTop: 'none',
+                              fontSize: '0.8rem',
+                              color: '#000000',
+                              backgroundColor: '#ffffff',
+                              minHeight: '24px'
+                            }}>
+                              <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                                Foam
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                {(parseFloat(group.foamQnty) || 1).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${(parseFloat(group.foamJLPrice) || 0).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                $0.00
+                              </Box>
+                              <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                ${((parseFloat(group.foamQnty) || 1) * (parseFloat(group.foamJLPrice) || 0)).toFixed(2)}
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
+
+                    {/* Extra Expenses in JL Table */}
+                    {selectedOrder.extraExpenses && selectedOrder.extraExpenses.length > 0 && (
+                      <>
+                        {/* Extra Expenses Header */}
+                        <Box sx={{ 
+                          display: 'flex',
+                          backgroundColor: '#f8f8f8',
+                          border: '1px solid #ccc',
+                          borderTop: 'none',
+                          fontWeight: 'bold',
+                          fontSize: '0.8rem',
+                          color: '#000000',
+                          minHeight: '24px'
+                        }}>
+                          <Box sx={{ flex: 6, py: 0.25, px: 0.5, display: 'flex', alignItems: 'center' }}>
+                            Extra Expenses
+                          </Box>
+                        </Box>
+
+                        {/* Extra Expenses Items */}
+                        {selectedOrder.extraExpenses.map((expense, expenseIndex) => (
+                          <Box key={expenseIndex} sx={{ 
+                            display: 'flex',
+                            border: '1px solid #ccc',
+                            borderTop: 'none',
+                            fontSize: '0.8rem',
+                            color: '#000000',
+                            backgroundColor: '#ffffff',
+                            minHeight: '24px'
+                          }}>
+                            <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                              {expense.description || 'Extra Expense'}
+                            </Box>
+                            <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              {(parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1).toFixed(2)}
+                            </Box>
+                            <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              ${(parseFloat(expense.price) || 0).toFixed(2)}
+                            </Box>
+                            <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              ${((parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1) * (parseFloat(expense.price) || 0)).toFixed(2)}
+                            </Box>
+                            <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              ${(((parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1) * (parseFloat(expense.price) || 0)) * (parseFloat(expense.taxRate) || 0.13)).toFixed(2)}
+                            </Box>
+                            <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                              ${(parseFloat(expense.total) || 0).toFixed(2)}
+                            </Box>
+                          </Box>
+                        ))}
+                      </>
+                    )}
+
+                    {/* JL Totals */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'flex-end',
+                      mt: 1
+                    }}>
+                      <Box sx={{ 
+                        width: 300,
+                        backgroundColor: '#f0f0f0',
+                        border: '1px solid #999',
+                        p: 1.5
+                      }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between',
+                          mb: 0.5,
+                          fontWeight: 'bold',
+                          fontSize: '0.8rem',
+                          color: '#000000'
+                        }}>
+                          <span>Subtotal (Before Tax):</span>
+                          <span style={{ color: '#000000' }}>${jlSubtotalBeforeTax.toFixed(2)}</span>
+                        </Box>
+                        <Box sx={{ 
+                          borderTop: '1px solid #ccc',
+                          pt: 0.5,
+                          display: 'flex', 
+                          justifyContent: 'space-between',
+                          fontWeight: 'bold',
+                          fontSize: '0.9rem',
+                          color: '#000000'
+                        }}>
+                          <span>Grand Total (JL Internal Cost):</span>
+                          <span style={{ color: '#f27921' }}>${jlGrandTotal.toFixed(2)}</span>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Box>
+                );
+              })()}
             </Box>
 
 
@@ -1120,9 +1491,16 @@ const CorporateInvoicesPage = () => {
                           {selectedOrder.corporateCustomer?.corporateName}
                         </Typography>
                         {selectedOrder.contactPerson?.name && (
-                          <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1, color: 'black' }}>
-                            Contact: {selectedOrder.contactPerson.name}
-                          </Typography>
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', display: 'inline' }}>
+                              Contact: {selectedOrder.contactPerson.name}
+                            </Typography>
+                            {selectedOrder.orderDetails?.note?.value && (
+                              <Typography variant="body1" sx={{ color: 'black', display: 'inline', ml: 1 }}>
+                                • <strong>{selectedOrder.orderDetails.note.caption || 'Note'}:</strong> {selectedOrder.orderDetails.note.value}
+                              </Typography>
+                            )}
+                          </Box>
                         )}
                         {selectedOrder.contactPerson?.phone && (
                           <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
@@ -1283,6 +1661,20 @@ const CorporateInvoicesPage = () => {
                                   
                                   // Create items from furniture group data
                                   const groupItems = [];
+                                  
+                                  // Add individual furniture items if they exist
+                                  if (group.furniture && Array.isArray(group.furniture)) {
+                                    group.furniture.forEach((furniture, furnitureIndex) => {
+                                      if (furniture.price && furniture.quantity) {
+                                        groupItems.push({
+                                          id: `item-${groupIndex}-furniture-${furnitureIndex}`,
+                                          name: furniture.name || `Furniture Item ${furnitureIndex + 1}`,
+                                          price: parseFloat(furniture.price) || 0,
+                                          quantity: parseFloat(furniture.quantity) || 0
+                                        });
+                                      }
+                                    });
+                                  }
                                   
                                   // Add material item
                                   if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
@@ -1487,6 +1879,15 @@ const CorporateInvoicesPage = () => {
                                   ${totals.subtotal.toFixed(2)}
                                 </Typography>
                               </Box>
+                              
+                              {totals.delivery > 0 && (
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                  <Typography variant="body1" sx={{ color: 'black' }}>Delivery:</Typography>
+                                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                                    ${totals.delivery.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              )}
                               
                               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                 <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>

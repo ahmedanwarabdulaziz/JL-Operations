@@ -53,12 +53,15 @@ import {
   PersonAdd as PersonAddIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
+  Receipt as ReceiptIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
+import { useNavigate } from 'react-router-dom';
 import CorporateCustomerDialog from '../../components/CorporateCustomers/CorporateCustomerDialog';
 
 const CorporateCustomersPage = () => {
+  const navigate = useNavigate();
   const [corporateCustomers, setCorporateCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -507,8 +510,40 @@ const CorporateCustomersPage = () => {
                     </Box>
                   )}
 
-                  {/* Add Contact Person Button - Always at bottom */}
-                  <Box sx={{ mt: 'auto', pt: 2 }}>
+                  {/* Action Buttons - Always at bottom */}
+                  <Box sx={{ mt: 'auto', pt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Button
+                      startIcon={<ReceiptIcon />}
+                      onClick={() => navigate(`/admin/corporate-customers/${customer.id}/invoices`)}
+                      variant="contained"
+                      sx={{
+                        width: '100%',
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '3px solid #4CAF50',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                        position: 'relative',
+                        fontWeight: 'bold',
+                        '&:hover': {
+                          background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                          border: '3px solid #45a049',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        },
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '50%',
+                          background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                          borderRadius: '4px 4px 0 0',
+                          pointerEvents: 'none'
+                        }
+                      }}
+                    >
+                      View Invoices
+                    </Button>
                     <Button
                       startIcon={<PersonAddIcon />}
                       onClick={() => handleOpenContactPersonDialog(customer)}

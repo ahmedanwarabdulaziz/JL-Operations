@@ -142,7 +142,10 @@ const MaterialRequestPage = () => {
           return;
         }
 
-      const furnitureGroups = order.furnitureData?.groups || [];
+      // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+      const furnitureGroups = order.orderType === 'corporate' 
+        ? (order.furnitureGroups || [])
+        : (order.furnitureData?.groups || []);
       
       // Track duplicate groups to make IDs unique
       const groupCounts = {};
@@ -193,9 +196,12 @@ const MaterialRequestPage = () => {
                 materialStatus: materialStatus,
                 materialNote: group.materialNote || '',
                 orderDate: order.createdAt,
-                customerName: order.personalInfo?.customerName || 'N/A',
+                customerName: order.orderType === 'corporate' 
+                  ? (order.corporateCustomer?.corporateName || 'N/A')
+                  : (order.personalInfo?.customerName || 'N/A'),
                 orderStatus: orderStatus,
-                isAdditional: false
+                isAdditional: false,
+                orderType: order.orderType || 'regular'
               });
               
               // Check if there's additional quantity needed
@@ -217,10 +223,13 @@ const MaterialRequestPage = () => {
                   materialStatus: null, // Additional quantity is not ordered yet
                   materialNote: group.materialNote || '',
                   orderDate: order.createdAt,
-                  customerName: order.personalInfo?.customerName || 'N/A',
+                  customerName: order.orderType === 'corporate' 
+                    ? (order.corporateCustomer?.corporateName || 'N/A')
+                    : (order.personalInfo?.customerName || 'N/A'),
                   orderStatus: orderStatus,
                   isAdditional: true,
-                  additionalQnty: additionalQnty
+                  additionalQnty: additionalQnty,
+                  orderType: order.orderType || 'regular'
                 });
               }
               // If additionalQnty <= 0, don't add to required (quantity decreased)
@@ -241,9 +250,12 @@ const MaterialRequestPage = () => {
                 materialStatus: materialStatus,
                 materialNote: group.materialNote || '',
                 orderDate: order.createdAt,
-                customerName: order.personalInfo?.customerName || 'N/A',
+                customerName: order.orderType === 'corporate' 
+                  ? (order.corporateCustomer?.corporateName || 'N/A')
+                  : (order.personalInfo?.customerName || 'N/A'),
                 orderStatus: orderStatus,
-                isAdditional: false
+                isAdditional: false,
+                orderType: order.orderType || 'regular'
               });
             }
           }
@@ -387,14 +399,16 @@ const MaterialRequestPage = () => {
     try {
       setLoading(true);
       
-      // Fetch orders, material companies, and general expenses
-      const [ordersSnapshot, companiesSnapshot, generalExpensesSnapshot] = await Promise.all([
+      // Fetch orders, corporate orders, material companies, and general expenses
+      const [ordersSnapshot, corporateOrdersSnapshot, companiesSnapshot, generalExpensesSnapshot] = await Promise.all([
         getDocs(collection(db, 'orders')),
+        getDocs(collection(db, 'corporate-orders')),
         getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc'))),
         getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc')))
       ]);
       
-      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), orderType: 'regular' }));
+      const corporateOrdersData = corporateOrdersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), orderType: 'corporate' }));
       const companiesData = companiesSnapshot.docs.map((doc, index) => ({
         id: doc.id,
         order: doc.data().order ?? index,
@@ -405,10 +419,13 @@ const MaterialRequestPage = () => {
       // Sort companies by order field
       companiesData.sort((a, b) => a.order - b.order);
       
-      setOrders(ordersData);
+      // Combine regular and corporate orders
+      const allOrdersData = [...ordersData, ...corporateOrdersData];
+      
+      setOrders(allOrdersData);
       setMaterialCompanies(companiesData);
       
-      const allMaterials = extractMaterialsFromOrders(ordersData);
+      const allMaterials = extractMaterialsFromOrders(allOrdersData);
       
       // Convert general expenses to material format
       const generalExpenseMaterials = generalExpensesData.map(expense => ({
@@ -538,10 +555,11 @@ const MaterialRequestPage = () => {
         return;
       }
 
-      // Handle regular order materials
+      // Handle regular and corporate order materials
       // IMPORTANT: Only update the specific material's order - do NOT affect other orders with same materialCode
       // Fetch fresh order data from Firebase to ensure we have the latest state
-      const orderRef = doc(db, 'orders', material.orderId);
+      const orderCollection = material.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, orderCollection, material.orderId);
       const orderDoc = await getDoc(orderRef);
       
       if (!orderDoc.exists()) {
@@ -550,7 +568,7 @@ const MaterialRequestPage = () => {
         return;
       }
       
-      const order = { id: orderDoc.id, ...orderDoc.data() };
+      const order = { id: orderDoc.id, ...orderDoc.data(), orderType: material.orderType || 'regular' };
       
       // Verify the material belongs to this order by checking the material ID format
       // Material ID should be: `${orderId}_${materialCode}_${materialCompany}` or with `_additional`
@@ -560,6 +578,11 @@ const MaterialRequestPage = () => {
         return;
       }
 
+      // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+      const furnitureGroups = order.orderType === 'corporate' 
+        ? (order.furnitureGroups || [])
+        : (order.furnitureData?.groups || []);
+
       // Find the specific group in this specific order that matches this material
       // If material has groupIndex, use it to find the exact group (handles duplicates)
       // Otherwise, find the first matching group
@@ -568,7 +591,7 @@ const MaterialRequestPage = () => {
       
       if (material.groupIndex !== undefined && material.groupIndex !== null) {
         // Use the stored groupIndex to find the exact group
-        targetGroup = order.furnitureData?.groups?.[material.groupIndex];
+        targetGroup = furnitureGroups[material.groupIndex];
         targetGroupIndex = material.groupIndex;
         
         // Verify it's the correct group
@@ -582,7 +605,7 @@ const MaterialRequestPage = () => {
       
       // Fallback: search for matching group if groupIndex didn't work
       if (!targetGroup) {
-        const matchingGroups = order.furnitureData?.groups?.filter(
+        const matchingGroups = furnitureGroups.filter(
           (g, idx) => g.materialCode === material.materialCode && 
                       g.materialCompany === material.materialCompany
         ) || [];
@@ -596,14 +619,14 @@ const MaterialRequestPage = () => {
         if (matchingGroups.length === 1) {
           // Only one match - use it
           targetGroup = matchingGroups[0];
-          targetGroupIndex = order.furnitureData.groups.indexOf(targetGroup);
+          targetGroupIndex = furnitureGroups.indexOf(targetGroup);
         } else {
           // Multiple matches - this is the duplicate groups issue
           // For now, update the first one, but log a warning
           console.warn(`[WARNING] Found ${matchingGroups.length} groups with same materialCode/materialCompany in order ${material.orderId}. ` +
                       `Updating the first one. Consider using groupIndex for precise updates.`);
           targetGroup = matchingGroups[0];
-          targetGroupIndex = order.furnitureData.groups.indexOf(targetGroup);
+          targetGroupIndex = furnitureGroups.indexOf(targetGroup);
         }
       }
       
@@ -686,14 +709,14 @@ const MaterialRequestPage = () => {
       
       // Update only the specific group at targetGroupIndex in THIS specific order
       // This ensures we update the exact group, even if there are duplicates
-      if (targetGroupIndex < 0 || targetGroupIndex >= order.furnitureData.groups.length) {
+      if (targetGroupIndex < 0 || targetGroupIndex >= furnitureGroups.length) {
         console.error(`[ERROR] Invalid group index ${targetGroupIndex} for order ${material.orderId}`);
         showError('Invalid group index. Cannot update.');
         setUpdating(false);
         return;
       }
       
-      const groupToUpdate = order.furnitureData.groups[targetGroupIndex];
+      const groupToUpdate = furnitureGroups[targetGroupIndex];
       
       // Verify this is the correct group
       if (groupToUpdate.materialCode !== material.materialCode || 
@@ -712,7 +735,7 @@ const MaterialRequestPage = () => {
                  `totalQty=${groupToUpdate.materialJLQnty}`);
       
       // Update only the specific group at the target index
-      const updatedFurnitureGroups = order.furnitureData.groups.map((group, index) => {
+      const updatedFurnitureGroups = furnitureGroups.map((group, index) => {
         if (index === targetGroupIndex) {
           return { 
             ...group, 
@@ -736,9 +759,12 @@ const MaterialRequestPage = () => {
       
       // Update ONLY this specific order's Firebase document
       // This will NOT affect any other orders, even if they have the same materialCode
-      await updateDoc(orderRef, {
-        'furnitureData.groups': updatedFurnitureGroups
-      });
+      // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+      const updateData = order.orderType === 'corporate' 
+        ? { furnitureGroups: updatedFurnitureGroups }
+        : { 'furnitureData.groups': updatedFurnitureGroups };
+      
+      await updateDoc(orderRef, updateData);
       
       console.log(`[FIREBASE UPDATE] Successfully updated order ${orderRef.id}`);
       console.log(`[FIREBASE UPDATE] Summary: Order ${material.orderId}, Material ${material.materialCode}, ` +

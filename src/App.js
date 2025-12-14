@@ -15,6 +15,7 @@ import TestPage from './pages/Test/TestPage';
 import EmailTestPage from './pages/Test/EmailTestPage';
 import CustomersPage from './pages/Customers/CustomersPage';
 import CorporateCustomersPage from './admin/pages/CorporateCustomers/CorporateCustomersPage';
+import CorporateCustomerInvoicesPage from './admin/pages/CorporateCustomers/CorporateCustomerInvoicesPage';
 import OrdersPage from './pages/Orders/OrdersPage';
 import NewOrderPage from './pages/Orders/NewOrderPage';
 import CorporateOrderPage from './pages/Orders/CorporateOrderPage';
@@ -188,6 +189,7 @@ const AppContent = () => {
           <Route path="/customers" element={<Navigate to="/admin/customers" replace />} />
           <Route path="/admin/customers" element={<CustomersPage />} />
           <Route path="/admin/corporate-customers" element={<CorporateCustomersPage />} />
+          <Route path="/admin/corporate-customers/:customerId/invoices" element={<CorporateCustomerInvoicesPage />} />
           <Route path="/orders" element={<Navigate to="/admin/orders" replace />} />
           <Route path="/admin/orders" element={<OrdersPage />} />
           <Route path="/orders/new" element={<Navigate to="/admin/orders/new" replace />} />

@@ -11,160 +11,72 @@ import {
   TableRow,
   TextField,
   InputAdornment,
-  Card,
-  CardContent,
-  Grid,
-  Chip,
-  IconButton,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   CircularProgress,
-  Alert,
-  Tooltip,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormLabel
+  Button,
+  Tooltip
 } from '@mui/material';
 import {
   Search as SearchIcon,
   AccountBalance as AccountBalanceIcon,
-  Receipt as ReceiptIcon,
-  TrendingUp as TrendingUpIcon,
-  MonetizationOn as MonetizationOnIcon,
-  Edit as EditIcon,
-  Visibility as ViewIcon,
-  PictureAsPdf as PdfIcon,
-  Refresh as RefreshIcon,
-  DateRange as DateRangeIcon,
-  FilterList as FilterListIcon,
-  Settings as SettingsIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  CalendarToday as CalendarIcon,
-  Assignment as AssignmentIcon
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
-import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../components/Common/NotificationSystem';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
-import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
-import { formatDate, formatDateOnly, formatDateRange, toDateObject } from '../../utils/dateUtils';
+import { calculateOrderTotal, calculateOrderCost } from '../../utils/orderCalculations';
+import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { buttonStyles } from '../../styles/buttonStyles';
-
-// Invoice statuses will be loaded dynamically from database
 
 const FinancePage = () => {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
-  const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [editingStatus, setEditingStatus] = useState(null);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  
-  // Enhanced validation dialog state
-  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
-  const [validationError, setValidationError] = useState({ 
-    type: '', 
-    message: '', 
-    order: null, 
-    newStatus: null,
-    pendingAmount: 0,
-    currentAmount: 0
-  });
-  
-  // Allocation popup state
-  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
-  const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
-  const [allocationMethod, setAllocationMethod] = useState('time-based');
-  const [manualAllocations, setManualAllocations] = useState([]);
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
-  const [plPreviewData, setPlPreviewData] = useState(null);
-  
-  // Date filtering state - default to current month
-  const [dateFrom, setDateFrom] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
-  });
-  const [dateTo, setDateTo] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
-  });
-  
-  // Applied date filter state
-  const [appliedDateFrom, setAppliedDateFrom] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [appliedDateTo, setAppliedDateTo] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  });
-  const [financialSummary, setFinancialSummary] = useState({
-    totalRevenue: 0,
-    totalCost: 0,
-    totalProfit: 0,
-    averageProfitMargin: 0,
-    paidAmount: 0,
-    pendingAmount: 0,
-    totalExtraExpenses: 0,
-    totalPickupDelivery: 0,
-    totalTax: 0,
-    totalOrders: 0
-  });
+  const [materialTaxRates, setMaterialTaxRates] = useState({});
 
-  const { showSuccess, showError } = useNotification();
-  const navigate = useNavigate();
+  const { showError } = useNotification();
 
-  // Fetch orders and statuses from Firebase
+  // Fetch orders and material tax rates from Firebase
   const fetchOrders = async () => {
     try {
       setLoading(true);
       
-      // Fetch orders
-      const ordersRef = collection(db, 'orders');
-      const q = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const ordersData = querySnapshot.docs.map(doc => ({
+      // Fetch regular orders, corporate orders, and material tax rates
+      const [ordersSnapshot, corporateOrdersSnapshot, taxRates] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        fetchMaterialCompanyTaxRates()
+      ]);
+      
+      // Set material tax rates
+      setMaterialTaxRates(taxRates);
+      
+      // Map regular orders
+      const regularOrders = ordersSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // Add default invoice status if not present
-        invoiceStatus: doc.data().invoiceStatus || 'in_progress'
+        orderType: 'regular'
       }));
-
-      // Get invoice statuses to identify end states
-      const statusesRef = collection(db, 'invoiceStatuses');
-      const statusesSnapshot = await getDocs(statusesRef);
-      const statusesData = statusesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Filter out cancelled and pending orders, include all other orders (including done)
-      const excludedStatuses = statusesData.filter(status => 
-        status.isEndState && (status.endStateType === 'cancelled' || status.endStateType === 'pending')
-      );
-      const excludedValues = excludedStatuses.map(status => status.value);
-
-      const activeOrders = ordersData.filter(order => 
-        !excludedValues.includes(order.invoiceStatus)
-      );
       
-      setOrders(activeOrders);
-      setFilteredOrders(activeOrders);
-      calculateFinancialSummary(activeOrders);
+      // Map corporate orders
+      const corporateOrders = corporateOrdersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'corporate'
+      }));
+      
+      // Combine all orders
+      const allOrders = [...regularOrders, ...corporateOrders];
+      
+      // Sort by invoice number descending
+      allOrders.sort((a, b) => {
+        const invoiceA = a.orderDetails?.billInvoice || '';
+        const invoiceB = b.orderDetails?.billInvoice || '';
+        return invoiceB.localeCompare(invoiceA);
+      });
+      
+      setOrders(allOrders);
+      setFilteredOrders(allOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showError('Failed to fetch orders');
@@ -173,352 +85,32 @@ const FinancePage = () => {
     }
   };
 
-  // Fetch invoice statuses from database
-  const fetchInvoiceStatuses = async () => {
-    try {
-      const statusesRef = collection(db, 'invoiceStatuses');
-      const querySnapshot = await getDocs(statusesRef);
-      const statusesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Sort by sortOrder
-      statusesData.sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1));
-      setInvoiceStatuses(statusesData);
-    } catch (error) {
-      console.error('Error fetching invoice statuses:', error);
-      // Fallback to default statuses if database fetch fails
-      setInvoiceStatuses([
-        { value: 'in_progress', label: 'In Progress', color: '#2196f3' },
-        { value: 'done', label: 'Done', color: '#4caf50' }
-      ]);
-    }
-  };
-
-  // Helper function to calculate partial amounts for allocated orders
-  const calculatePartialAmounts = (order, profitData, normalizedPayment) => {
-    let orderRevenue = profitData.revenue;
-    let orderCost = profitData.cost;
-    let orderProfit = profitData.profit;
-    let orderPaidAmount = normalizedPayment.amountPaid;
-    let orderExtraExpenses = 0;
-    let orderPickupDelivery = 0;
-    let orderTax = 0;
+  // Calculate all totals for an order (Invoice, Cost, Profit)
+  const calculateOrderFinancials = (order) => {
+    // Normalize payment data for corporate orders (they use paymentDetails instead of paymentData)
+    const paymentData = order.orderType === 'corporate' 
+      ? (order.paymentDetails || {})
+      : (order.paymentData || {});
     
-    // Calculate extra expenses total
-    if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
-      orderExtraExpenses = order.extraExpenses.reduce((sum, exp) => {
-        return sum + (parseFloat(exp.total) || 0);
-      }, 0);
-    }
-    
-    // Calculate pickup & delivery cost
-    if (order.paymentData?.pickupDeliveryEnabled) {
-      const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-      const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
-      orderPickupDelivery = calculatePickupDeliveryCost(baseCost, serviceType);
-    }
-    
-    // Calculate tax on the base amount (before pickup & delivery)
-    const baseRevenueForTax = orderRevenue - orderPickupDelivery;
-    orderTax = baseRevenueForTax * 0.13; // 13% tax rate
-    
-    // For allocated orders, calculate partial amounts based on date filter
-    if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0 && appliedDateFrom && appliedDateTo) {
-      const fromDate = new Date(appliedDateFrom);
-      const toDate = new Date(appliedDateTo);
-      
-      // Set time to start/end of day for accurate comparison
-      fromDate.setHours(0, 0, 0, 0);
-      toDate.setHours(23, 59, 59, 999);
-      
-      // Calculate total allocation percentage for the filtered date range
-      let totalAllocationPercentage = 0;
-      order.allocation.allocations.forEach(allocation => {
-        const allocationDate = new Date(allocation.year, allocation.month, 1);
-        if (allocationDate >= fromDate && allocationDate <= toDate) {
-          totalAllocationPercentage += allocation.percentage || 0;
-        }
-      });
-      
-
-      
-      // Only apply allocation if there are allocations in the date range
-      if (totalAllocationPercentage > 0) {
-        const allocationMultiplier = totalAllocationPercentage / 100;
-        
-        // Apply allocation to all components
-        orderRevenue = profitData.revenue * allocationMultiplier;
-        orderCost = profitData.cost * allocationMultiplier;
-        orderProfit = profitData.profit * allocationMultiplier;
-        orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
-        orderExtraExpenses = orderExtraExpenses * allocationMultiplier;
-        orderPickupDelivery = orderPickupDelivery * allocationMultiplier;
-        
-        // Recalculate tax on allocated base revenue
-        const allocatedBaseRevenueForTax = orderRevenue - orderPickupDelivery;
-        orderTax = allocatedBaseRevenueForTax * 0.13;
-        
-
-      }
-    }
-    
-    return {
-      revenue: orderRevenue,
-      cost: orderCost,
-      profit: orderProfit,
-      paidAmount: orderPaidAmount,
-      extraExpenses: orderExtraExpenses,
-      pickupDelivery: orderPickupDelivery,
-      tax: orderTax,
-      profitPercentage: orderRevenue > 0 ? (orderProfit / orderRevenue) * 100 : 0
+    const normalizedOrder = {
+      ...order,
+      paymentData: paymentData
     };
-  };
-
-  // Calculate financial summary with allocation support
-  const calculateFinancialSummary = (ordersData) => {
-    const summary = ordersData.reduce((acc, order) => {
-      const profitData = calculateOrderProfit(order);
-      const normalizedPayment = normalizePaymentData(order.paymentData);
-      
-      // Use the enhanced calculatePartialAmounts function
-      const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
-      
-      acc.totalRevenue += partialAmounts.revenue;
-      acc.totalCost += partialAmounts.cost;
-      acc.totalProfit += partialAmounts.profit;
-      acc.paidAmount += partialAmounts.paidAmount;
-      acc.pendingAmount += (partialAmounts.revenue - partialAmounts.paidAmount);
-      acc.totalExtraExpenses += partialAmounts.extraExpenses;
-      acc.totalPickupDelivery += partialAmounts.pickupDelivery;
-      acc.totalTax += partialAmounts.tax;
-      acc.totalOrders += 1;
-      
-      return acc;
-    }, { 
-      totalRevenue: 0, 
-      totalCost: 0, 
-      totalProfit: 0, 
-      paidAmount: 0, 
-      pendingAmount: 0, 
-      totalExtraExpenses: 0,
-      totalPickupDelivery: 0,
-      totalTax: 0,
-      totalOrders: 0 
-    });
     
-    // Calculate average profit margin
-    summary.averageProfitMargin = summary.totalRevenue > 0 ? 
-      (summary.totalProfit / summary.totalRevenue) * 100 : 0;
+    // Calculate invoice total (customer-facing total including tax)
+    const invoiceTotal = calculateOrderTotal(normalizedOrder);
     
-    setFinancialSummary(summary);
-  };
-
-  // Search and filter logic
-  useEffect(() => {
-    let filtered = orders;
+    // Calculate cost total (JL internal costs including tax)
+    const costTotal = calculateOrderCost(normalizedOrder, materialTaxRates);
     
-    // Apply date range filter
-    if (appliedDateFrom && appliedDateTo) {
-      filtered = filtered.filter(order => {
-        const fromDate = new Date(appliedDateFrom);
-        const toDate = new Date(appliedDateTo);
-        
-        // Set time to start/end of day for accurate comparison
-        fromDate.setHours(0, 0, 0, 0);
-        toDate.setHours(23, 59, 59, 999);
-        
-        // For allocated orders, check both allocation months and order dates
-        if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
+    // Calculate profit
+    const profit = invoiceTotal - costTotal;
 
-          
-          // Check if any allocation month falls within the selected date range
-          const hasAllocationInRange = order.allocation.allocations.some(allocation => {
-            const allocationDate = new Date(allocation.year, allocation.month, 1);
-            
-
-            
-            return allocationDate >= fromDate && allocationDate <= toDate;
-          });
-          
-          // Also check if the order's startDate/endDate (updated during allocation) fall within the range
-          let hasOrderDateInRange = false;
-          if (order.orderDetails?.startDate && order.orderDetails?.endDate) {
-            try {
-              const orderStartDate = toDateObject(order.orderDetails.startDate);
-              const orderEndDate = toDateObject(order.orderDetails.endDate);
-              
-              // Check if the order date range overlaps with the filter date range
-              hasOrderDateInRange = (orderStartDate <= toDate && orderEndDate >= fromDate);
-              
-
-            } catch (error) {
-              console.error('Error checking order dates for allocated order:', error);
-            }
-          }
-          
-          // Return true if either allocation months OR order dates fall within the range
-          const finalResult = hasAllocationInRange || hasOrderDateInRange;
-          
-
-          
-          return finalResult;
-        } else {
-          // For unallocated orders, use startDate if available, otherwise use createdAt
-          let orderDate;
-          
-          if (order.orderDetails?.startDate) {
-            // Use dateUtils to properly convert Firestore Timestamps
-            try {
-              orderDate = toDateObject(order.orderDetails.startDate);
-            } catch (error) {
-              console.error('Error converting startDate:', error);
-              // Fallback to createdAt
-              orderDate = toDateObject(order.createdAt);
-            }
-          } else {
-            orderDate = toDateObject(order.createdAt);
-          }
-          
-          // Debug logging for fast orders
-          if (order.isFastOrder) {
-            console.log('Fast order filtering:', {
-              orderId: order.id,
-              billInvoice: order.orderDetails?.billInvoice,
-              startDate: order.orderDetails?.startDate,
-              createdAt: order.createdAt,
-              orderDate: orderDate,
-              fromDate: fromDate,
-              toDate: toDate,
-              isInRange: orderDate >= fromDate && orderDate <= toDate
-            });
-          }
-          
-          return orderDate >= fromDate && orderDate <= toDate;
-        }
-      });
-    }
-    
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.personalInfo?.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.orderDetails?.billInvoice?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.personalInfo?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.personalInfo?.phone?.includes(searchTerm)
-      );
-    }
-    
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(order => order.invoiceStatus === statusFilter);
-    }
-    
-    setFilteredOrders(filtered);
-    calculateFinancialSummary(filtered);
-  }, [searchTerm, statusFilter, orders, appliedDateFrom, appliedDateTo]);
-
-  // Apply date filter functions
-  const handleApplyDateFilter = () => {
-    setAppliedDateFrom(dateFrom);
-    setAppliedDateTo(dateTo);
-  };
-
-  const handleClearDateFilter = () => {
-    setDateFrom(() => {
-      const now = new Date();
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    });
-    setDateTo(() => {
-      const now = new Date();
-      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    });
-    setAppliedDateFrom(() => {
-      const now = new Date();
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    });
-    setAppliedDateTo(() => {
-      const now = new Date();
-      return new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    });
-  };
-
-  // Update invoice status
-  const updateInvoiceStatus = async (orderId, newStatus) => {
-    try {
-      // Find the order and new status
-      const order = orders.find(o => o.id === orderId);
-      const newStatusObj = invoiceStatuses.find(s => s.value === newStatus);
-      
-      if (!order || !newStatusObj) {
-        showError('Order or status not found');
-        return;
-      }
-
-      // Payment validation for end states
-      if (newStatusObj.isEndState) {
-        const totalAmount = calculateOrderProfit(order).revenue;
-        const normalizedPayment = normalizePaymentData(order.paymentData);
-        
-        if (newStatusObj.endStateType === 'done') {
-          // For "done" - must be fully paid
-          if (normalizedPayment.amountPaid < totalAmount) {
-            const pendingAmount = totalAmount - normalizedPayment.amountPaid;
-            setValidationError({
-              type: 'done',
-              message: `Cannot complete order: Payment not fully received. Required: $${totalAmount.toFixed(2)}, Paid: $${normalizedPayment.amountPaid.toFixed(2)}`,
-              order: order,
-              newStatus: newStatusObj,
-              pendingAmount: pendingAmount,
-              currentAmount: normalizedPayment.amountPaid
-            });
-            setValidationDialogOpen(true);
-            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
-            return;
-          }
-          
-          // Show allocation dialog for all "End Done" orders
-          console.log('Showing allocation dialog for completed order:', order.id);
-          handleAllocationDialog(order, newStatusObj);
-          setStatusDialogOpen(false);
-          return;
-        } else if (newStatusObj.endStateType === 'cancelled') {
-          // For "cancelled" - must have $0 payment
-          if (normalizedPayment.amountPaid > 0) {
-            setValidationError({
-              type: 'cancelled',
-              message: `Cannot cancel order: Payment has been received ($${normalizedPayment.amountPaid.toFixed(2)}). Please refund the customer first.`,
-              order: order,
-              newStatus: newStatusObj,
-              pendingAmount: 0,
-              currentAmount: normalizedPayment.amountPaid
-            });
-            setValidationDialogOpen(true);
-            setStatusDialogOpen(false); // Close the status dialog when validation dialog opens
-            return;
-          }
-        }
-      }
-
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { invoiceStatus: newStatus });
-      
-      // Update local state
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, invoiceStatus: newStatus } : order
-      );
-      setOrders(updatedOrders);
-      
-      showSuccess('Invoice status updated successfully');
-      setStatusDialogOpen(false);
-      setValidationDialogOpen(false);
-      setEditingStatus(null);
-      fetchOrders();
-    } catch (error) {
-      console.error('Error updating invoice status:', error);
-      showError('Failed to update invoice status');
-    }
+    return {
+      invoiceTotal,
+      costTotal,
+      profit
+    };
   };
 
   // Format currency
@@ -526,270 +118,22 @@ const FinancePage = () => {
     return `$${parseFloat(amount).toFixed(2)}`;
   };
 
-  // Format date
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    const dateObj = date.toDate ? date.toDate() : new Date(date);
-    return dateObj.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
-  // Get status info
-  const getStatusInfo = (status) => {
-    return invoiceStatuses.find(s => s.value === status) || 
-           { value: status, label: status, color: '#757575' };
-  };
-
-  // Get payment status
-  const getPaymentStatus = (order) => {
-    const total = calculateOrderTotal(order);
-    const normalizedPayment = normalizePaymentData(order.paymentData);
+  // Search and filter logic
+  useEffect(() => {
+    let filtered = orders;
     
-    if (normalizedPayment.amountPaid >= total) return { status: 'Fully Paid', color: '#4caf50' };
-    if (normalizedPayment.amountPaid >= normalizedPayment.deposit && normalizedPayment.deposit > 0) return { status: 'Deposit Paid', color: '#ff9800' };
-    if (normalizedPayment.amountPaid > 0) return { status: 'Partial Payment', color: '#f44336' };
-    return { status: 'Not Paid', color: '#757575' };
-  };
-
-  // Check if order spans multiple months
-  const checkIfCrossMonth = (order, customStartDate = null, customEndDate = null) => {
-    const startDate = customStartDate || (order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt));
-    const endDate = customEndDate || new Date();
-    
-    const startMonth = startDate.getMonth();
-    const startYear = startDate.getFullYear();
-    const endMonth = endDate.getMonth();
-    const endYear = endDate.getFullYear();
-    
-    return (startYear !== endYear) || (startMonth !== endMonth);
-  };
-
-  // Calculate allocation for an order
-  const calculateAllocation = (order, startDate, endDate) => {
-    console.log('Calculating allocation for order:', order.id, 'startDate:', startDate, 'endDate:', endDate);
-    const profitData = calculateOrderProfit(order);
-    console.log('Profit data:', profitData);
-    const allocations = calculateTimeBasedAllocation({
-      ...order,
-      startDate,
-      endDate,
-      profitData
-    });
-    console.log('Time-based allocations:', allocations);
-    
-    return allocations.map(allocation => ({
-      ...allocation,
-      revenue: profitData.revenue * (allocation.percentage / 100),
-      costs: profitData.cost * (allocation.percentage / 100),
-      profit: profitData.profit * (allocation.percentage / 100)
-    }));
-  };
-
-  // Handle allocation dialog
-  const handleAllocationDialog = (order, newStatus) => {
-    const orderStartDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-    const orderEndDate = new Date(); // Current date when status changes
-    
-    setSelectedOrderForAllocation({ ...order, newStatus });
-    setStartDate(orderStartDate);
-    setEndDate(orderEndDate);
-    setAllocationMethod('time-based');
-    
-    const allocations = calculateAllocation(order, orderStartDate, orderEndDate);
-    setManualAllocations(allocations);
-    
-    setAllocationDialogOpen(true);
-  };
-
-  // Apply allocation and update status
-  const applyAllocation = async () => {
-    try {
-      if (!selectedOrderForAllocation) return;
-      
-      // Convert dates to Firestore Timestamps for consistent storage
-      const { Timestamp } = await import('firebase/firestore');
-      const firestoreNow = Timestamp.fromDate(new Date());
-      const firestoreStartDate = startDate ? Timestamp.fromDate(startDate) : null;
-      const firestoreEndDate = endDate ? Timestamp.fromDate(endDate) : null;
-      
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
-      
-      // Update order with new dates and allocation
-      const updateData = {
-        invoiceStatus: selectedOrderForAllocation.newStatus.value,
-        statusUpdatedAt: firestoreNow,
-        allocation: {
-          method: allocationMethod,
-          allocations: manualAllocations,
-          appliedAt: firestoreNow,
-          startDate: firestoreStartDate,
-          endDate: firestoreEndDate
-        },
-        // Update orderDetails dates to match allocation dates
-        'orderDetails.startDate': firestoreStartDate,
-        'orderDetails.endDate': firestoreEndDate,
-        'orderDetails.lastUpdated': firestoreNow
-      };
-      
-      await updateDoc(orderRef, updateData);
-      
-      // Update local state
-      const updatedOrders = orders.map(order =>
-        order.id === selectedOrderForAllocation.id 
-          ? { ...order, ...updateData }
-          : order
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(order =>
+        order.orderDetails?.billInvoice?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setOrders(updatedOrders);
-      
-      showSuccess('Order completed and allocation applied successfully');
-      setAllocationDialogOpen(false);
-      setSelectedOrderForAllocation(null);
-      fetchOrders();
-      
-      // Show option to view P&L
-      setTimeout(() => {
-        if (window.confirm('Allocation applied successfully! Would you like to view the updated P&L Statement?')) {
-          navigate('/admin/pl');
-        }
-      }, 1000);
-    } catch (error) {
-      console.error('Error applying allocation:', error);
-      showError('Failed to apply allocation');
     }
-  };
-
-  // Enhanced payment update functions
-  const handleMakeFullyPaid = async () => {
-    try {
-      const { order, newStatus, pendingAmount } = validationError;
-      const orderRef = doc(db, 'orders', order.id);
-      
-      // Normalize existing payment data
-      const normalizedPaymentData = normalizePaymentData(order.paymentData);
-      
-      // Calculate new total paid amount
-      const newTotalPaid = normalizedPaymentData.amountPaid + pendingAmount;
-      
-      // Validate the new payment data
-      const validation = validatePaymentData({
-        ...normalizedPaymentData,
-        amountPaid: newTotalPaid
-      });
-      
-      if (!validation.isValid) {
-        showError(`Payment validation failed: ${validation.errors.join(', ')}`);
-        return;
-      }
-      
-      // Prepare payment history entry
-      const paymentEntry = {
-        amount: pendingAmount,
-        date: firestoreNow,
-        type: 'Status Change - Full Payment',
-        method: 'System Adjustment',
-        description: `Auto-payment for status change to ${newStatus.label}`
-      };
-      
-      // Update order with new payment data
-      const updateData = {
-        'paymentData.amountPaid': newTotalPaid,
-        'paymentData.paymentHistory': [
-          ...(normalizedPaymentData.paymentHistory),
-          paymentEntry
-        ]
-      };
-      
-      await updateDoc(orderRef, updateData);
-      
-      // Now update the status directly
-      const statusUpdateData = {
-        invoiceStatus: newStatus.value,
-        statusUpdatedAt: new Date()
-      };
-      
-      await updateDoc(orderRef, statusUpdateData);
-      
-      showSuccess(`Payment updated and order status changed to "${newStatus.label}"`);
-      setValidationDialogOpen(false);
-      
-      // Show allocation dialog after payment is handled
-      console.log('Payment handled, now showing allocation dialog for order:', order.id);
-      handleAllocationDialog(order, newStatus);
-      
-      fetchOrders();
-    } catch (error) {
-      console.error('Error updating payment:', error);
-      showError('Failed to update payment');
-    }
-  };
-
-  const handleSetPaymentToZero = async () => {
-    try {
-      const { order, newStatus, currentAmount } = validationError;
-      const orderRef = doc(db, 'orders', order.id);
-      
-      // Normalize existing payment data
-      const normalizedPaymentData = normalizePaymentData(order.paymentData);
-      
-      // Validate the new payment data
-      const validation = validatePaymentData({
-        ...normalizedPaymentData,
-        amountPaid: 0
-      });
-      
-      if (!validation.isValid) {
-        showError(`Payment validation failed: ${validation.errors.join(', ')}`);
-        return;
-      }
-      
-      // Prepare payment history entry for refund
-      const paymentEntry = {
-        amount: -currentAmount, // Negative amount for refund
-        date: firestoreNow,
-        type: 'Status Change - Refund',
-        method: 'System Adjustment',
-        description: `Auto-refund for status change to ${newStatus.label}`
-      };
-      
-      // Update order with zero payment
-      const updateData = {
-        'paymentData.amountPaid': 0,
-        'paymentData.paymentHistory': [
-          ...(normalizedPaymentData.paymentHistory),
-          paymentEntry
-        ]
-      };
-      
-      await updateDoc(orderRef, updateData);
-      
-      // Now update the status directly
-      const statusUpdateData = {
-        invoiceStatus: newStatus.value,
-        statusUpdatedAt: firestoreNow
-      };
-      
-      await updateDoc(orderRef, statusUpdateData);
-      
-      showSuccess(`Payment reset to $0 and order status changed to "${newStatus.label}"`);
-      setValidationDialogOpen(false);
-      
-      // Show allocation dialog after payment is handled (for cancelled orders too)
-      console.log('Payment handled, now showing allocation dialog for cancelled order:', order.id);
-      handleAllocationDialog(order, newStatus);
-      
-      fetchOrders();
-    } catch (error) {
-      console.error('Error updating payment:', error);
-      showError('Failed to update payment');
-    }
-  };
+    
+    setFilteredOrders(filtered);
+  }, [searchTerm, orders]);
 
   useEffect(() => {
     fetchOrders();
-    fetchInvoiceStatuses();
   }, []);
 
   if (loading) {
@@ -800,6 +144,19 @@ const FinancePage = () => {
     );
   }
 
+  // Calculate totals for all orders
+  const grandTotals = filteredOrders.reduce((acc, order) => {
+    const financials = calculateOrderFinancials(order);
+    acc.invoiceTotal += financials.invoiceTotal;
+    acc.costTotal += financials.costTotal;
+    acc.profit += financials.profit;
+    return acc;
+  }, {
+    invoiceTotal: 0,
+    costTotal: 0,
+    profit: 0
+  });
+
   return (
     <Box sx={{ p: 3, backgroundColor: '#1a1a1a', minHeight: '100vh' }}>
       {/* Header */}
@@ -807,549 +164,45 @@ const FinancePage = () => {
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <AccountBalanceIcon sx={{ fontSize: 32, color: '#b98f33', mr: 2 }} />
           <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-            Financial Management
+            Finance
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            variant="contained"
-            startIcon={<SettingsIcon />}
-            onClick={() => navigate('/admin/status-management')}
-            sx={buttonStyles.primaryButton}
-          >
-            Manage Statuses
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<TrendingUpIcon />}
-            onClick={() => navigate('/admin/pl')}
-            sx={buttonStyles.primaryButton}
-          >
-            P&L Statement
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<RefreshIcon />}
-            onClick={() => {
-              fetchOrders();
-              fetchInvoiceStatuses();
-            }}
-            sx={buttonStyles.primaryButton}
-          >
-            Refresh Data
-          </Button>
-        </Box>
+        <Button
+          variant="contained"
+          startIcon={<RefreshIcon />}
+          onClick={fetchOrders}
+          sx={buttonStyles.primaryButton}
+        >
+          Refresh
+        </Button>
       </Box>
 
-      {/* Status Integration Info */}
-      {invoiceStatuses.length === 0 && (
-        <Alert 
-          severity="info" 
-          sx={{ mb: 3 }}
-          action={
-            <Button 
-              size="small" 
-              onClick={() => navigate('/admin/status-management')}
-              sx={buttonStyles.primaryButton}
-            >
-              Setup Statuses
-            </Button>
-          }
-        >
-          <strong>No custom statuses found.</strong> Create custom invoice statuses in Status Management for better workflow control.
-        </Alert>
-      )}
-
-      {/* Financial Summary Cards - Compact Single Row */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Total Revenue
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalRevenue)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Total Costs
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalCost)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <TrendingUpIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Total Profit
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalProfit)}
-                </Typography>
-                <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.65rem', color: '#b98f33' }}>
-                  {financialSummary.averageProfitMargin.toFixed(1)}% margin
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Paid Amount
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.paidAmount)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Pending
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.pendingAmount)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Total Orders
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {financialSummary.totalOrders}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <MonetizationOnIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Avg Order
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalOrders > 0 ? financialSummary.totalRevenue / financialSummary.totalOrders : 0)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Collection %
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {financialSummary.totalRevenue > 0 ? 
-                    ((financialSummary.paidAmount / financialSummary.totalRevenue) * 100).toFixed(1) : 0}%
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Extra Expenses Summary Card */}
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <ReceiptIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Extra Expenses
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalExtraExpenses)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Pickup & Delivery Summary Card */}
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <AssignmentIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Pickup & Delivery
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalPickupDelivery)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Tax Summary Card */}
-        <Grid item xs={6} sm={3} md={1.5}>
-          <Card sx={{ 
-            backgroundColor: '#2a2a2a', 
-            color: '#ffffff', 
-            height: '100%',
-            border: '1px solid #333333',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)'
-          }}>
-            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Box sx={{ textAlign: 'center' }}>
-                <AccountBalanceIcon sx={{ fontSize: 24, mb: 0.5, color: '#b98f33' }} />
-                <Typography variant="body2" sx={{ fontWeight: 'bold', fontSize: '0.75rem', color: '#b98f33' }}>
-                  Tax Amount
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', mt: 0.5, fontSize: '1.1rem', color: '#ffffff' }}>
-                  {formatCurrency(financialSummary.totalTax)}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Filters */}
-      <Paper sx={{ p: 3, mb: 3, border: '1px solid #333333', backgroundColor: '#2a2a2a' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <FilterListIcon sx={{ color: '#b98f33', mr: 1 }} />
-          <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
-            Filters & Search
-          </Typography>
-        </Box>
-        
-        <Grid container spacing={3} alignItems="center">
-          {/* Search Field */}
-          <Grid item xs={12} lg={4}>
-            <TextField
-              fullWidth
-              placeholder="Search by customer name, invoice number, email, or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                )
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#b98f33' },
-                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
-                }
-              }}
-            />
-          </Grid>
-
-          {/* Date Range Filters */}
-          <Grid item xs={12} sm={6} lg={2}>
-            <TextField
-              fullWidth
-              label="From Date"
-              type="date"
-              value={dateFrom ? dateFrom.toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  const date = new Date(e.target.value);
-                  date.setHours(0, 0, 0, 0); // Set to start of day
-                  setDateFrom(date);
-                } else {
-                  setDateFrom(null);
-                }
-              }}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <DateRangeIcon sx={{ color: '#b98f33' }} />
-                  </InputAdornment>
-                )
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#b98f33' },
-                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
-                }
-              }}
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} lg={2}>
-            <TextField
-              fullWidth
-              label="To Date"
-              type="date"
-              value={dateTo ? dateTo.toISOString().split('T')[0] : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  const date = new Date(e.target.value);
-                  date.setHours(0, 0, 0, 0); // Set to start of day
-                  setDateTo(date);
-                } else {
-                  setDateTo(null);
-                }
-              }}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  '&:hover fieldset': { borderColor: '#b98f33' },
-                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
-                }
-              }}
-            />
-          </Grid>
-
-          {/* Apply Filter Button */}
-          <Grid item xs={12} sm={6} lg={1}>
-            <Button
-              variant="contained"
-              onClick={handleApplyDateFilter}
-              disabled={!dateFrom || !dateTo}
-              fullWidth
-              sx={buttonStyles.primaryButton}
-            >
-              Apply Filter
-            </Button>
-          </Grid>
-
-          {/* Clear Filter Button */}
-          <Grid item xs={12} sm={6} lg={1}>
-            <Button
-              variant="outlined"
-              onClick={handleClearDateFilter}
-              fullWidth
-              sx={buttonStyles.cancelButton}
-            >
-              Clear
-            </Button>
-          </Grid>
-
-          {/* Status Filter */}
-          <Grid item xs={12} sm={6} lg={2.5}>
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: '#b98f33' }}>Invoice Status</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                label="Invoice Status"
-                sx={{
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' }
-                }}
-              >
-                <MenuItem value="all">
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: '50%',
-                        backgroundColor: '#757575',
-                        mr: 2
-                      }}
-                    />
-                    All Statuses
-                  </Box>
-                </MenuItem>
-                {invoiceStatuses.map(status => (
-                  <MenuItem key={status.value} value={status.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          backgroundColor: status.color,
-                          mr: 2
-                        }}
-                      />
-                      {status.label}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-
-          {/* Results Count */}
-          <Grid item xs={12} lg={1.5}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-                <strong>{filteredOrders.length}</strong> of <strong>{orders.length}</strong> orders
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
-
-        {/* Active Filters Display */}
-        {(statusFilter !== 'all' || searchTerm || (appliedDateFrom && appliedDateTo)) && (
-          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #333333' }}>
-            <Typography variant="body2" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>
-              Active Filters:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {statusFilter !== 'all' && (
-                <Chip
-                  label={`Status: ${invoiceStatuses.find(s => s.value === statusFilter)?.label}`}
-                  onDelete={() => setStatusFilter('all')}
-                  color="primary"
-                  size="small"
-                />
-              )}
-              {searchTerm && (
-                <Chip
-                  label={`Search: "${searchTerm}"`}
-                  onDelete={() => setSearchTerm('')}
-                  color="primary"
-                  size="small"
-                />
-              )}
-              {appliedDateFrom && appliedDateTo && (
-                <Chip
-                  label={`Date: ${formatDateRange(appliedDateFrom, appliedDateTo)}`}
-                  onDelete={() => {
-                    const now = new Date();
-                    setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
-                    setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-                    setAppliedDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
-                    setAppliedDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-                  }}
-                  color="primary"
-                  size="small"
-                />
-              )}
-              <Button
-                size="small"
-                variant="contained"
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('all');
-                  const now = new Date();
-                  setDateFrom(new Date(now.getFullYear(), now.getMonth(), 1));
-                  setDateTo(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-                }}
-                sx={buttonStyles.primaryButton}
-              >
-                Clear All
-              </Button>
-            </Box>
-          </Box>
-        )}
+      {/* Search */}
+      <Paper sx={{ p: 2, mb: 3, border: '1px solid #333333', backgroundColor: '#2a2a2a' }}>
+        <TextField
+          fullWidth
+          placeholder="Search by invoice number..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ color: '#b98f33' }} />
+              </InputAdornment>
+            )
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              color: '#ffffff',
+              '& fieldset': { borderColor: '#333333' },
+              '&:hover fieldset': { borderColor: '#b98f33' },
+              '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+            },
+            '& .MuiInputBase-input::placeholder': {
+              color: '#888888'
+            }
+          }}
+        />
       </Paper>
 
       {/* Orders Table */}
@@ -1357,594 +210,114 @@ const FinancePage = () => {
         <Table>
           <TableHead sx={{ backgroundColor: '#b98f33' }}>
             <TableRow>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Customer</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice #</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Cost</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit %</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Paid</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Balance</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Payment Status</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice Status</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Date</TableCell>
-              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="center">Actions</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice Number</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="right">Total Invoice</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="right">Total Cost</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }} align="right">Profit</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredOrders.map((order) => {
-              const profitData = calculateOrderProfit(order);
-              const normalizedPayment = normalizePaymentData(order.paymentData);
-              const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
-              const balance = partialAmounts.revenue - partialAmounts.paidAmount;
-              const paymentStatus = getPaymentStatus(order);
-              const statusInfo = getStatusInfo(order.invoiceStatus);
+              const financials = calculateOrderFinancials(order);
+              
+              // Get customer info based on order type
+              const customerName = order.orderType === 'corporate'
+                ? (order.corporateCustomer?.corporateName || 'N/A')
+                : (order.personalInfo?.customerName || 'N/A');
+              
+              const customerEmail = order.orderType === 'corporate'
+                ? (order.contactPerson?.email || order.corporateCustomer?.email || 'No email')
+                : (order.personalInfo?.email || 'No email');
+              
+              const customerPhone = order.orderType === 'corporate'
+                ? (order.contactPerson?.phone || order.corporateCustomer?.phone || 'No phone')
+                : (order.personalInfo?.phone || 'No phone');
+              
+              const customerDetails = `${customerName} | ${customerEmail} | ${customerPhone}`;
               
               return (
                 <TableRow key={order.id} hover>
                   <TableCell>
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        {order.personalInfo?.customerName || 'N/A'}
+                    <Tooltip title={customerDetails} arrow>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#b98f33', cursor: 'help' }}>
+                        {order.orderDetails?.billInvoice || 'N/A'}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {order.personalInfo?.email || 'No email'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {order.personalInfo?.phone || 'No phone'}
-                      </Typography>
-                    </Box>
+                    </Tooltip>
                   </TableCell>
                   
-                  <TableCell>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {order.orderDetails?.billInvoice || 'N/A'}
+                  <TableCell align="right">
+                    <Typography variant="body1" sx={{ color: '#ffffff' }}>
+                      {formatCurrency(financials.invoiceTotal)}
                     </Typography>
                   </TableCell>
                   
-                  <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(partialAmounts.revenue)}
+                  <TableCell align="right">
+                    <Typography variant="body1" sx={{ color: '#ffffff' }}>
+                      {formatCurrency(financials.costTotal)}
                     </Typography>
                   </TableCell>
                   
-                  <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(partialAmounts.cost)}
-                    </Typography>
-                  </TableCell>
-                  
-                  <TableCell>
+                  <TableCell align="right">
                     <Typography 
-                      variant="subtitle1" 
+                      variant="body1" 
                       sx={{ 
                         fontWeight: 'bold', 
-                        color: partialAmounts.profit >= 0 ? '#4caf50' : '#f44336' 
+                        color: financials.profit >= 0 ? '#4caf50' : '#f44336' 
                       }}
                     >
-                      {formatCurrency(partialAmounts.profit)}
+                      {formatCurrency(financials.profit)}
                     </Typography>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Typography 
-                        variant="subtitle2" 
-                        sx={{ 
-                          fontWeight: 'bold', 
-                          color: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
-                          mr: 1
-                        }}
-                      >
-                        {partialAmounts.profitPercentage.toFixed(1)}%
-                      </Typography>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 8,
-                          backgroundColor: '#e0e0e0',
-                          borderRadius: 4,
-                          overflow: 'hidden'
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: `${Math.min(Math.abs(partialAmounts.profitPercentage), 100)}%`,
-                            height: '100%',
-                            backgroundColor: partialAmounts.profitPercentage >= 0 ? '#4caf50' : '#f44336',
-                            transition: 'width 0.3s ease'
-                          }}
-                        />
-                      </Box>
-                    </Box>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {formatCurrency(partialAmounts.paidAmount)}
-                    </Typography>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Typography 
-                      variant="subtitle1" 
-                      sx={{ 
-                        fontWeight: 'bold', 
-                        color: balance > 0 ? '#f44336' : '#4caf50' 
-                      }}
-                    >
-                      {formatCurrency(balance)}
-                    </Typography>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Chip
-                      label={paymentStatus.status}
-                      sx={{
-                        backgroundColor: paymentStatus.color,
-                        color: 'white',
-                        fontWeight: 'bold'
-                      }}
-                    />
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Chip
-                      label={statusInfo.label}
-                      sx={{
-                        backgroundColor: statusInfo.color,
-                        color: 'white',
-                        fontWeight: 'bold',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => {
-                        setSelectedOrder(order);
-                        setEditingStatus(order.invoiceStatus);
-                        setStatusDialogOpen(true);
-                      }}
-                    />
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                      <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
-                        {formatDateOnly(order.orderDetails?.startDate || order.createdAt)}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
-                        {formatDateOnly(order.orderDetails?.endDate || order.statusUpdatedAt || order.createdAt)}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  
-                  <TableCell align="center">
-                    <Tooltip title="View Order">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => navigate(`/admin/orders`, { state: { viewOrder: order } })}
-                        sx={{ color: '#b98f33' }}
-                      >
-                        <ViewIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="View Invoice">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => navigate(`/admin/invoices`, { state: { viewOrder: order } })}
-                        sx={{ color: '#b98f33' }}
-                      >
-                        <PdfIcon />
-                      </IconButton>
-                    </Tooltip>
                   </TableCell>
                 </TableRow>
               );
             })}
+            
+            {/* Grand Totals Row */}
+            {filteredOrders.length > 0 && (
+              <TableRow sx={{ backgroundColor: '#3a3a3a', '& td': { borderTop: '2px solid #b98f33' } }}>
+                <TableCell>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                    GRAND TOTAL
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                    {formatCurrency(grandTotals.invoiceTotal)}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                    {formatCurrency(grandTotals.costTotal)}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography 
+                    variant="subtitle1" 
+                    sx={{ 
+                      fontWeight: 'bold', 
+                      color: grandTotals.profit >= 0 ? '#4caf50' : '#f44336' 
+                    }}
+                  >
+                    {formatCurrency(grandTotals.profit)}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+            
+            {filteredOrders.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
+                  <Typography variant="body1" sx={{ color: '#888888' }}>
+                    {searchTerm ? 'No invoices found matching your search.' : 'No invoices found.'}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Professional Status Dialog */}
-      <Dialog 
-        open={statusDialogOpen} 
-        onClose={() => setStatusDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            zIndex: 1000
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
-          color: '#000000',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}>
-          <AssignmentIcon />
-          Update Invoice Status
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 3 }}>
-          {/* Current Status Display */}
-          <Box sx={{ mb: 3, p: 2, backgroundColor: '#3a3a3a', borderRadius: 1 }}>
-            <Typography variant="subtitle2" sx={{ color: '#b98f33', mb: 1 }}>
-              Current Status
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
-                  backgroundColor: getStatusInfo(editingStatus)?.color || '#607d8b'
-                }}
-              />
-              <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                {getStatusInfo(editingStatus)?.label || editingStatus || 'Unknown Status'}
-              </Typography>
-            </Box>
-          </Box>
-
-          {/* Status Dropdown */}
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel>Select New Status</InputLabel>
-            <Select
-              value={editingStatus || ''}
-              onChange={(e) => setEditingStatus(e.target.value)}
-              label="Select New Status"
-            >
-              {invoiceStatuses
-                .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
-                .map(status => (
-                  <MenuItem key={status.value} value={status.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: '50%',
-                          backgroundColor: status.color
-                        }}
-                      />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                          {status.label}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#666' }}>
-                          {status.description || `Order is ${status.label.toLowerCase()}`}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
-
-          {/* Status Description */}
-          {editingStatus && (
-            <Box sx={{ p: 2, backgroundColor: '#3a3a3a', borderRadius: 1 }}>
-              <Typography variant="body2" sx={{ color: '#b98f33' }}>
-                <strong>Selected:</strong> {getStatusInfo(editingStatus)?.label || editingStatus}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#ffffff', display: 'block', mt: 1 }}>
-                {getStatusInfo(editingStatus)?.description || 'Status will be updated for this order.'}
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button 
-            onClick={() => setStatusDialogOpen(false)}
-            variant="outlined"
-            size="small"
-            sx={buttonStyles.cancelButton}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => updateInvoiceStatus(selectedOrder.id, editingStatus)}
-            variant="contained"
-            disabled={!editingStatus}
-            size="small"
-            sx={buttonStyles.primaryButton}
-          >
-            Update Status
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Enhanced Validation Dialog */}
-      <Dialog open={validationDialogOpen} onClose={() => setValidationDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Payment Validation Required</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 3 }}>
-            {validationError.message}
-          </Typography>
-          
-          {validationError.type === 'done' && (
-            <Button 
-              variant="contained" 
-              onClick={handleMakeFullyPaid}
-              fullWidth
-              sx={{ 
-                mb: 2,
-                ...buttonStyles.primaryButton
-              }}
-              startIcon={<CheckCircleIcon />}
-            >
-              Make ${validationError.pendingAmount.toFixed(2)} as Paid
-            </Button>
-          )}
-          
-          {validationError.type === 'cancelled' && (
-            <Button 
-              variant="contained" 
-              onClick={handleSetPaymentToZero}
-              fullWidth
-              sx={{ 
-                mb: 2,
-                ...buttonStyles.primaryButton
-              }}
-              startIcon={<CancelIcon />}
-            >
-              Set Payment Amount to $0.00
-            </Button>
-          )}
-          
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            This action will update the payment history and automatically change the order status.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setValidationDialogOpen(false)}
-            variant="contained"
-            sx={{ 
-              backgroundColor: '#b98f33',
-              color: '#000000',
-              border: '1px solid #8b6b1f',
-              boxShadow: '0 2px 4px rgba(185, 143, 51, 0.3)',
-              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
-              '&:hover': { 
-                backgroundColor: '#d4af5a',
-                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.4)'
-              }
-            }}
-          >
-            Cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Allocation Dialog */}
-      <Dialog 
-        open={allocationDialogOpen} 
-        onClose={() => setAllocationDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <CalendarIcon sx={{ mr: 1, color: '#b98f33' }} />
-            Order Completion & Date Allocation
-          </Box>
-        </DialogTitle>
-        
-        <DialogContent>
-          {selectedOrderForAllocation && (
-            <Box sx={{ mt: 2 }}>
-              {/* Order Summary */}
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: '#3a3a3a' }}>
-                <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
-                  Order Summary
-                </Typography>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  <Typography variant="body2">
-                    <strong>Order Completion:</strong> Please review and adjust the order dates if needed. 
-                    This information will be used for accurate P&L reporting and financial analysis.
-                  </Typography>
-                </Alert>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Order: {selectedOrderForAllocation.orderDetails?.billInvoice || selectedOrderForAllocation.id}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Customer: {selectedOrderForAllocation.personalInfo?.customerName}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Revenue: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).revenue)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Costs: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).cost)}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Gross Profit: {formatCurrency(calculateOrderProfit(selectedOrderForAllocation).profit)}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-
-              {/* Date Range */}
-              <Paper sx={{ p: 2, mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Date Range
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="Start Date"
-                      type="date"
-                      value={startDate ? startDate.toISOString().split('T')[0] : ''}
-                      onChange={(e) => {
-                        const newStartDate = new Date(e.target.value);
-                        setStartDate(newStartDate);
-                        if (endDate && newStartDate > endDate) {
-                          setEndDate(newStartDate);
-                        }
-                        // Recalculate allocations
-                        const allocations = calculateAllocation(selectedOrderForAllocation, newStartDate, endDate);
-                        setManualAllocations(allocations);
-                      }}
-                      InputLabelProps={{ shrink: true }}
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="End Date"
-                      type="date"
-                      value={endDate ? endDate.toISOString().split('T')[0] : ''}
-                      onChange={(e) => {
-                        const newEndDate = new Date(e.target.value);
-                        // Validate end date
-                        const today = new Date();
-                        today.setHours(23, 59, 59, 999);
-                        if (newEndDate > today) {
-                          showError('End date cannot be in the future');
-                          return;
-                        }
-                        if (startDate && newEndDate < startDate) {
-                          showError('End date cannot be before start date');
-                          return;
-                        }
-                        setEndDate(newEndDate);
-                        // Recalculate allocations
-                        const allocations = calculateAllocation(selectedOrderForAllocation, startDate, newEndDate);
-                        setManualAllocations(allocations);
-                      }}
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ max: new Date().toISOString().split('T')[0] }}
-                    />
-                  </Grid>
-                </Grid>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Duration: {startDate && endDate ? 
-                    Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1 : 0} days
-                </Typography>
-              </Paper>
-
-              {/* Allocation Method */}
-              <Paper sx={{ p: 2, mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Allocation Method
-                </Typography>
-                <FormControl component="fieldset" fullWidth>
-                  <RadioGroup
-                    value={allocationMethod}
-                    onChange={(e) => setAllocationMethod(e.target.value)}
-                  >
-                    <FormControlLabel 
-                      value="time-based" 
-                      control={<Radio />} 
-                      label="Time-based allocation (recommended - proportional to days in each month)" 
-                    />
-                    <FormControlLabel 
-                      value="manual" 
-                      control={<Radio />} 
-                      label="Manual allocation (for special cases - specify percentages)" 
-                    />
-                  </RadioGroup>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    Time-based allocation is recommended for most orders. Use manual allocation only for special cases where the time-based calculation doesn't reflect the actual work distribution.
-                  </Typography>
-                </FormControl>
-              </Paper>
-
-              {/* Monthly Breakdown */}
-              <Paper sx={{ p: 2, mb: 3 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                  Monthly Breakdown
-                </Typography>
-                
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Month</TableCell>
-                        <TableCell>Days</TableCell>
-                        <TableCell>Percentage</TableCell>
-                        <TableCell>Revenue</TableCell>
-                        <TableCell>Costs</TableCell>
-                        <TableCell>Profit</TableCell>
-                        {allocationMethod === 'manual' && (
-                          <TableCell>Manual %</TableCell>
-                        )}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {manualAllocations.map((allocation, index) => (
-                        <TableRow key={index}>
-                          <TableCell>{allocation.monthKey}</TableCell>
-                          <TableCell>{allocation.days}</TableCell>
-                          <TableCell>{formatPercentage(allocation.percentage)}</TableCell>
-                          <TableCell>{formatCurrency(allocation.revenue)}</TableCell>
-                          <TableCell>{formatCurrency(allocation.costs)}</TableCell>
-                          <TableCell>{formatCurrency(allocation.profit)}</TableCell>
-                          {allocationMethod === 'manual' && (
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={allocation.percentage}
-                                onChange={(e) => {
-                                  const newAllocations = [...manualAllocations];
-                                  newAllocations[index].percentage = parseFloat(e.target.value) || 0;
-                                  setManualAllocations(newAllocations);
-                                }}
-                                inputProps={{ min: 0, max: 100, step: 0.1 }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-
-                {allocationMethod === 'manual' && (
-                  <Box sx={{ mt: 2, p: 2, backgroundColor: '#fff3cd', borderRadius: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Percentage: {formatPercentage(manualAllocations.reduce((sum, a) => sum + a.percentage, 0))}
-                      {manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100 && (
-                        <span style={{ color: '#d32f2f' }}> (Must equal 100%)</span>
-                      )}
-                    </Typography>
-                  </Box>
-                )}
-              </Paper>
-            </Box>
-          )}
-        </DialogContent>
-        
-        <DialogActions>
-          <Button 
-            onClick={() => setAllocationDialogOpen(false)}
-            variant="outlined"
-            sx={buttonStyles.cancelButton}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={applyAllocation}
-            variant="contained"
-            disabled={allocationMethod === 'manual' && 
-              manualAllocations.reduce((sum, a) => sum + a.percentage, 0) !== 100}
-            sx={buttonStyles.primaryButton}
-          >
-            Complete Order & Apply Allocation
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
 
-export default FinancePage; 
+export default FinancePage;

@@ -77,6 +77,8 @@ const CorporateOrderPage = () => {
   const [loading, setLoading] = useState(true);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [invoiceNumberLoading, setInvoiceNumberLoading] = useState(false);
+  const [orderNote, setOrderNote] = useState('');
+  const [orderNoteCaption, setOrderNoteCaption] = useState('Note');
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [addCorporateDialogOpen, setAddCorporateDialogOpen] = useState(false);
   const [orderData, setOrderData] = useState({
@@ -453,7 +455,11 @@ const CorporateOrderPage = () => {
         orderDetails: {
           billInvoice: finalInvoiceNumber,
           orderType: 'corporate',
-          status: 'pending'
+          status: 'pending',
+          note: {
+            caption: orderNoteCaption || 'Note',
+            value: orderNote || ''
+          }
         },
         // Order data (furniture, materials, payment, etc.)
         furnitureGroups: orderData.furnitureGroups,
@@ -722,6 +728,51 @@ const CorporateOrderPage = () => {
                     />
                   </Box>
                 )}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 300 }}>
+                  <TextField
+                    value={orderNoteCaption}
+                    onChange={(e) => setOrderNoteCaption(e.target.value)}
+                    placeholder="Caption"
+                    size="small"
+                    sx={{
+                      width: 120,
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: '#333333',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                      }
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+                    :
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    value={orderNote}
+                    onChange={(e) => setOrderNote(e.target.value)}
+                    placeholder="Enter order note..."
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: '#333333',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                      }
+                    }}
+                  />
+                </Box>
               </Box>
               {(selectedCustomer || selectedContactPerson) && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
@@ -895,7 +946,32 @@ const CorporateOrderPage = () => {
               Add Contact Person
             </Button>
           )}
-          <Button onClick={() => setCustomerDialogOpen(false)}>
+          <Button 
+            onClick={() => setCustomerDialogOpen(false)}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              position: 'relative',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '50%',
+                background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                borderRadius: '6px 6px 0 0',
+                pointerEvents: 'none'
+              }
+            }}
+          >
             Cancel
           </Button>
         </DialogActions>
