@@ -251,21 +251,26 @@ export const generateInvoicePreviewHtml = (order, totals, materialTaxRates = {})
         </tr>
         ${extraExpenses
           .map(
-            (expense) => `
+            (expense) => {
+              // Handle different quantity field names (quantity, qty, unit)
+              const quantity = parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1;
+              const price = parseFloat(expense.price) || 0;
+              const subtotal = quantity * price;
+              const taxRate = parseFloat(expense.taxRate) || 0.13;
+              const tax = subtotal * taxRate;
+              const total = parseFloat(expense.total) || (subtotal + tax);
+              
+              return `
               <tr>
                 <td>${expense.description || 'Extra Expense'}</td>
-                <td style="text-align: right">${(parseFloat(expense.quantity) || 1).toFixed(2)}</td>
-                <td style="text-align: right">$${(parseFloat(expense.price) || 0).toFixed(2)}</td>
-                <td style="text-align: right">$${(
-                  (parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)
-                ).toFixed(2)}</td>
-                <td style="text-align: right">$${(
-                  ((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)) *
-                  (parseFloat(expense.taxRate) || 0.13)
-                ).toFixed(2)}</td>
-                <td style="text-align: right">$${(parseFloat(expense.total) || 0).toFixed(2)}</td>
+                <td style="text-align: right">${quantity.toFixed(2)}</td>
+                <td style="text-align: right">$${price.toFixed(2)}</td>
+                <td style="text-align: right">$${subtotal.toFixed(2)}</td>
+                <td style="text-align: right">$${tax.toFixed(2)}</td>
+                <td style="text-align: right">$${total.toFixed(2)}</td>
               </tr>
-            `
+            `;
+            }
           )
           .join('')}
       `

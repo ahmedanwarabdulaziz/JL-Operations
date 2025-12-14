@@ -49,15 +49,19 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   CalendarToday as CalendarIcon,
-  Assignment as AssignmentIcon
+  Assignment as AssignmentIcon,
+  Close as CloseIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
-import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, normalizePaymentData, validatePaymentData, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
+import { calculateOrderTotal, calculateJLCostAnalysisBeforeTax, calculateOrderProfit, normalizePaymentData, validatePaymentData, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
 import { formatDate, formatDateOnly, formatDateRange, toDateObject } from '../../../utils/dateUtils';
+import { generateInvoicePreviewHtml, calculateInvoiceTotals } from '../../shared/utils/invoicePreview';
+import { fetchMaterialCompanyTaxRates } from '../../../utils/materialTaxRates';
 
 // Invoice statuses will be loaded dynamically from database
 
@@ -91,6 +95,16 @@ const FinancePage = () => {
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [plPreviewData, setPlPreviewData] = useState(null);
+  
+  // Invoice preview dialog state
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [previewOrder, setPreviewOrder] = useState(null);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [materialTaxRates, setMaterialTaxRates] = useState({});
+  
+  // Year/Month filter state
+  const [selectedYear, setSelectedYear] = useState(null);
+  const [selectedMonths, setSelectedMonths] = useState([]);
   
   // Date filtering state - default to current month
   const [dateFrom, setDateFrom] = useState(() => {
@@ -196,14 +210,16 @@ const FinancePage = () => {
   // Helper function to calculate partial amounts for allocated orders
   const calculatePartialAmounts = (order, profitData, normalizedPayment) => {
     let orderRevenue = profitData.revenue;
-    let orderCost = profitData.cost;
-    let orderProfit = profitData.profit;
+    // Calculate cost: JL Cost Analysis Total (before tax)
+    let orderCost = calculateJLCostAnalysisBeforeTax(order);
+    // Calculate profit
+    let orderProfit = orderRevenue - orderCost;
     let orderPaidAmount = normalizedPayment.amountPaid;
     let orderExtraExpenses = 0;
     let orderPickupDelivery = 0;
     let orderTax = 0;
     
-    // Calculate extra expenses total
+    // Calculate extra expenses total (for display purposes)
     if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
       orderExtraExpenses = order.extraExpenses.reduce((sum, exp) => {
         return sum + (parseFloat(exp.total) || 0);
@@ -247,8 +263,8 @@ const FinancePage = () => {
         
         // Apply allocation to all components
         orderRevenue = profitData.revenue * allocationMultiplier;
-        orderCost = profitData.cost * allocationMultiplier;
-        orderProfit = profitData.profit * allocationMultiplier;
+        orderCost = orderCost * allocationMultiplier;
+        orderProfit = orderRevenue - orderCost;
         orderPaidAmount = normalizedPayment.amountPaid * allocationMultiplier;
         orderExtraExpenses = orderExtraExpenses * allocationMultiplier;
         orderPickupDelivery = orderPickupDelivery * allocationMultiplier;
@@ -312,9 +328,110 @@ const FinancePage = () => {
     setFinancialSummary(summary);
   };
 
+  // Get available years and months from orders
+  const getAvailableYearsAndMonths = () => {
+    const yearMonthMap = new Map();
+    
+    orders.forEach(order => {
+      const startDate = order.orderDetails?.startDate || order.createdAt;
+      let orderDate;
+      
+      try {
+        if (startDate?.toDate) {
+          orderDate = startDate.toDate();
+        } else if (startDate) {
+          orderDate = toDateObject(startDate);
+        } else {
+          return;
+        }
+        
+        const year = orderDate.getFullYear();
+        const month = orderDate.getMonth() + 1; // 1-12
+        
+        if (!yearMonthMap.has(year)) {
+          yearMonthMap.set(year, new Set());
+        }
+        yearMonthMap.get(year).add(month);
+      } catch (error) {
+        console.error('Error processing date:', error);
+      }
+    });
+    
+    // Convert to sorted arrays
+    const years = Array.from(yearMonthMap.keys()).sort((a, b) => b - a);
+    const monthsByYear = {};
+    years.forEach(year => {
+      monthsByYear[year] = Array.from(yearMonthMap.get(year)).sort((a, b) => a - b);
+    });
+    
+    return { years, monthsByYear };
+  };
+
+  // Handle year selection
+  const handleYearClick = (year) => {
+    if (selectedYear === year) {
+      setSelectedYear(null);
+      setSelectedMonths([]);
+    } else {
+      setSelectedYear(year);
+      setSelectedMonths([]);
+    }
+  };
+
+  // Handle month selection
+  const handleMonthClick = (month) => {
+    setSelectedMonths(prev => {
+      if (prev.includes(month)) {
+        return prev.filter(m => m !== month);
+      } else {
+        return [...prev, month];
+      }
+    });
+  };
+
+  // Clear year/month filters
+  const handleClearYearMonthFilters = () => {
+    setSelectedYear(null);
+    setSelectedMonths([]);
+  };
+
   // Search and filter logic
   useEffect(() => {
     let filtered = orders;
+    
+    // Apply year/month filter
+    if (selectedYear !== null) {
+      filtered = filtered.filter(order => {
+        const startDate = order.orderDetails?.startDate || order.createdAt;
+        let orderDate;
+        
+        try {
+          if (startDate?.toDate) {
+            orderDate = startDate.toDate();
+          } else if (startDate) {
+            orderDate = toDateObject(startDate);
+          } else {
+            return false;
+          }
+          
+          const orderYear = orderDate.getFullYear();
+          const orderMonth = orderDate.getMonth() + 1;
+          
+          if (orderYear !== selectedYear) {
+            return false;
+          }
+          
+          if (selectedMonths.length > 0 && !selectedMonths.includes(orderMonth)) {
+            return false;
+          }
+          
+          return true;
+        } catch (error) {
+          console.error('Error filtering by date:', error);
+          return false;
+        }
+      });
+    }
     
     // Apply date range filter
     if (appliedDateFrom && appliedDateTo) {
@@ -414,7 +531,7 @@ const FinancePage = () => {
     
     setFilteredOrders(filtered);
     calculateFinancialSummary(filtered);
-  }, [searchTerm, statusFilter, orders, appliedDateFrom, appliedDateTo]);
+  }, [searchTerm, statusFilter, orders, appliedDateFrom, appliedDateTo, selectedYear, selectedMonths]);
 
   // Apply date filter functions
   const handleApplyDateFilter = () => {
@@ -521,6 +638,97 @@ const FinancePage = () => {
   // Format currency
   const formatCurrency = (amount) => {
     return `$${parseFloat(amount).toFixed(2)}`;
+  };
+
+  // Format allocation details for tooltip
+  const formatAllocationDetails = (order) => {
+    if (!order.allocation || !order.allocation.allocations || order.allocation.allocations.length === 0) {
+      return 'No allocation data';
+    }
+
+    const allocations = order.allocation.allocations;
+    const profitData = calculateOrderProfit(order);
+    
+    // Format month key (e.g., "2024-01" -> "January 2024")
+    const formatMonthKey = (monthKey) => {
+      const [year, month] = monthKey.split('-');
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${monthNames[parseInt(month) - 1]} ${year}`;
+    };
+
+    let details = 'Allocation Details:\n\n';
+    
+    allocations.forEach((allocation, index) => {
+      const revenue = allocation.revenue !== undefined 
+        ? allocation.revenue 
+        : profitData.revenue * (allocation.percentage / 100);
+      const cost = allocation.costs !== undefined 
+        ? allocation.costs 
+        : profitData.cost * (allocation.percentage / 100);
+      const profit = allocation.profit !== undefined 
+        ? allocation.profit 
+        : revenue - cost;
+
+      details += `${formatMonthKey(allocation.monthKey)}:\n`;
+      details += `  Percentage: ${formatPercentage(allocation.percentage)}\n`;
+      if (allocation.days !== undefined) {
+        details += `  Days: ${allocation.days}\n`;
+      }
+      details += `  Revenue: ${formatCurrency(revenue)}\n`;
+      details += `  Cost: ${formatCurrency(cost)}\n`;
+      details += `  Profit: ${formatCurrency(profit)}\n`;
+      
+      if (index < allocations.length - 1) {
+        details += '\n';
+      }
+    });
+
+    return details;
+  };
+
+  // Handle invoice preview
+  const handlePreviewInvoice = (order) => {
+    try {
+      setPreviewOrder(order);
+      
+      // Normalize order structure for invoice preview
+      // Corporate orders use furnitureGroups, regular orders use furnitureData.groups
+      const normalizedOrder = {
+        ...order,
+        paymentData: normalizePaymentData(order.paymentData || {}),
+        // Normalize furniture data structure if needed
+        furnitureData: order.furnitureData || { groups: [] }
+      };
+      
+      // Generate invoice preview HTML
+      const totals = calculateInvoiceTotals(normalizedOrder, materialTaxRates);
+      const html = generateInvoicePreviewHtml(normalizedOrder, totals, materialTaxRates);
+      setPreviewHtml(html);
+      
+      setPreviewDialogOpen(true);
+    } catch (error) {
+      console.error('Error generating invoice preview:', error);
+      showError('Failed to generate invoice preview');
+    }
+  };
+
+  // Handle print
+  const handlePrint = () => {
+    if (!previewHtml) return;
+    
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      showError('Unable to open print window. Pop-up might be blocked.');
+      return;
+    }
+    
+    printWindow.document.write(previewHtml);
+    printWindow.document.close();
+    
+    printWindow.onload = () => {
+      printWindow.print();
+    };
   };
 
   // Format date
@@ -792,6 +1000,7 @@ const FinancePage = () => {
   useEffect(() => {
     fetchOrders();
     fetchInvoiceStatuses();
+    fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
   }, []);
 
   if (loading) {
@@ -1168,6 +1377,99 @@ const FinancePage = () => {
         </Grid>
       </Grid>
 
+      {/* Year/Month Filter Cards */}
+      {(() => {
+        const { years, monthsByYear } = getAvailableYearsAndMonths();
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        return (
+          <Paper sx={{ p: 2, mb: 3, border: '1px solid #333333', backgroundColor: '#2a2a2a' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                Filter by Year & Month
+              </Typography>
+              {(selectedYear !== null || selectedMonths.length > 0) && (
+                <Button
+                  size="small"
+                  onClick={handleClearYearMonthFilters}
+                  sx={{
+                    color: '#b98f33',
+                    borderColor: '#b98f33',
+                    '&:hover': {
+                      borderColor: '#d4af5a',
+                      backgroundColor: 'rgba(185, 143, 51, 0.1)'
+                    }
+                  }}
+                  variant="outlined"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </Box>
+            
+            {/* Years */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
+                Years:
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {years.map(year => (
+                  <Chip
+                    key={year}
+                    label={year}
+                    onClick={() => handleYearClick(year)}
+                    sx={{
+                      backgroundColor: selectedYear === year ? '#b98f33' : '#3a3a3a',
+                      color: selectedYear === year ? '#000000' : '#ffffff',
+                      fontWeight: selectedYear === year ? 'bold' : 'normal',
+                      border: selectedYear === year ? '2px solid #8b6b1f' : '1px solid #555555',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        backgroundColor: selectedYear === year ? '#d4af5a' : '#4a4a4a',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                      },
+                      transition: 'all 0.2s ease'
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+            
+            {/* Months for selected year */}
+            {selectedYear !== null && monthsByYear[selectedYear] && (
+              <Box>
+                <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
+                  Months for {selectedYear}:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {monthsByYear[selectedYear].map(month => (
+                    <Chip
+                      key={month}
+                      label={monthNames[month - 1]}
+                      onClick={() => handleMonthClick(month)}
+                      sx={{
+                        backgroundColor: selectedMonths.includes(month) ? '#b98f33' : '#3a3a3a',
+                        color: selectedMonths.includes(month) ? '#000000' : '#ffffff',
+                        fontWeight: selectedMonths.includes(month) ? 'bold' : 'normal',
+                        border: selectedMonths.includes(month) ? '2px solid #8b6b1f' : '1px solid #555555',
+                        cursor: 'pointer',
+                        '&:hover': {
+                          backgroundColor: selectedMonths.includes(month) ? '#d4af5a' : '#4a4a4a',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                        },
+                        transition: 'all 0.2s ease'
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Paper>
+        );
+      })()}
+
       {/* Filters */}
       <Paper sx={{ p: 3, mb: 3, border: '1px solid #333333', backgroundColor: '#2a2a2a' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -1485,6 +1787,8 @@ const FinancePage = () => {
             <TableRow>
               <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Customer</TableCell>
               <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Invoice #</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Start Date</TableCell>
+              <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Allocation</TableCell>
               <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Revenue</TableCell>
               <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Cost</TableCell>
               <TableCell sx={{ color: '#000000', fontWeight: 'bold' }}>Profit</TableCell>
@@ -1506,6 +1810,12 @@ const FinancePage = () => {
               const paymentStatus = getPaymentStatus(order);
               const statusInfo = getStatusInfo(order.invoiceStatus);
               
+              // Check if order has allocation
+              const hasAllocation = order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0;
+              
+              // Get start date
+              const startDate = order.orderDetails?.startDate || order.createdAt;
+              
               return (
                 <TableRow key={order.id} hover>
                   <TableCell>
@@ -1526,6 +1836,56 @@ const FinancePage = () => {
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
                       {order.orderDetails?.billInvoice || 'N/A'}
                     </Typography>
+                  </TableCell>
+                  
+                  <TableCell>
+                    <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                      {formatDateOnly(startDate)}
+                    </Typography>
+                  </TableCell>
+                  
+                  <TableCell>
+                    <Tooltip 
+                      title={hasAllocation ? formatAllocationDetails(order) : 'No allocation'}
+                      arrow
+                      placement="right"
+                      componentsProps={{
+                        tooltip: {
+                          sx: {
+                            backgroundColor: '#2a2a2a',
+                            border: '1px solid #b98f33',
+                            color: '#ffffff',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'pre-line',
+                            maxWidth: '400px',
+                            '& .MuiTooltip-arrow': {
+                              color: '#2a2a2a',
+                              '&::before': {
+                                border: '1px solid #b98f33'
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: hasAllocation ? 'help' : 'default' }}>
+                        {hasAllocation ? (
+                          <>
+                            <CheckCircleIcon sx={{ fontSize: 18, color: '#4caf50' }} />
+                            <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                              Yes
+                            </Typography>
+                          </>
+                        ) : (
+                          <>
+                            <CancelIcon sx={{ fontSize: 18, color: '#757575' }} />
+                            <Typography variant="body2" sx={{ color: '#757575' }}>
+                              No
+                            </Typography>
+                          </>
+                        )}
+                      </Box>
+                    </Tooltip>
                   </TableCell>
                   
                   <TableCell>
@@ -1655,10 +2015,10 @@ const FinancePage = () => {
                     <Tooltip title="View Invoice">
                       <IconButton 
                         size="small" 
-                        onClick={() => navigate(`/admin/invoices`, { state: { viewOrder: order } })}
+                        onClick={() => handlePreviewInvoice(order)}
                         sx={{ color: '#b98f33' }}
                       >
-                        <PdfIcon />
+                        <ViewIcon />
                       </IconButton>
                     </Tooltip>
                   </TableCell>
@@ -2125,6 +2485,127 @@ const FinancePage = () => {
             }}
           >
             Complete Order & Apply Allocation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Invoice Preview Dialog */}
+      <Dialog 
+        open={previewDialogOpen} 
+        onClose={() => setPreviewDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            border: '2px solid #b98f33',
+            borderRadius: '10px',
+            color: '#ffffff',
+            maxHeight: '90vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid #b98f33'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <ReceiptIcon sx={{ color: '#000000', fontSize: 28 }} />
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+              Invoice Preview - {previewOrder?.orderDetails?.billInvoice || 'N/A'}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => setPreviewDialogOpen(false)}
+            sx={{
+              color: '#000000',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.1)'
+              }
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ 
+          p: 2,
+          backgroundColor: '#3a3a3a',
+          overflow: 'auto',
+          display: 'flex',
+          justifyContent: 'center',
+          '&::-webkit-scrollbar': {
+            width: '8px'
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#2a2a2a'
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#b98f33',
+            borderRadius: '4px'
+          }
+        }}>
+          <Box sx={{ 
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            overflow: 'hidden',
+            width: '100%'
+          }}>
+            <iframe
+              srcDoc={previewHtml}
+              style={{
+                width: '100%',
+                minHeight: '600px',
+                border: 'none',
+                display: 'block'
+              }}
+              title="Invoice Preview"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ 
+          backgroundColor: '#3a3a3a',
+          borderTop: '1px solid #b98f33',
+          p: 2,
+          gap: 2
+        }}>
+          <Button
+            onClick={() => setPreviewDialogOpen(false)}
+            sx={{
+              color: '#ffffff',
+              borderColor: '#666666',
+              '&:hover': {
+                borderColor: '#b98f33',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+            variant="outlined"
+          >
+            Close
+          </Button>
+          <Button
+            onClick={handlePrint}
+            variant="contained"
+            startIcon={<PrintIcon />}
+            sx={{
+              background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+              color: '#000000',
+              fontWeight: 'bold',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            Print
           </Button>
         </DialogActions>
       </Dialog>

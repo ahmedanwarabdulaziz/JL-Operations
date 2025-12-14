@@ -285,6 +285,105 @@ export const calculateOrderCost = (order, materialTaxRates = {}) => {
 };
 
 /**
+ * Calculate JL internal costs BEFORE tax (for finance reporting)
+ */
+export const calculateOrderCostBeforeTax = (order) => {
+  let totalCost = 0;
+
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
+      // JL Material costs WITHOUT tax
+      const jlMaterialPrice = parseFloat(group.materialJLPrice) || 0;
+      const jlMaterialQnty = parseFloat(group.materialJLQnty) || 0;
+      const jlMaterialSubtotal = jlMaterialPrice * jlMaterialQnty;
+      totalCost += jlMaterialSubtotal;
+
+      // JL Foam costs (no tax)
+      const jlFoamPrice = parseFloat(group.foamJLPrice) || 0;
+      const foamQnty = parseFloat(group.foamQnty) || 1;
+      totalCost += jlFoamPrice * foamQnty;
+
+      // Other expenses (no tax)
+      totalCost += parseFloat(group.otherExpenses) || 0;
+
+      // Shipping costs (no tax)
+      totalCost += parseFloat(group.shipping) || 0;
+    });
+  }
+
+  // Add extra expenses
+  if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
+    const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
+      return sum + (parseFloat(exp.total) || 0);
+    }, 0);
+    totalCost += extraExpensesTotal;
+  }
+
+  return totalCost;
+};
+
+/**
+ * Calculate expenses total WITHOUT tax (for finance reporting)
+ */
+export const calculateExpensesTotalWithoutTax = (order) => {
+  let expensesTotal = 0;
+
+  // Calculate extra expenses without tax
+  if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
+    order.extraExpenses.forEach(expense => {
+      const price = parseFloat(expense.price) || 0;
+      const quantity = parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1;
+      const subtotal = price * quantity;
+      expensesTotal += subtotal;
+    });
+  }
+
+  return expensesTotal;
+};
+
+/**
+ * Calculate JL Cost Analysis total BEFORE tax (materials, foam, other expenses, shipping, and extra expenses)
+ */
+export const calculateJLCostAnalysisBeforeTax = (order) => {
+  let jlCostTotal = 0;
+
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
+      // JL Material costs WITHOUT tax
+      const jlMaterialPrice = parseFloat(group.materialJLPrice) || 0;
+      const jlMaterialQnty = parseFloat(group.materialJLQnty) || 0;
+      const jlMaterialSubtotal = jlMaterialPrice * jlMaterialQnty;
+      jlCostTotal += jlMaterialSubtotal;
+
+      // JL Foam costs (no tax)
+      const jlFoamPrice = parseFloat(group.foamJLPrice) || 0;
+      const foamQnty = parseFloat(group.foamQnty) || 1;
+      jlCostTotal += jlFoamPrice * foamQnty;
+
+      // Other expenses (no tax)
+      jlCostTotal += parseFloat(group.otherExpenses) || 0;
+
+      // Shipping costs (no tax)
+      jlCostTotal += parseFloat(group.shipping) || 0;
+    });
+  }
+
+  // Add extra expenses WITHOUT tax (price × quantity)
+  if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
+    order.extraExpenses.forEach(expense => {
+      const price = parseFloat(expense.price) || 0;
+      const quantity = parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1;
+      const expenseSubtotal = price * quantity;
+      jlCostTotal += expenseSubtotal;
+    });
+  }
+
+  return jlCostTotal;
+};
+
+/**
  * Calculate profit and profit percentage
  * Revenue includes tax (customer-facing total)
  * Cost includes tax (internal JL costs with tax)
