@@ -23,6 +23,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
   IconButton,
   InputAdornment,
   Avatar,
@@ -61,6 +62,7 @@ import {
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ArrowDropDown as ArrowDropDownIcon,
   Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
@@ -161,6 +163,10 @@ const WorkshopPage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
+  
+  // State for invoices menu
+  const [invoicesMenuAnchor, setInvoicesMenuAnchor] = useState(null);
+  const invoicesMenuOpen = Boolean(invoicesMenuAnchor);
   
   // Enhanced validation dialog state (from Finance page)
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -3425,12 +3431,25 @@ const WorkshopPage = () => {
                   {selectedOrder.allocation && selectedOrder.allocation.allocations ? 'Edit Allocation' : 'Allocate'}
                 </Button>
 
-                {/* Invoices Button */}
+                {/* Invoices Button with Menu */}
                 <Button
                   variant="contained"
                   size="medium"
-                  startIcon={<AssignmentIcon />}
-                  onClick={() => navigate(`/admin/invoices?orderId=${selectedOrder.id}`)}
+                  type="button"
+                  aria-controls={invoicesMenuOpen ? 'invoices-menu' : undefined}
+                  aria-haspopup="true"
+                  aria-expanded={invoicesMenuOpen ? 'true' : undefined}
+                  startIcon={<ReceiptIcon sx={{ color: '#000000' }} />}
+                  endIcon={<ArrowDropDownIcon sx={{ color: '#000000' }} />}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!selectedOrder) {
+                      showError('Please select an order first');
+                      return;
+                    }
+                    setInvoicesMenuAnchor(event.currentTarget);
+                  }}
                   sx={{
                     background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                     color: '#000000',
@@ -3444,6 +3463,54 @@ const WorkshopPage = () => {
                 >
                   Invoices
                 </Button>
+                <Menu
+                  id="invoices-menu"
+                  anchorEl={invoicesMenuAnchor}
+                  open={invoicesMenuOpen}
+                  onClose={() => setInvoicesMenuAnchor(null)}
+                  MenuListProps={{
+                    'aria-labelledby': 'invoices-button',
+                  }}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                  PaperProps={{
+                    sx: {
+                      mt: 1,
+                      minWidth: 200,
+                      backgroundColor: '#2a2a2a',
+                      border: '1px solid #444',
+                      '& .MuiMenuItem-root': {
+                        color: '#ffffff',
+                        '&:hover': {
+                          backgroundColor: '#3a3a3a',
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem onClick={() => {
+                    setInvoicesMenuAnchor(null);
+                    if (selectedOrder) {
+                      navigate(`/admin/invoices?orderId=${selectedOrder.id}`);
+                    }
+                  }}>
+                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
+                    Regular Invoices
+                  </MenuItem>
+                  <MenuItem onClick={() => {
+                    setInvoicesMenuAnchor(null);
+                    navigate('/admin/corporate-invoices');
+                  }}>
+                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
+                    Corporate Invoices
+                  </MenuItem>
+                </Menu>
 
                 {/* Send Completion Email Button */}
                 <Button

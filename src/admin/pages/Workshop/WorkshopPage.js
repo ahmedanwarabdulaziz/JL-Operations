@@ -23,6 +23,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
   IconButton,
   InputAdornment,
   Avatar,
@@ -60,11 +61,13 @@ import {
   Check as CheckIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ArrowDropDown as ArrowDropDownIcon,
   Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../shared/services/emailService';
 
@@ -209,6 +212,7 @@ const WorkshopPage = () => {
   const [sendEmailChecked, setSendEmailChecked] = useState(true);
   const [includeReviewChecked, setIncludeReviewChecked] = useState(true);
   
+  const navigate = useNavigate();
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
@@ -216,6 +220,48 @@ const WorkshopPage = () => {
   const { treatments, loading: treatmentsLoading } = useTreatments();
   const { onFocus: handleAutoSelect } = useAutoSelect();
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  
+  // State for invoices menu
+  const [invoicesMenuAnchor, setInvoicesMenuAnchor] = useState(null);
+  const invoicesMenuOpen = Boolean(invoicesMenuAnchor);
+
+  // Handler to open invoices menu
+  const handleInvoicesMenuClick = useCallback((event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (!selectedOrder) {
+      showError('Please select an order first');
+      return;
+    }
+    if (event && event.currentTarget) {
+      setInvoicesMenuAnchor(event.currentTarget);
+    }
+  }, [selectedOrder, showError]);
+
+  // Handler to close invoices menu
+  const handleInvoicesMenuClose = () => {
+    setInvoicesMenuAnchor(null);
+  };
+
+  // Handler to navigate to regular invoices page
+  const handleNavigateToRegularInvoices = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    handleInvoicesMenuClose();
+    if (selectedOrder) {
+      navigate(`/admin/invoices?orderId=${selectedOrder.id}`);
+    }
+  };
+
+  // Handler to navigate to corporate invoices page
+  const handleNavigateToCorporateInvoices = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    handleInvoicesMenuClose();
+    navigate('/admin/corporate-invoices');
+  };
 
   // Fetch invoice statuses
   const fetchInvoiceStatuses = async () => {
@@ -2046,6 +2092,98 @@ const WorkshopPage = () => {
                 >
                   {sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}
                 </Button>
+
+                {/* Invoices Button with Menu */}
+                <Button
+                  variant="contained"
+                  size="medium"
+                  type="button"
+                  aria-controls={invoicesMenuOpen ? 'invoices-menu' : undefined}
+                  aria-haspopup="true"
+                  aria-expanded={invoicesMenuOpen ? 'true' : undefined}
+                  startIcon={<ReceiptIcon sx={{ color: '#000000' }} />}
+                  endIcon={<ArrowDropDownIcon sx={{ color: '#000000' }} />}
+                  onClick={handleInvoicesMenuClick}
+                  disabled={!selectedOrder}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: 2,
+                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                    color: '#000000',
+                    border: '3px solid #f27921',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                    position: 'relative',
+                    '&:hover': {
+                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                      border: '3px solid #e06810',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)',
+                      transform: 'translateY(-1px)'
+                    },
+                    '&:disabled': {
+                      background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                      border: '3px solid #666666',
+                      color: '#666666',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                    },
+                    transition: 'all 0.3s ease',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '50%',
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                      borderRadius: '6px 6px 0 0',
+                      pointerEvents: 'none'
+                    }
+                  }}
+                >
+                  Invoices
+                </Button>
+                <Menu
+                  id="invoices-menu"
+                  anchorEl={invoicesMenuAnchor}
+                  open={invoicesMenuOpen}
+                  onClose={handleInvoicesMenuClose}
+                  MenuListProps={{
+                    'aria-labelledby': 'invoices-button',
+                  }}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                  PaperProps={{
+                    sx: {
+                      mt: 1,
+                      minWidth: 200,
+                      backgroundColor: '#2a2a2a',
+                      border: '1px solid #444',
+                      '& .MuiMenuItem-root': {
+                        color: '#ffffff',
+                        '&:hover': {
+                          backgroundColor: '#3a3a3a',
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem onClick={handleNavigateToRegularInvoices}>
+                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
+                    Regular Invoices
+                  </MenuItem>
+                  <MenuItem onClick={handleNavigateToCorporateInvoices}>
+                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
+                    Corporate Invoices
+                  </MenuItem>
+                </Menu>
               </Box>
             </Box>
 

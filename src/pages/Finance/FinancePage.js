@@ -28,11 +28,9 @@ import {
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  AccountBalance as AccountBalanceIcon,
   Refresh as RefreshIcon,
   Visibility as VisibilityIcon,
-  Close as CloseIcon,
-  Print as PrintIcon
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -42,7 +40,7 @@ import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { buttonStyles } from '../../styles/buttonStyles';
 import { formatDateOnly, toDateObject } from '../../utils/dateUtils';
 import { CheckCircle, Cancel } from '@mui/icons-material';
-import { generateInvoicePreviewHtml, calculateInvoiceTotals } from '../../shared/utils/invoicePreview';
+import InvoicePreviewDialog from '../../shared/components/InvoicePreviewDialog';
 
 const FinancePage = () => {
   const [orders, setOrders] = useState([]);
@@ -52,7 +50,6 @@ const FinancePage = () => {
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState(null);
-  const [previewHtml, setPreviewHtml] = useState('');
   const [selectedYear, setSelectedYear] = useState(null);
   const [selectedMonths, setSelectedMonths] = useState([]);
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
@@ -222,57 +219,11 @@ const FinancePage = () => {
   const handlePreviewInvoice = (order) => {
     try {
       setPreviewOrder(order);
-      
-      // Normalize order structure for invoice preview
-      // Corporate orders use furnitureGroups, regular orders use furnitureData.groups
-      const normalizedOrder = {
-        ...order,
-        paymentData: order.orderType === 'corporate' 
-          ? (order.paymentDetails || {})
-          : (order.paymentData || {}),
-        // Normalize furniture data structure
-        furnitureData: order.orderType === 'corporate' && order.furnitureGroups
-          ? { groups: order.furnitureGroups }
-          : (order.furnitureData || { groups: [] }),
-        // Normalize personal info for corporate orders
-        personalInfo: order.orderType === 'corporate'
-          ? {
-              customerName: order.corporateCustomer?.corporateName || 'N/A',
-              email: order.contactPerson?.email || order.corporateCustomer?.email || '',
-              phone: order.contactPerson?.phone || order.corporateCustomer?.phone || '',
-              address: order.corporateCustomer?.address || ''
-            }
-          : (order.personalInfo || {})
-      };
-      
-      // Generate invoice preview HTML
-      const totals = calculateInvoiceTotals(normalizedOrder, materialTaxRates);
-      const html = generateInvoicePreviewHtml(normalizedOrder, totals, materialTaxRates);
-      setPreviewHtml(html);
-      
       setPreviewDialogOpen(true);
     } catch (error) {
-      console.error('Error generating invoice preview:', error);
-      showError('Failed to generate invoice preview');
+      console.error('Error opening invoice preview:', error);
+      showError('Failed to open invoice preview');
     }
-  };
-
-  // Handle print
-  const handlePrint = () => {
-    if (!previewHtml) return;
-    
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
-    if (!printWindow) {
-      showError('Unable to open print window. Pop-up might be blocked.');
-      return;
-    }
-    
-    printWindow.document.write(previewHtml);
-    printWindow.document.close();
-    
-    printWindow.onload = () => {
-      printWindow.print();
-    };
   };
 
   // Get available years and months from orders
@@ -822,125 +773,12 @@ const FinancePage = () => {
       </TableContainer>
 
       {/* Invoice Preview Dialog */}
-      <Dialog 
-        open={previewDialogOpen} 
+      <InvoicePreviewDialog
+        open={previewDialogOpen}
         onClose={() => setPreviewDialogOpen(false)}
-        maxWidth="lg"
-        fullWidth
-        PaperProps={{
-          sx: {
-            backgroundColor: '#3a3a3a',
-            border: '2px solid #b98f33',
-            borderRadius: '10px',
-            color: '#ffffff',
-            maxHeight: '90vh'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
-          color: '#000000',
-          fontWeight: 'bold',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid #b98f33'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AccountBalanceIcon sx={{ color: '#000000', fontSize: 28 }} />
-            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-              Invoice Preview - {previewOrder?.orderDetails?.billInvoice || 'N/A'}
-            </Typography>
-          </Box>
-          <IconButton
-            onClick={() => setPreviewDialogOpen(false)}
-            sx={{
-              color: '#000000',
-              '&:hover': {
-                backgroundColor: 'rgba(0,0,0,0.1)'
-              }
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ 
-          p: 2,
-          backgroundColor: '#3a3a3a',
-          overflow: 'auto',
-          display: 'flex',
-          justifyContent: 'center',
-          '&::-webkit-scrollbar': {
-            width: '8px'
-          },
-          '&::-webkit-scrollbar-track': {
-            background: '#2a2a2a'
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: '#b98f33',
-            borderRadius: '4px'
-          }
-        }}>
-          <Box sx={{ 
-            backgroundColor: '#ffffff',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            overflow: 'hidden',
-            width: '100%'
-          }}>
-            <iframe
-              srcDoc={previewHtml}
-              style={{
-                width: '100%',
-                minHeight: '600px',
-                border: 'none',
-                display: 'block'
-              }}
-              title="Invoice Preview"
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ 
-          backgroundColor: '#3a3a3a',
-          borderTop: '1px solid #b98f33',
-          p: 2,
-          gap: 2
-        }}>
-          <Button
-            onClick={() => setPreviewDialogOpen(false)}
-            sx={{
-              color: '#ffffff',
-              borderColor: '#666666',
-              '&:hover': {
-                borderColor: '#b98f33',
-                backgroundColor: 'rgba(185, 143, 51, 0.1)'
-              }
-            }}
-            variant="outlined"
-          >
-            Close
-          </Button>
-          <Button
-            onClick={handlePrint}
-            variant="contained"
-            startIcon={<PrintIcon />}
-            sx={{
-              background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
-              color: '#000000',
-              fontWeight: 'bold',
-              border: '2px solid #8b6b1f',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 100%)',
-                transform: 'translateY(-1px)',
-                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
-              }
-            }}
-          >
-            Print
-          </Button>
-        </DialogActions>
-      </Dialog>
+        order={previewOrder}
+        materialTaxRates={materialTaxRates}
+      />
 
       {/* Status Update Dialog */}
       <Dialog 
