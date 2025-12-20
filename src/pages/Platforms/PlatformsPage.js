@@ -35,7 +35,7 @@ import {
   Public as PlatformIcon,
   Description as DescriptionIcon
 } from '@mui/icons-material';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { formatDate, formatDateOnly } from '../../utils/dateUtils';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { db } from '../../firebase/config';

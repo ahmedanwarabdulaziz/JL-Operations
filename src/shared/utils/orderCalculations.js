@@ -77,9 +77,11 @@ export const calculateOrderTotal = (order) => {
   let itemsSubtotal = 0;
   let taxableAmount = 0;
   
-  // Add furniture costs (supports both old and new field structures)
-  if (order.furnitureData?.groups) {
-    order.furnitureData.groups.forEach(group => {
+  // Support both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
       // Material costs
       const materialTotal = (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       itemsSubtotal += materialTotal;
@@ -113,12 +115,12 @@ export const calculateOrderTotal = (order) => {
   const taxAmount = taxableAmount * 0.13;
   
   // Add pickup & delivery cost (not taxable)
-  if (order.paymentData?.pickupDeliveryEnabled) {
-    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+  // Support both regular orders (paymentData) and corporate orders (paymentDetails)
+  const paymentData = order.paymentData || order.paymentDetails || {};
+  if (paymentData.pickupDeliveryEnabled) {
+    const baseCost = parseFloat(paymentData.pickupDeliveryCost) || 0;
+    const serviceType = paymentData.pickupDeliveryServiceType || 'both';
     const calculatedCost = calculatePickupDeliveryCost(baseCost, serviceType);
-    
-
     
     itemsSubtotal += calculatedCost;
   }
@@ -133,9 +135,11 @@ export const calculateOrderTotal = (order) => {
 export const calculateOrderTotalWithoutTax = (order) => {
   let total = 0;
   
-  // Add furniture costs (supports both old and new field structures)
-  if (order.furnitureData?.groups) {
-    order.furnitureData.groups.forEach(group => {
+  // Support both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
       // Material costs
       total += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       
@@ -160,9 +164,11 @@ export const calculateOrderTotalWithoutTax = (order) => {
   }
 
   // Add pickup & delivery cost
-  if (order.paymentData?.pickupDeliveryEnabled) {
-    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+  // Support both regular orders (paymentData) and corporate orders (paymentDetails)
+  const paymentData = order.paymentData || order.paymentDetails || {};
+  if (paymentData.pickupDeliveryEnabled) {
+    const baseCost = parseFloat(paymentData.pickupDeliveryCost) || 0;
+    const serviceType = paymentData.pickupDeliveryServiceType || 'both';
     total += calculatePickupDeliveryCost(baseCost, serviceType);
   }
 
@@ -175,8 +181,11 @@ export const calculateOrderTotalWithoutTax = (order) => {
 export const calculateOrderTax = (order) => {
   let taxableAmount = 0;
   
-  if (order.furnitureData?.groups) {
-    order.furnitureData.groups.forEach(group => {
+  // Support both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
       // Materials are taxable
       taxableAmount += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       
@@ -203,8 +212,11 @@ export const getOrderCostBreakdown = (order) => {
     total: 0
   };
 
-  if (order.furnitureData?.groups) {
-    order.furnitureData.groups.forEach(group => {
+  // Support both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
       // Material costs
       breakdown.material += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       
@@ -228,10 +240,11 @@ export const getOrderCostBreakdown = (order) => {
     });
   }
 
-  // Pickup & delivery
-  if (order.paymentData?.pickupDeliveryEnabled) {
-    const baseCost = parseFloat(order.paymentData.pickupDeliveryCost) || 0;
-    const serviceType = order.paymentData.pickupDeliveryServiceType || 'both';
+  // Pickup & delivery - handle both regular and corporate orders
+  const paymentData = order.paymentData || order.paymentDetails || {};
+  if (paymentData.pickupDeliveryEnabled) {
+    const baseCost = parseFloat(paymentData.pickupDeliveryCost) || 0;
+    const serviceType = paymentData.pickupDeliveryServiceType || 'both';
     breakdown.pickupDelivery = calculatePickupDeliveryCost(baseCost, serviceType);
   }
 
@@ -246,8 +259,11 @@ export const getOrderCostBreakdown = (order) => {
 export const calculateOrderCost = (order, materialTaxRates = {}) => {
   let totalCost = 0;
 
-  if (order.furnitureData?.groups) {
-    order.furnitureData.groups.forEach(group => {
+  // Support both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+  const furnitureGroups = order.furnitureData?.groups || order.furnitureGroups || [];
+  
+  if (furnitureGroups.length > 0) {
+    furnitureGroups.forEach(group => {
       // JL Material costs with tax
       const jlMaterialPrice = parseFloat(group.materialJLPrice) || 0;
       const jlMaterialQnty = parseFloat(group.materialJLQnty) || 0;

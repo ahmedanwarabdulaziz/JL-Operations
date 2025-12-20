@@ -74,7 +74,7 @@ import {
   AccessTime as AccessTimeIcon,
   Business as BusinessIcon
 } from '@mui/icons-material';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
 
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
@@ -85,6 +85,7 @@ import { db } from '../../firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
+import { createAllocation } from '../../shared/utils/allocationUtils';
 import { useAutoSelect } from '../../hooks/useAutoSelect';
 import { useNavigate } from 'react-router-dom';
 import { buttonStyles } from '../../styles/buttonStyles';
@@ -337,26 +338,31 @@ const WorkshopPage = () => {
     const endMonth = end.getMonth();
     const endYear = end.getFullYear();
     
+    // Convert to 1-indexed months (1-12) for new allocation format
+    const startMonth1Indexed = startMonth + 1;
+    const endMonth1Indexed = endMonth + 1;
+    
     if (startMonth === endMonth && startYear === endYear) {
-      return [{ month: startMonth, year: startYear, percentage: 100 }];
+      return [{ month: startMonth1Indexed, year: startYear, percentage: 100 }];
     }
     
     const allocations = [];
     let currentDate = new Date(start);
     
     while (currentDate <= end) {
-      const month = currentDate.getMonth();
+      const monthIndex = currentDate.getMonth(); // 0-indexed
+      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
       const year = currentDate.getFullYear();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
       const daysInOrder = Math.min(
         daysInMonth - currentDate.getDate() + 1,
         end.getDate() - currentDate.getDate() + 1
       );
       
       const percentage = (daysInOrder / totalDays) * 100;
-      allocations.push({ month, year, percentage });
+      allocations.push({ month: month, year: year, percentage: percentage });
       
-      currentDate = new Date(year, month + 1, 1);
+      currentDate = new Date(year, monthIndex + 1, 1);
     }
     
     return allocations;
@@ -373,9 +379,13 @@ const WorkshopPage = () => {
     const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
     
     while (current <= end) {
+      // Use 1-indexed months (1-12) to match new allocation format
+      const month = current.getMonth() + 1; // Convert from 0-indexed to 1-indexed
+      const year = current.getFullYear();
+      
       months.push({
-        month: current.getMonth(),
-        year: current.getFullYear(),
+        month: month, // 1-indexed (1-12)
+        year: year,
         label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         percentage: months.length === 0 ? 100 : 0 // Default 100% to first month
       });
@@ -389,17 +399,19 @@ const WorkshopPage = () => {
   // Generate 5-month allocation table (current ± 2 months) - fallback
   const generateMonthlyAllocations = (order) => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
+    const currentMonth = currentDate.getMonth(); // 0-indexed (0-11)
     const currentYear = currentDate.getFullYear();
     
     const months = [];
     for (let i = -2; i <= 2; i++) {
-      const month = (currentMonth + i + 12) % 12;
+      const monthIndex = (currentMonth + i + 12) % 12; // 0-indexed
       const year = currentYear + Math.floor((currentMonth + i) / 12);
+      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
+      
       months.push({
-        month,
-        year,
-        label: new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        month: month, // 1-indexed (1-12)
+        year: year,
+        label: new Date(year, monthIndex).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         percentage: i === 0 ? 100 : 0 // Default 100% to current month
       });
     }
@@ -728,68 +740,19 @@ const WorkshopPage = () => {
         return;
       }
 
-      // Calculate the actual allocation date range from the allocations
-      const allocationMonths = standaloneMonthlyAllocations.map(allocation => ({
-        year: allocation.year,
-        month: allocation.month
-      })).sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.month - b.month;
-      });
-
-      // Use the dates that the user actually entered in the allocation dialog
-      const actualStartDate = standaloneStartDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
-      const actualEndDate = standaloneEndDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
-
-      // Convert dates to Firestore Timestamps for consistent storage
-      const { Timestamp } = await import('firebase/firestore');
-      const firestoreStartDate = Timestamp.fromDate(actualStartDate);
-      const firestoreEndDate = Timestamp.fromDate(actualEndDate);
-      const firestoreNow = Timestamp.fromDate(new Date());
-
-      // Prepare allocation data with detailed information
-      const allocationData = {
-        method: 'manual',
-        allocations: standaloneMonthlyAllocations.map(allocation => {
-          const revenue = (standaloneTotalRevenue * allocation.percentage / 100);
-          const cost = (standaloneTotalCost * allocation.percentage / 100);
-          const profit = revenue - cost;
-          
-          return {
-            month: allocation.month,
-            year: allocation.year,
-            percentage: allocation.percentage,
-            revenue: revenue,
-            cost: cost,
-            profit: profit,
-            monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: firestoreNow
-          };
-        }),
-        appliedAt: firestoreNow,
-        originalRevenue: standaloneTotalRevenue,
-        originalCost: standaloneTotalCost,
-        originalProfit: standaloneTotalRevenue - standaloneTotalCost,
-        dateRange: {
-          startDate: firestoreStartDate,
-          endDate: firestoreEndDate
-        },
-        recalculatedAt: firestoreNow
+      // Calculate profit data for allocation
+      const profitData = {
+        revenue: standaloneTotalRevenue,
+        cost: standaloneTotalCost,
+        profit: standaloneTotalRevenue - standaloneTotalCost
       };
+
+      // Create allocation using new simplified format
+      const allocationData = createAllocation(standaloneMonthlyAllocations, profitData);
 
       // Prepare update data (only allocation, no status change)
       const updateData = {
-        allocation: allocationData,
-        startDate: firestoreStartDate,
-        endDate: firestoreEndDate
-      };
-
-      // Force update the order dates to match the actual allocation range
-      updateData.orderDetails = {
-        ...selectedOrderForStandaloneAllocation.orderDetails,
-        startDate: firestoreStartDate,
-        endDate: firestoreEndDate,
-        lastUpdated: firestoreNow
+        allocation: allocationData
       };
 
       // Force hide allocation dialog and show confirmation
@@ -808,7 +771,6 @@ const WorkshopPage = () => {
         'Confirm Allocation',
         `Are you sure you want to apply this allocation?\n\n` +
         `Order: ${selectedOrderForStandaloneAllocation.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation.id}\n` +
-        `Date Range: ${formatDateRange(actualStartDate, actualEndDate)}\n` +
         `Allocations: ${allocationSummary}\n` +
         `Total Revenue: ${formatCurrency(standaloneTotalRevenue)}\n` +
         `Total Cost: ${formatCurrency(standaloneTotalCost)}\n` +
@@ -913,69 +875,20 @@ const WorkshopPage = () => {
         return;
       }
 
-      // Calculate the actual allocation date range from the allocations
-      const allocationMonths = monthlyAllocations.map(allocation => ({
-        year: allocation.year,
-        month: allocation.month
-      })).sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.month - b.month;
-      });
-
-      // Use the dates that the user actually entered in the allocation dialog
-      const actualStartDate = startDate || new Date(allocationMonths[0].year, allocationMonths[0].month - 1, 1);
-      const actualEndDate = endDate || new Date(allocationMonths[allocationMonths.length - 1].year, allocationMonths[allocationMonths.length - 1].month, 0);
-
-      // Convert dates to Firestore Timestamps for consistent storage
-      const { Timestamp } = await import('firebase/firestore');
-      const firestoreStartDate = Timestamp.fromDate(actualStartDate);
-      const firestoreEndDate = Timestamp.fromDate(actualEndDate);
-      const firestoreNow = Timestamp.fromDate(new Date());
-
-      // Prepare allocation data with detailed information
-      const allocationData = {
-        method: 'manual',
-        allocations: monthlyAllocations.map(allocation => {
-          const revenue = (totalRevenue * allocation.percentage / 100);
-          const cost = (totalCost * allocation.percentage / 100);
-          const profit = revenue - cost;
-          
-          return {
-            month: allocation.month,
-            year: allocation.year,
-            percentage: allocation.percentage,
-            revenue: revenue,
-            cost: cost,
-            profit: profit,
-            monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: firestoreNow
-          };
-        }),
-        appliedAt: firestoreNow,
-        originalRevenue: totalRevenue,
-        originalCost: totalCost,
-        originalProfit: totalRevenue - totalCost,
-        dateRange: {
-          startDate: firestoreStartDate,
-          endDate: firestoreEndDate
-        },
-        recalculatedAt: firestoreNow
+      // Calculate profit data for allocation
+      const profitData = {
+        revenue: totalRevenue,
+        cost: totalCost,
+        profit: totalRevenue - totalCost
       };
+
+      // Create allocation using new simplified format
+      const allocationData = createAllocation(monthlyAllocations, profitData);
 
       // Prepare update data
       const updateData = {
         invoiceStatus: selectedOrderForAllocation.newStatus?.value || 'done',
-        allocation: allocationData,
-        startDate: firestoreStartDate,
-        endDate: firestoreEndDate
-      };
-
-      // Force update the order dates to match the actual allocation range
-      updateData.orderDetails = {
-        ...selectedOrderForAllocation.orderDetails,
-        startDate: firestoreStartDate,
-        endDate: firestoreEndDate,
-        lastUpdated: firestoreNow
+        allocation: allocationData
       };
 
       // Force hide allocation dialog and show confirmation
@@ -986,13 +899,7 @@ const WorkshopPage = () => {
       await new Promise(resolve => setTimeout(resolve, 200));
       
       // Show enhanced confirmation dialog with email options
-      // Filter allocations to only show those within the actual date range
-      const filteredAllocations = monthlyAllocations.filter(allocation => {
-        const allocationDate = new Date(allocation.year, allocation.month - 1, 1);
-        return allocationDate >= actualStartDate && allocationDate <= actualEndDate;
-      });
-      
-      const allocationSummary = filteredAllocations.map(allocation => 
+      const allocationSummary = monthlyAllocations.map(allocation => 
         `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
       ).join(', ');
 

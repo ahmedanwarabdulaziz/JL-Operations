@@ -40,7 +40,7 @@ import {
   Archive as ArchiveIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { validateCustomerInvoiceNumber, getNextCustomerInvoiceNumber } from '../../../utils/invoiceNumberUtils';
 import { db } from '../../../firebase/config';

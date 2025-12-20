@@ -54,7 +54,7 @@ import jsPDF from 'jspdf';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderTax, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../../shared/utils/materialTaxRates';
 import autoTable from 'jspdf-autotable';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
 

@@ -51,6 +51,7 @@ import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderC
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { formatCurrency } from '../shared/utils/plCalculations';
 import { formatDate } from '../shared/utils/plCalculations';
+import { normalizeAllocation } from '../shared/utils/allocationUtils';
 
 const EndDonePage = () => {
   const [orders, setOrders] = useState([]);
@@ -214,16 +215,20 @@ const EndDonePage = () => {
   const getAllocationInfo = (order) => {
     if (!order.allocation) return null;
     
-    const totalAllocations = order.allocation.allocations?.length || 0;
-    const method = order.allocation.method || 'unknown';
-    const appliedAt = order.allocation.appliedAt;
-    const originalRevenue = calculateOrderProfit(order, materialTaxRates).revenue;
+    // Normalize allocation to handle both old and new formats
+    const profitData = calculateOrderProfit(order, materialTaxRates);
+    const normalizedAllocation = normalizeAllocation(order.allocation, profitData);
+    
+    if (!normalizedAllocation || !normalizedAllocation.allocations) return null;
+    
+    const totalAllocations = normalizedAllocation.allocations.length;
+    const appliedAt = normalizedAllocation.appliedAt;
+    const originalRevenue = profitData.revenue;
     
     return {
       totalAllocations,
-      method,
       originalRevenue,
-      appliedAt: appliedAt?.toDate ? appliedAt.toDate() : new Date(appliedAt)
+      appliedAt: typeof appliedAt === 'string' ? new Date(appliedAt) : (appliedAt?.toDate ? appliedAt.toDate() : new Date(appliedAt))
     };
   };
 
@@ -723,16 +728,6 @@ const EndDonePage = () => {
                                     }}>
                                       <CardContent>
                                         <Grid container spacing={3}>
-                                          <Grid item xs={12} sm={3}>
-                                            <Box sx={{ textAlign: 'center' }}>
-                                              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                                {getAllocationInfo(order).method.toUpperCase()}
-                                              </Typography>
-                                              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                                Allocation Method
-                                              </Typography>
-                                            </Box>
-                                          </Grid>
                                           <Grid item xs={12} sm={3}>
                                             <Box sx={{ textAlign: 'center' }}>
                                               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>

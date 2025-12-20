@@ -15,7 +15,7 @@ import {
   Divider
 } from '@mui/material';
 import { Person as PersonIcon, Warning as WarningIcon } from '@mui/icons-material';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { buttonStyles } from '../../styles/buttonStyles';
 
 const FastOrderStep1 = ({ 

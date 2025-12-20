@@ -56,7 +56,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { calculateOrderProfit, normalizePaymentData } from '../../utils/orderCalculations';
 import { formatCurrency, formatPercentage, calculateTimeBasedAllocation, processOrdersForPL } from '../../utils/plCalculations';
 import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';

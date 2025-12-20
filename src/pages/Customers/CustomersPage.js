@@ -31,7 +31,7 @@ import {
   LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { DataGrid } from '@mui/x-data-grid';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { useFirebase } from '../../hooks/useFirebase';
 import { collection, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';

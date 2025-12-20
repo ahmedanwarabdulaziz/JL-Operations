@@ -72,7 +72,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 
 // Sortable Table Row Component
 const SortableTableRow = ({ 

@@ -47,6 +47,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ArchiveIcon from '@mui/icons-material/Archive';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import TimelineIcon from '@mui/icons-material/Timeline';
 
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
@@ -63,10 +64,14 @@ const menuItems = [
   { text: 'Extra Expenses', path: '/admin/extra-expenses', icon: <AttachMoneyIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
   { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
-  { text: 'Corporate', path: '/admin/corporate-customers', icon: <CorporateFareIcon /> },
+  { text: 'Allocation Orders', path: '/admin/allocation-orders', icon: <TimelineIcon /> },
   { text: 'Completed Orders', path: '/admin/end-done', icon: <CheckCircleIcon /> },
   { text: 'Cancelled Orders', path: '/admin/end-cancelled', icon: <CancelIcon /> },
   { text: 'Pending Orders', path: '/admin/pending-orders', icon: <AccessTimeIcon /> },
+];
+
+const corporateItems = [
+  { text: 'Corporate Customers', path: '/admin/corporate-customers', icon: <CorporateFareIcon /> },
 ];
 
 
@@ -76,6 +81,7 @@ const settingsItems = [
   { text: 'Platforms', path: '/admin/platforms', icon: <PublicIcon /> },
   { text: 'Status Management', path: '/admin/status-management', icon: <ManageAccountsIcon /> },
   { text: 'Website Management', path: '/admin/website', icon: <WebIcon /> },
+  { text: 'Control', path: '/admin/control', icon: <StorageIcon /> },
 ];
 
 const underConstructionItems = [
@@ -97,6 +103,7 @@ const Sidebar = ({ onToggle, onPin }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [underConstructionOpen, setUnderConstructionOpen] = useState(false);
+  const [corporateOpen, setCorporateOpen] = useState(false);
 
 
   const handleNavigation = (path) => {
@@ -109,6 +116,10 @@ const Sidebar = ({ onToggle, onPin }) => {
 
   const handleUnderConstructionToggle = () => {
     setUnderConstructionOpen(!underConstructionOpen);
+  };
+
+  const handleCorporateToggle = () => {
+    setCorporateOpen(!corporateOpen);
   };
 
   const toggleSidebar = () => {
@@ -318,6 +329,101 @@ const Sidebar = ({ onToggle, onPin }) => {
             </ListItemButton>
           </ListItem>
         ))}
+
+        {/* Corporate Section */}
+        <ListItem disablePadding sx={{ mb: 1 }}>
+          <ListItemButton
+            onClick={handleCorporateToggle}
+            sx={{
+              mx: 1,
+              borderRadius: 1,
+              minHeight: 48,
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              color: '#000000',
+              backgroundColor: 'rgba(0,0,0,0.1)',
+              '&:hover': {
+                backgroundColor: 'rgba(0,0,0,0.2)',
+              },
+            }}
+          >
+            <Box sx={{ 
+              color: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isExpanded ? 'flex-start' : 'center',
+              width: '100%'
+            }}>
+              <CorporateFareIcon />
+              {isExpanded && (
+                <>
+                  <ListItemText 
+                    primary="Corporate" 
+                    sx={{
+                      ml: 2,
+                      color: '#000000',
+                      '& .MuiListItemText-primary': {
+                        fontWeight: 600,
+                        color: '#000000',
+                      },
+                    }}
+                  />
+                  {corporateOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </>
+              )}
+            </Box>
+          </ListItemButton>
+        </ListItem>
+
+        <Collapse in={corporateOpen && isExpanded} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {corporateItems.map((item) => (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => handleNavigation(item.path)}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    mx: 1,
+                    ml: 3,
+                    borderRadius: 1,
+                    minHeight: 40,
+                    color: '#000000',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0,0,0,0.15)',
+                    },
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(0,0,0,0.25)',
+                      color: '#000000',
+                      '&:hover': {
+                        backgroundColor: 'rgba(0,0,0,0.25)',
+                      },
+                    },
+                  }}
+                >
+                  <Box sx={{ 
+                    color: '#000000',
+                    display: 'flex',
+                    alignItems: 'center',
+                    width: '100%'
+                  }}>
+                    {item.icon}
+                    <ListItemText 
+                      primary={item.text} 
+                      sx={{
+                        ml: 2,
+                        color: '#000000',
+                        '& .MuiListItemText-primary': {
+                          fontWeight: 400,
+                          fontSize: '0.9rem',
+                          color: '#000000',
+                        },
+                      }}
+                    />
+                  </Box>
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
 
         {/* Settings Section */}
         <ListItem disablePadding sx={{ mb: 1 }}>

@@ -79,6 +79,7 @@ import { db } from '../shared/firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
+import { createAllocation } from '../shared/utils/allocationUtils';
 import { formatDate, formatDateOnly, formatDateRange } from '../../../utils/dateUtils';
 import { useAutoSelect } from '../shared/hooks/useAutoSelect';
 
@@ -316,26 +317,31 @@ const WorkshopPage = () => {
     const endMonth = end.getMonth();
     const endYear = end.getFullYear();
     
+    // Convert to 1-indexed months (1-12) for new allocation format
+    const startMonth1Indexed = startMonth + 1;
+    const endMonth1Indexed = endMonth + 1;
+    
     if (startMonth === endMonth && startYear === endYear) {
-      return [{ month: startMonth, year: startYear, percentage: 100 }];
+      return [{ month: startMonth1Indexed, year: startYear, percentage: 100 }];
     }
     
     const allocations = [];
     let currentDate = new Date(start);
     
     while (currentDate <= end) {
-      const month = currentDate.getMonth();
+      const monthIndex = currentDate.getMonth(); // 0-indexed
+      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
       const year = currentDate.getFullYear();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
       const daysInOrder = Math.min(
         daysInMonth - currentDate.getDate() + 1,
         end.getDate() - currentDate.getDate() + 1
       );
       
       const percentage = (daysInOrder / totalDays) * 100;
-      allocations.push({ month, year, percentage });
+      allocations.push({ month: month, year: year, percentage: percentage });
       
-      currentDate = new Date(year, month + 1, 1);
+      currentDate = new Date(year, monthIndex + 1, 1);
     }
     
     return allocations;
@@ -352,9 +358,14 @@ const WorkshopPage = () => {
     const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
     
     while (current <= end) {
+      // Use 1-indexed months (1-12) to match new allocation format
+      const monthIndex = current.getMonth(); // 0-indexed
+      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
+      const year = current.getFullYear();
+      
       months.push({
-        month: current.getMonth(),
-        year: current.getFullYear(),
+        month: month, // 1-indexed (1-12)
+        year: year,
         label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         percentage: months.length === 0 ? 100 : 0 // Default 100% to first month
       });
@@ -368,17 +379,19 @@ const WorkshopPage = () => {
   // Generate 5-month allocation table (current ± 2 months) - fallback
   const generateMonthlyAllocations = (order) => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
+    const currentMonth = currentDate.getMonth(); // 0-indexed (0-11)
     const currentYear = currentDate.getFullYear();
     
     const months = [];
     for (let i = -2; i <= 2; i++) {
-      const month = (currentMonth + i + 12) % 12;
+      const monthIndex = (currentMonth + i + 12) % 12; // 0-indexed
       const year = currentYear + Math.floor((currentMonth + i) / 12);
+      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
+      
       months.push({
-        month,
-        year,
-        label: new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        month: month, // 1-indexed (1-12)
+        year: year,
+        label: new Date(year, monthIndex).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         percentage: i === 0 ? 100 : 0 // Default 100% to current month
       });
     }
@@ -551,57 +564,21 @@ const WorkshopPage = () => {
         return;
       }
 
-      // Convert dates to Firestore Timestamps for consistent storage
-      const { Timestamp } = await import('firebase/firestore');
-      const firestoreStartDate = startDate ? Timestamp.fromDate(startDate) : null;
-      const firestoreEndDate = endDate ? Timestamp.fromDate(endDate) : null;
-      const firestoreNow = Timestamp.fromDate(new Date());
-
-      // Prepare allocation data with detailed information
-      const allocationData = {
-        method: 'manual',
-        allocations: monthlyAllocations.map(allocation => {
-          const revenue = (totalRevenue * allocation.percentage / 100);
-          const cost = (totalCost * allocation.percentage / 100);
-          const profit = revenue - cost;
-          
-          return {
-            month: allocation.month,
-            year: allocation.year,
-            percentage: allocation.percentage,
-            revenue: revenue,
-            cost: cost,
-            profit: profit,
-            monthKey: `${allocation.year}-${String(allocation.month).padStart(2, '0')}`,
-            calculatedAt: firestoreNow
-          };
-        }),
-        appliedAt: firestoreNow,
-        originalRevenue: totalRevenue,
-        originalCost: totalCost,
-        originalProfit: totalRevenue - totalCost,
-        dateRange: {
-          startDate: firestoreStartDate,
-          endDate: firestoreEndDate
-        },
-        recalculatedAt: firestoreNow
+      // Calculate profit data for allocation
+      const profitData = {
+        revenue: totalRevenue,
+        cost: totalCost,
+        profit: totalRevenue - totalCost
       };
+
+      // Create allocation using new simplified format
+      const allocationData = createAllocation(monthlyAllocations, profitData);
 
       // Prepare update data
       const updateData = {
         invoiceStatus: selectedOrderForAllocation.newStatus?.value || 'done',
         allocation: allocationData
       };
-
-      // Always update dates if they exist (even if they haven't changed)
-      if (startDate && endDate) {
-        updateData.orderDetails = {
-          ...selectedOrderForAllocation.orderDetails,
-          startDate: firestoreStartDate,
-          endDate: firestoreEndDate,
-          lastUpdated: firestoreNow
-        };
-      }
 
       // Force hide allocation dialog and show confirmation
       setAllocationDialogHidden(true);

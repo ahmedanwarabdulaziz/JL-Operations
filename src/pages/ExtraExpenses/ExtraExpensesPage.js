@@ -56,7 +56,7 @@ import {
 import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { formatDate, formatDateOnly } from '../../utils/dateUtils';
 import { buttonStyles } from '../../styles/buttonStyles';
 

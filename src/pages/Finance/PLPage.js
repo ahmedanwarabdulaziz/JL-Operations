@@ -66,7 +66,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { 

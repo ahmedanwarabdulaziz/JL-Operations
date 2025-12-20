@@ -1,5 +1,6 @@
 // P&L calculation utilities
 import { calculateOrderProfit } from './orderCalculations';
+import { normalizeAllocation, getMonthKeyFromAllocation } from './allocationUtils';
 
 /**
  * Calculate time-based allocation for cross-month orders
@@ -57,45 +58,39 @@ export const processOrdersForPL = (orders, materialTaxRates = {}) => {
   orders.forEach(order => {
     const profitData = calculateOrderProfit(order, materialTaxRates);
     
-    // Use allocation dates if available, otherwise fall back to created/status dates
-    let startDate, endDate;
+    // Normalize allocation (handles both old and new formats)
+    const normalizedAllocation = normalizeAllocation(order.allocation, profitData);
     
-    if (order.allocation?.dateRange?.startDate && order.allocation?.dateRange?.endDate) {
-      startDate = order.allocation.dateRange.startDate.toDate ? 
-        order.allocation.dateRange.startDate.toDate() : 
-        new Date(order.allocation.dateRange.startDate);
-      endDate = order.allocation.dateRange.endDate.toDate ? 
-        order.allocation.dateRange.endDate.toDate() : 
-        new Date(order.allocation.dateRange.endDate);
-    } else {
-      startDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
-      endDate = order.statusUpdatedAt?.toDate ? order.statusUpdatedAt.toDate() : startDate;
-    }
+    // Check if order has allocation
+    const hasAllocation = normalizedAllocation && normalizedAllocation.allocations && normalizedAllocation.allocations.length > 0;
     
-    // Check if order spans multiple months OR has manual allocation
+    // Get dates from order (no longer from allocation.dateRange)
+    const startDate = order.createdAt?.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+    const endDate = order.statusUpdatedAt?.toDate ? order.statusUpdatedAt.toDate() : startDate;
+    
+    // Check if order spans multiple months
     const startMonth = startDate.getMonth();
     const startYear = startDate.getFullYear();
     const endMonth = endDate.getMonth();
     const endYear = endDate.getFullYear();
     
     const isCrossMonth = (startYear !== endYear) || (startMonth !== endMonth);
-    const hasManualAllocation = order.allocation?.method === 'manual' && order.allocation?.allocations;
     
     console.log(`Order ${order.id}:`, {
       isCrossMonth,
-      hasManualAllocation,
-      allocation: order.allocation,
+      hasAllocation,
+      allocation: normalizedAllocation,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString()
     });
     
-    if (isCrossMonth || hasManualAllocation) {
+    if (isCrossMonth || hasAllocation) {
       crossMonthOrders.push({
         ...order,
         startDate,
         endDate,
         profitData,
-        allocation: order.allocation || null
+        allocation: normalizedAllocation || null
       });
     } else {
       // Single month order
@@ -118,23 +113,39 @@ export const processOrdersForPL = (orders, materialTaxRates = {}) => {
       console.log(`Order ${order.id} has ${order.allocation.allocations.length} allocations`);
       
       order.allocation.allocations.forEach(allocation => {
+        // Use stored values if available, otherwise calculate from percentage
         const profitData = {
-          revenue: order.profitData.revenue * (allocation.percentage / 100),
-          cost: order.profitData.cost * (allocation.percentage / 100),
-          profit: order.profitData.profit * (allocation.percentage / 100)
+          revenue: allocation.revenue !== undefined 
+            ? allocation.revenue 
+            : order.profitData.revenue * (allocation.percentage / 100),
+          cost: allocation.cost !== undefined 
+            ? allocation.cost 
+            : order.profitData.cost * (allocation.percentage / 100),
+          profit: allocation.profit !== undefined 
+            ? allocation.profit 
+            : order.profitData.profit * (allocation.percentage / 100)
         };
         
-        console.log(`Allocation for ${allocation.monthKey}:`, {
+        // Get monthKey from allocation (handle both old and new formats)
+        const monthKey = getMonthKeyFromAllocation(allocation) || 
+          (allocation.month && allocation.year ? `${allocation.year}-${String(allocation.month).padStart(2, '0')}` : null);
+        
+        if (!monthKey) {
+          console.warn(`Could not determine monthKey for allocation:`, allocation);
+          return;
+        }
+        
+        console.log(`Allocation for ${monthKey}:`, {
           percentage: allocation.percentage,
           revenue: profitData.revenue,
           cost: profitData.cost,
           profit: profitData.profit
         });
         
-        addToPeriodData(monthlyData, allocation.monthKey, profitData);
+        addToPeriodData(monthlyData, monthKey, profitData);
         
         // Add to quarterly and yearly data
-        const [year, month] = allocation.monthKey.split('-');
+        const [year, month] = monthKey.split('-');
         const quarterKey = `${year}-Q${Math.floor((parseInt(month) - 1) / 3) + 1}`;
         const yearKey = year;
         

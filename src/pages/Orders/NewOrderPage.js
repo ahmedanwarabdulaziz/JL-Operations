@@ -24,7 +24,7 @@ import {
 } from '@mui/material';
 import { Warning as WarningIcon, Search as SearchIcon, Person as PersonIcon, Email as EmailIcon, Phone as PhoneIcon, LocationOn as LocationIcon } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { sendEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';

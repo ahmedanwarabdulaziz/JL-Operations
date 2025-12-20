@@ -34,7 +34,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateJLCostAnalysisBeforeTax } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { buttonStyles } from '../../styles/buttonStyles';
@@ -177,8 +177,15 @@ const FinancePage = () => {
     const allocations = order.allocation.allocations;
     const financials = calculateOrderFinancials(order);
     
-    // Format month key (e.g., "2024-01" -> "January 2024")
-    const formatMonthKey = (monthKey) => {
+    // Format month key (e.g., "2024-01" -> "January 2024" or from month/year)
+    const formatMonthKey = (allocation) => {
+      let monthKey = allocation.monthKey;
+      // If no monthKey, generate from month and year
+      if (!monthKey && allocation.month !== undefined && allocation.year !== undefined) {
+        monthKey = `${allocation.year}-${String(allocation.month).padStart(2, '0')}`;
+      }
+      if (!monthKey) return 'N/A';
+      
       const [year, month] = monthKey.split('-');
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                           'July', 'August', 'September', 'October', 'November', 'December'];
@@ -191,14 +198,14 @@ const FinancePage = () => {
       const revenue = allocation.revenue !== undefined 
         ? allocation.revenue 
         : financials.invoiceTotal * (allocation.percentage / 100);
-      const cost = allocation.costs !== undefined 
-        ? allocation.costs 
+      const cost = allocation.cost !== undefined || allocation.costs !== undefined
+        ? (allocation.cost !== undefined ? allocation.cost : allocation.costs)
         : financials.costTotal * (allocation.percentage / 100);
       const profit = allocation.profit !== undefined 
         ? allocation.profit 
         : revenue - cost;
 
-      details += `${formatMonthKey(allocation.monthKey)}:\n`;
+      details += `${formatMonthKey(allocation)}:\n`;
       details += `  Percentage: ${allocation.percentage.toFixed(2)}%\n`;
       if (allocation.days !== undefined) {
         details += `  Days: ${allocation.days}\n`;

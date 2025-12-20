@@ -48,7 +48,7 @@ import {
   TrendingDown as TrendingDownIcon
 } from '@mui/icons-material';
 
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateOrderProfit } from '../../utils/orderCalculations';

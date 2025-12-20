@@ -42,7 +42,7 @@ import {
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { getNextCorporateInvoiceNumber, validateCorporateInvoiceNumber } from '../../utils/invoiceNumberUtils';

@@ -43,7 +43,7 @@ import {
   LocationOn as LocationIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useNotification } from '../../components/Common/NotificationSystem';
+import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import Step5Review from './steps/Step5Review';

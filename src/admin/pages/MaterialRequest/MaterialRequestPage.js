@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material';
 import { collection, getDocs, updateDoc, doc, query, orderBy, addDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
 
 const MaterialRequestPage = () => {

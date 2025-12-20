@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { deleteAllTInvoices } from '../../../utils/deleteTInvoices';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 
 const DeleteTInvoicesPage = () => {
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
-// P&L calculation utilities
-import { calculateOrderProfit } from './orderCalculations';
+// Re-export from shared utils
+export * from '../shared/utils/plCalculations';
 
 /**
  * Calculate time-based allocation for cross-month orders

@@ -24,7 +24,7 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';

@@ -4,7 +4,7 @@ import { CssBaseline } from '@mui/material';
 import theme from './theme/theme';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './components/Auth/AuthContext';
-import { NotificationProvider } from './components/Common/NotificationSystem';
+import { NotificationProvider } from './shared/components/Common/NotificationSystem';
 import { FirebaseProvider } from './contexts/FirebaseContext';
 import MainLayout from './components/Layout/MainLayout';
 import AdminMainLayout from './admin/layouts/MainLayout';
@@ -16,6 +16,7 @@ import EmailTestPage from './pages/Test/EmailTestPage';
 import CustomersPage from './pages/Customers/CustomersPage';
 import CorporateCustomersPage from './admin/pages/CorporateCustomers/CorporateCustomersPage';
 import CorporateCustomerInvoicesPage from './admin/pages/CorporateCustomers/CorporateCustomerInvoicesPage';
+import AllocationOrdersPage from './admin/pages/AllocationOrders/AllocationOrdersPage';
 import OrdersPage from './pages/Orders/OrdersPage';
 import NewOrderPage from './pages/Orders/NewOrderPage';
 import CorporateOrderPage from './pages/Orders/CorporateOrderPage';
@@ -29,7 +30,7 @@ import TaxedInvoicesPage from './admin/pages/TaxedInvoices/TaxedInvoicesPage';
 import DeleteTInvoicesPage from './admin/pages/TaxedInvoices/DeleteTInvoicesPage';
 import MobileInvoicesPage from './admin-mobile/pages/Invoices/MobileInvoicesPage';
 
-import FinancePage from './pages/Finance/FinancePage';
+import FinancePage from './admin/pages/Finance/FinancePage';
 import PLPage from './pages/Finance/PLPage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
@@ -44,6 +45,7 @@ import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
+import ControlPage from './admin/pages/Control/ControlPage';
 
         // Website Management imports
         import AdminWebsiteLayout from './admin/layouts/WebsiteLayout';
@@ -190,6 +192,7 @@ const AppContent = () => {
           <Route path="/admin/customers" element={<CustomersPage />} />
           <Route path="/admin/corporate-customers" element={<CorporateCustomersPage />} />
           <Route path="/admin/corporate-customers/:customerId/invoices" element={<CorporateCustomerInvoicesPage />} />
+          <Route path="/admin/allocation-orders" element={<AllocationOrdersPage />} />
           <Route path="/orders" element={<Navigate to="/admin/orders" replace />} />
           <Route path="/admin/orders" element={<OrdersPage />} />
           <Route path="/orders/new" element={<Navigate to="/admin/orders/new" replace />} />
@@ -226,6 +229,7 @@ const AppContent = () => {
           <Route path="/admin/status-management" element={<StatusManagementPage />} />
           <Route path="/data-management" element={<Navigate to="/admin/data-management" replace />} />
           <Route path="/admin/data-management" element={<DataManagementPage />} />
+          <Route path="/admin/control" element={<ControlPage />} />
           <Route path="/email-settings" element={<Navigate to="/admin/email-settings" replace />} />
           <Route path="/admin/email-settings" element={<EmailSettingsPage />} />
           <Route path="/end-done" element={<Navigate to="/admin/end-done" replace />} />

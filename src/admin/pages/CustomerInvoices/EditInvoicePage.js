@@ -29,7 +29,7 @@ import {
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useNotification } from '../../../components/Common/NotificationSystem';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
