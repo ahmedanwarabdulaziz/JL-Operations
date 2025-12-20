@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -19,9 +20,15 @@ import {
   Tooltip,
   Chip,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
   Select,
   MenuItem,
-  FormControl,
+  IconButton,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -31,6 +38,8 @@ import {
   MonetizationOn as MonetizationOnIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  Assignment as AssignmentIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
@@ -38,9 +47,11 @@ import { useNotification } from '../../../shared/components/Common/NotificationS
 import { calculateOrderTotal, calculateJLCostAnalysisBeforeTax, calculateOrderProfit, normalizePaymentData } from '../../../shared/utils/orderCalculations';
 import { formatCurrency, formatPercentage } from '../../../shared/utils/plCalculations';
 import { formatDateOnly, toDateObject } from '../../../utils/dateUtils';
-import { normalizeAllocation } from '../../../shared/utils/allocationUtils';
+import { normalizeAllocation, createAllocation } from '../../../shared/utils/allocationUtils';
+import { buttonStyles } from '../../../styles/buttonStyles';
 
 const FinancePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,11 +59,44 @@ const FinancePage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   
-  // Year/Month filter state
-  const [selectedYear, setSelectedYear] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState(null);
+  // Status dialog state
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [editingStatus, setEditingStatus] = useState(null);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState(null);
+  
+  // Allocation dialog state
+  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [selectedOrderForAllocation, setSelectedOrderForAllocation] = useState(null);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [monthlyAllocations, setMonthlyAllocations] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalCost, setTotalCost] = useState(0);
+  const [showAllocationTable, setShowAllocationTable] = useState(false);
+  
+  // Year/Month filter state - initialize from URL params
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const yearParam = searchParams.get('year');
+    return yearParam ? parseInt(yearParam, 10) : null;
+  });
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const monthParam = searchParams.get('month');
+    return monthParam ? parseInt(monthParam, 10) : null;
+  });
 
   const { showError, showSuccess } = useNotification();
+
+  // Update URL params when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedYear !== null) {
+      params.set('year', selectedYear.toString());
+    }
+    if (selectedMonth !== null) {
+      params.set('month', selectedMonth.toString());
+    }
+    setSearchParams(params, { replace: true });
+  }, [selectedYear, selectedMonth, setSearchParams]);
 
   // Format customer details for tooltip
   const formatCustomerDetails = (order) => {
@@ -168,17 +212,16 @@ const FinancePage = () => {
     return str.toUpperCase().startsWith('T-');
   };
 
-  // Fetch orders from Firebase (both regular and corporate, plus taxed invoices and customer invoices)
+  // Fetch orders from Firebase (regular and corporate orders, plus corporate taxed invoices only - exclude customer invoices)
   const fetchOrders = async () => {
     try {
       setLoading(true);
       
-      // Fetch from all collections that might contain invoices
-      const [ordersSnapshot, corporateOrdersSnapshot, taxedInvoicesSnapshot, customerInvoicesSnapshot] = await Promise.all([
+      // Fetch from collections (excluding customer-invoices)
+      const [ordersSnapshot, corporateOrdersSnapshot, taxedInvoicesSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'corporate-orders'), orderBy('createdAt', 'desc'))),
-        getDocs(query(collection(db, 'taxedInvoices'), orderBy('createdAt', 'desc'))),
-        getDocs(query(collection(db, 'customer-invoices'), orderBy('createdAt', 'desc')))
+        getDocs(query(collection(db, 'taxedInvoices'), orderBy('createdAt', 'desc')))
       ]);
       
       // Map regular orders
@@ -195,24 +238,22 @@ const FinancePage = () => {
         orderType: 'corporate'
       }));
       
-      // Map taxed invoices
-      const taxedInvoices = taxedInvoicesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: doc.data().orderType || 'regular',
-        source: 'taxedInvoices'
-      }));
+      // Map taxed invoices - filter out customer invoices (only include corporate)
+      const taxedInvoices = taxedInvoicesSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderType: doc.data().orderType || 'regular',
+          source: 'taxedInvoices'
+        }))
+        .filter(invoice => {
+          // Exclude customer invoices - only include corporate invoices
+          const isCustomerInvoice = invoice.orderType === 'customer' || invoice.source === 'customer-invoices';
+          return !isCustomerInvoice;
+        });
       
-      // Map customer invoices
-      const customerInvoices = customerInvoicesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: doc.data().orderType || 'regular',
-        source: 'customer-invoices'
-      }));
-      
-      // Combine all orders
-      const allOrders = [...regularOrders, ...corporateOrders, ...taxedInvoices, ...customerInvoices];
+      // Combine all orders (excluding customer invoices)
+      const allOrders = [...regularOrders, ...corporateOrders, ...taxedInvoices];
       
       // Sort by createdAt descending
       allOrders.sort((a, b) => {
@@ -245,17 +286,294 @@ const FinancePage = () => {
     };
   };
 
-  // Handle status change
-  const handleStatusChange = async (orderId, newStatusValue, orderType) => {
+  // Generate months between dates
+  const generateMonthsBetweenDates = (startDate, endDate) => {
+    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return [];
+    }
+    
+    const months = [];
+    const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    
+    while (current <= end) {
+      const monthIndex = current.getMonth();
+      const month = monthIndex + 1;
+      const year = current.getFullYear();
+      
+      months.push({
+        month: month,
+        year: year,
+        label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: months.length === 0 ? 100 : 0
+      });
+      
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+  };
+
+  // Generate 5-month allocation table (fallback)
+  const generateMonthlyAllocations = (order) => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    
+    const months = [];
+    for (let i = -2; i <= 2; i++) {
+      const monthIndex = (currentMonth + i + 12) % 12;
+      const year = currentYear + Math.floor((currentMonth + i) / 12);
+      const month = monthIndex + 1;
+      
+      months.push({
+        month: month,
+        year: year,
+        label: new Date(year, monthIndex).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: i === 0 ? 100 : 0
+      });
+    }
+    
+    return months;
+  };
+
+  // Handle allocation dialog open
+  const handleAllocationDialog = (order) => {
+    setSelectedOrderForAllocation(order);
+    setAllocationDialogOpen(true);
+    setShowAllocationTable(false);
+    
+    // Set default dates
+    let start, end;
+    
+    if (order.orderDetails?.startDate) {
+      if (order.orderDetails.startDate.toDate) {
+        start = order.orderDetails.startDate.toDate();
+      } else {
+        start = new Date(order.orderDetails.startDate);
+      }
+    }
+    
+    if (order.orderDetails?.endDate) {
+      if (order.orderDetails.endDate.toDate) {
+        end = order.orderDetails.endDate.toDate();
+      } else {
+        end = new Date(order.orderDetails.endDate);
+      }
+    }
+    
+    if (start && !isNaN(start.getTime())) {
+      setStartDate(start);
+    } else {
+      setStartDate(new Date());
+    }
+    
+    if (end && !isNaN(end.getTime())) {
+      setEndDate(end);
+    } else {
+      setEndDate(new Date());
+    }
+
+    // Check if order already has allocation data
+    if (order.allocation && order.allocation.allocations) {
+      setMonthlyAllocations(order.allocation.allocations.map(allocation => ({
+        month: allocation.month,
+        year: allocation.year,
+        label: new Date(allocation.year, allocation.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: allocation.percentage
+      })));
+      setShowAllocationTable(true);
+    } else {
+      const initialAllocations = generateMonthlyAllocations(order);
+      setMonthlyAllocations(initialAllocations);
+    }
+
+    const normalizedOrder = normalizeOrderForCalculations(order);
+    const profitData = calculateOrderProfit(normalizedOrder);
+    setTotalRevenue(profitData.revenue);
+    setTotalCost(calculateJLCostAnalysisBeforeTax(normalizedOrder));
+  };
+
+  // Handle save dates
+  const handleSaveDates = async () => {
+    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      showError('Please select valid start and end dates');
+      return;
+    }
+
+    if (!selectedOrderForAllocation) {
+      showError('No order selected for allocation');
+      return;
+    }
+
+    const newAllocations = generateMonthsBetweenDates(startDate, endDate);
+    
+    if (newAllocations.length === 0) {
+      showError('No valid months found between the selected dates');
+      return;
+    }
+
+    try {
+      // Determine collection name
+      let collectionName;
+      if (selectedOrderForAllocation.source === 'taxedInvoices') {
+        collectionName = 'taxedInvoices';
+      } else if (selectedOrderForAllocation.orderType === 'corporate') {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+
+      const orderRef = doc(db, collectionName, selectedOrderForAllocation.id);
+      await updateDoc(orderRef, {
+        'orderDetails.startDate': startDate,
+        'orderDetails.endDate': endDate,
+        'orderDetails.lastUpdated': new Date()
+      });
+
+      setSelectedOrderForAllocation(prev => ({
+        ...prev,
+        orderDetails: {
+          ...prev.orderDetails,
+          startDate: startDate,
+          endDate: endDate,
+          lastUpdated: new Date()
+        }
+      }));
+
+      setMonthlyAllocations(newAllocations);
+      setShowAllocationTable(true);
+      showSuccess('Dates saved! Table updated with relevant months.');
+    } catch (error) {
+      console.error('Error saving dates:', error);
+      showError('Failed to save dates to database');
+    }
+  };
+
+  // Calculate totals
+  const calculateAllocationTotals = (allocations) => {
+    const totalPercentage = allocations.reduce((sum, item) => sum + (parseFloat(item.percentage) || 0), 0);
+    const calculatedRevenue = allocations.reduce((sum, item) => sum + (totalRevenue * (parseFloat(item.percentage) || 0) / 100), 0);
+    const calculatedCost = allocations.reduce((sum, item) => sum + (totalCost * (parseFloat(item.percentage) || 0) / 100), 0);
+    const calculatedProfit = calculatedRevenue - calculatedCost;
+    
+    return { totalPercentage, totalRevenue: calculatedRevenue, totalCost: calculatedCost, totalProfit: calculatedProfit };
+  };
+
+  // Get allocation status
+  const getAllocationStatus = () => {
+    const totals = calculateAllocationTotals(monthlyAllocations);
+    const remainingPercentage = 100 - totals.totalPercentage;
+    
+    if (Math.abs(remainingPercentage) <= 0.01) {
+      return { status: 'valid', message: 'Allocation is complete and ready to apply', color: '#4caf50' };
+    } else if (totals.totalPercentage > 100) {
+      return { status: 'over', message: `Total exceeds 100% by ${Math.abs(remainingPercentage).toFixed(1)}%`, color: '#f44336' };
+    } else {
+      return { status: 'under', message: `${Math.abs(remainingPercentage).toFixed(1)}% remaining to reach 100%`, color: '#ff9800' };
+    }
+  };
+
+  // Update allocation percentage
+  const updateAllocationPercentage = (index, percentage) => {
+    const newAllocations = [...monthlyAllocations];
+    newAllocations[index] = {
+      ...newAllocations[index],
+      percentage: parseFloat(percentage) || 0
+    };
+    setMonthlyAllocations(newAllocations);
+  };
+
+  // Apply allocation
+  const applyAllocation = async () => {
+    try {
+      if (!selectedOrderForAllocation) return;
+      
+      const totals = calculateAllocationTotals(monthlyAllocations);
+      if (Math.abs(totals.totalPercentage - 100) > 0.01) {
+        showError('Total percentage must equal 100%');
+        return;
+      }
+
+      const profitData = {
+        revenue: totalRevenue,
+        cost: totalCost,
+        profit: totalRevenue - totalCost
+      };
+
+      const allocationData = createAllocation(monthlyAllocations, profitData);
+
+      // Determine collection name
+      let collectionName;
+      if (selectedOrderForAllocation.source === 'taxedInvoices') {
+        collectionName = 'taxedInvoices';
+      } else if (selectedOrderForAllocation.orderType === 'corporate') {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+
+      const orderRef = doc(db, collectionName, selectedOrderForAllocation.id);
+      await updateDoc(orderRef, {
+        allocation: allocationData
+      });
+      
+      // Update local state
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === selectedOrderForAllocation.id 
+            ? { ...order, allocation: allocationData }
+            : order
+        )
+      );
+      
+      setFilteredOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === selectedOrderForAllocation.id 
+            ? { ...order, allocation: allocationData }
+            : order
+        )
+      );
+      
+      showSuccess('Allocation applied successfully');
+      setAllocationDialogOpen(false);
+      setSelectedOrderForAllocation(null);
+      setMonthlyAllocations([]);
+      setShowAllocationTable(false);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error applying allocation:', error);
+      showError('Failed to apply allocation');
+    }
+  };
+
+  // Update invoice status (adapted from Workshop page)
+  const updateInvoiceStatus = async (orderId, newStatus) => {
     try {
       setUpdatingStatus(orderId);
       
-      // Determine which collection to update based on order type
-      const collectionName = orderType === 'corporate' ? 'corporate-orders' : 'orders';
-      const orderRef = doc(db, collectionName, orderId);
+      // Find the order and new status
+      const order = orders.find(o => o.id === orderId);
+      const newStatusObj = invoiceStatuses.find(s => s.value === newStatus);
       
+      if (!order || !newStatusObj) {
+        showError('Order or status not found');
+        return;
+      }
+
+      // Determine which collection to update based on order type and source
+      let collectionName;
+      if (order.source === 'taxedInvoices') {
+        collectionName = 'taxedInvoices';
+      } else if (order.orderType === 'corporate') {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+      
+      const orderRef = doc(db, collectionName, orderId);
       await updateDoc(orderRef, {
-        invoiceStatus: newStatusValue,
+        invoiceStatus: newStatus,
         statusUpdatedAt: new Date()
       });
       
@@ -263,15 +581,27 @@ const FinancePage = () => {
       setOrders(prevOrders => 
         prevOrders.map(order => 
           order.id === orderId 
-            ? { ...order, invoiceStatus: newStatusValue, statusUpdatedAt: new Date() }
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
             : order
         )
       );
       
-      showSuccess('Order status updated successfully');
+      // Update filtered orders as well
+      setFilteredOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+            : order
+        )
+      );
+      
+      showSuccess('Invoice status updated successfully');
+      setStatusDialogOpen(false);
+      setEditingStatus(null);
+      setSelectedOrderForStatus(null);
     } catch (error) {
-      console.error('Error updating order status:', error);
-      showError('Failed to update order status');
+      console.error('Error updating invoice status:', error);
+      showError('Failed to update invoice status');
     } finally {
       setUpdatingStatus(null);
     }
@@ -528,7 +858,8 @@ const FinancePage = () => {
     if (searchTerm) {
       filtered = filtered.filter(order => {
         const searchLower = searchTerm.toLowerCase();
-        const invoiceMatch = order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower);
+        const invoiceNumber = order.invoiceNumber || order.orderDetails?.billInvoice || '';
+        const invoiceMatch = invoiceNumber.toLowerCase().includes(searchLower);
         
         // Check customer name based on order type
         let customerMatch = false;
@@ -550,6 +881,44 @@ const FinancePage = () => {
     
     setFilteredOrders(filtered);
   }, [searchTerm, orders, selectedYear, selectedMonth]);
+
+  // Calculate totals for filtered orders
+  const calculateTotals = () => {
+    let totalRevenue = 0;
+    let totalCost = 0;
+    let totalProfit = 0;
+    let totalPaid = 0;
+    let totalBalance = 0;
+
+    filteredOrders.forEach(order => {
+      // Normalize order structure for calculations
+      const normalizedOrder = normalizeOrderForCalculations(order);
+      
+      // Normalize payment data for corporate orders
+      const paymentData = order.orderType === 'corporate' 
+        ? (order.paymentDetails || {})
+        : (order.paymentData || {});
+      const normalizedPayment = normalizePaymentData(paymentData);
+      
+      // Calculate profit using normalized order structure
+      const profitData = calculateOrderProfit(normalizedOrder);
+      const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
+      
+      totalRevenue += partialAmounts.revenue || 0;
+      totalCost += partialAmounts.cost || 0;
+      totalProfit += partialAmounts.profit || 0;
+      totalPaid += partialAmounts.paidAmount || 0;
+      totalBalance += partialAmounts.balance || 0;
+    });
+
+    return {
+      revenue: totalRevenue,
+      cost: totalCost,
+      profit: totalProfit,
+      paid: totalPaid,
+      balance: totalBalance
+    };
+  };
 
   // Calculate monthly summaries (previous, current, next month)
   const calculateMonthlySummaries = () => {
@@ -703,179 +1072,200 @@ const FinancePage = () => {
         Finance Overview
       </Typography>
 
-      {/* Monthly Summary Cards */}
+      {/* Monthly Summary Cards and Year/Month Filter */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {[
-          { key: 'previous', data: monthlySummaries.previous, label: 'Previous Month' },
-          { key: 'current', data: monthlySummaries.current, label: 'Current Month' },
-          { key: 'next', data: monthlySummaries.next, label: 'Next Month' }
-        ].map(({ key, data, label }) => (
-          <Grid item xs={12} md={4} key={key}>
-            <Card sx={{ backgroundColor: '#2a2a2a', border: '1px solid #333333', height: '100%' }}>
-              <CardContent>
+        {/* Monthly Summary Cards */}
+        <Grid item xs={12} md={8}>
+          <Grid container spacing={2}>
+            {[
+              { key: 'previous', data: monthlySummaries.previous, label: 'Previous Month' },
+              { key: 'current', data: monthlySummaries.current, label: 'Current Month' },
+              { key: 'next', data: monthlySummaries.next, label: 'Next Month' }
+            ].map(({ key, data, label }) => {
+              const isSelected = selectedYear === data.year && selectedMonth === data.month;
+              return (
+                <Grid item xs={12} sm={4} key={key}>
+                  <Card 
+                    onClick={() => {
+                      setSelectedYear(data.year);
+                      setSelectedMonth(data.month);
+                    }}
+                    sx={{ 
+                      backgroundColor: isSelected ? '#3a3a3a' : '#2a2a2a', 
+                      border: isSelected ? '2px solid #b98f33' : '1px solid #333333', 
+                      height: '100%',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        backgroundColor: isSelected ? '#4a4a4a' : '#333333',
+                        borderColor: '#b98f33',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+                      },
+                    }}
+                  >
+                    <CardContent>
+                      <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
+                        {label}
+                      </Typography>
+                      <Typography variant="subtitle1" sx={{ mb: 2, color: '#ffffff', fontWeight: 'bold' }}>
+                        {data.monthName} {data.year}
+                      </Typography>
+                      
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                            Total Taxed Invoice
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                            {formatCurrency(data.totalTaxedInvoice)}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                            Revenue
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                            {formatCurrency(data.revenue)}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                            Cost
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                            {formatCurrency(data.cost)}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                            Profit
+                          </Typography>
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              color: data.profit >= 0 ? '#4caf50' : '#f44336', 
+                              fontWeight: 'bold' 
+                            }}
+                          >
+                            {formatCurrency(data.profit)}
+                          </Typography>
+                          {data.revenue > 0 && (
+                            <Typography variant="caption" sx={{ color: '#b98f33' }}>
+                              {((data.profit / data.revenue) * 100).toFixed(1)}% margin
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Grid>
+
+        {/* Year/Month Filter */}
+        <Grid item xs={12} md={4}>
+          {(() => {
+            const { years, monthsByYear } = getAvailableYearsAndMonths();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            return (
+              <Paper sx={{ p: 2, height: '100%', backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
                 <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
-                  {label}
-                </Typography>
-                <Typography variant="subtitle1" sx={{ mb: 2, color: '#ffffff', fontWeight: 'bold' }}>
-                  {data.monthName} {data.year}
+                  Filter by Year & Month
                 </Typography>
                 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
-                      Total Taxed Invoice
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
-                      {formatCurrency(data.totalTaxedInvoice)}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
-                      Revenue
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
-                      {formatCurrency(data.revenue)}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
-                      Cost
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
-                      {formatCurrency(data.cost)}
-                    </Typography>
-                  </Box>
-                  
-                  <Box>
-                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
-                      Profit
-                    </Typography>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        color: data.profit >= 0 ? '#4caf50' : '#f44336', 
-                        fontWeight: 'bold' 
-                      }}
-                    >
-                      {formatCurrency(data.profit)}
-                    </Typography>
-                    {data.revenue > 0 && (
-                      <Typography variant="caption" sx={{ color: '#b98f33' }}>
-                        {((data.profit / data.revenue) * 100).toFixed(1)}% margin
-                      </Typography>
-                    )}
+                {/* Years */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
+                    Year:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {years.map(year => {
+                      const yearNum = Number(year);
+                      return (
+                        <Chip
+                          key={String(yearNum)}
+                          label={String(yearNum)}
+                          onClick={() => {
+                            setSelectedYear(yearNum);
+                            setSelectedMonth(null); // Reset month when year changes
+                          }}
+                          sx={{
+                            backgroundColor: selectedYear === yearNum ? '#b98f33' : '#3a3a3a',
+                            color: selectedYear === yearNum ? '#000000' : '#ffffff',
+                            fontWeight: selectedYear === yearNum ? 'bold' : 'normal',
+                            border: selectedYear === yearNum ? '2px solid #8b6b1f' : '1px solid #555555',
+                            cursor: 'pointer',
+                            '&:hover': {
+                              backgroundColor: selectedYear === yearNum ? '#d4af5a' : '#4a4a4a',
+                            },
+                          }}
+                        />
+                      );
+                    })}
                   </Box>
                 </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Year/Month Filter */}
-      {(() => {
-        const { years, monthsByYear } = getAvailableYearsAndMonths();
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        
-        return (
-          <Paper sx={{ p: 2, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
-            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>
-              Filter by Year & Month
-            </Typography>
-            
-            {/* Years */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
-                Year:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {years.map(year => {
-                  const yearNum = Number(year);
-                  return (
-                    <Chip
-                      key={String(yearNum)}
-                      label={String(yearNum)}
+                
+                {/* Months for selected year */}
+                {selectedYear !== null && monthsByYear[selectedYear] && (
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
+                      Month:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {monthsByYear[selectedYear].map(month => {
+                        const monthNum = Number(month);
+                        const monthIndex = monthNum - 1;
+                        const monthName = (monthIndex >= 0 && monthIndex < 12) ? monthNames[monthIndex] : `Month ${monthNum}`;
+                        
+                        return (
+                          <Chip
+                            key={String(monthNum)}
+                            label={monthName}
+                            onClick={() => setSelectedMonth(monthNum)}
+                            sx={{
+                              backgroundColor: selectedMonth === monthNum ? '#b98f33' : '#3a3a3a',
+                              color: selectedMonth === monthNum ? '#000000' : '#ffffff',
+                              fontWeight: selectedMonth === monthNum ? 'bold' : 'normal',
+                              border: selectedMonth === monthNum ? '2px solid #8b6b1f' : '1px solid #555555',
+                              cursor: 'pointer',
+                              '&:hover': {
+                                backgroundColor: selectedMonth === monthNum ? '#d4af5a' : '#4a4a4a',
+                              },
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  </Box>
+                )}
+                
+                {/* Clear filter button */}
+                {(selectedYear !== null || selectedMonth !== null) && (
+                  <Box sx={{ mt: 2 }}>
+                    <Button
+                      variant="outlined"
                       onClick={() => {
-                        setSelectedYear(yearNum);
-                        setSelectedMonth(null); // Reset month when year changes
+                        setSelectedYear(null);
+                        setSelectedMonth(null);
                       }}
-                      sx={{
-                        backgroundColor: selectedYear === yearNum ? '#b98f33' : '#3a3a3a',
-                        color: selectedYear === yearNum ? '#000000' : '#ffffff',
-                        fontWeight: selectedYear === yearNum ? 'bold' : 'normal',
-                        border: selectedYear === yearNum ? '2px solid #8b6b1f' : '1px solid #555555',
-                        cursor: 'pointer',
-                        '&:hover': {
-                          backgroundColor: selectedYear === yearNum ? '#d4af5a' : '#4a4a4a',
-                        },
-                      }}
-                    />
-                  );
-                })}
-              </Box>
-            </Box>
-            
-            {/* Months for selected year */}
-            {selectedYear !== null && monthsByYear[selectedYear] && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ color: '#ffffff', mb: 1 }}>
-                  Month:
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {monthsByYear[selectedYear].map(month => {
-                    const monthNum = Number(month);
-                    const monthIndex = monthNum - 1;
-                    const monthName = (monthIndex >= 0 && monthIndex < 12) ? monthNames[monthIndex] : `Month ${monthNum}`;
-                    
-                    return (
-                      <Chip
-                        key={String(monthNum)}
-                        label={monthName}
-                        onClick={() => setSelectedMonth(monthNum)}
-                        sx={{
-                          backgroundColor: selectedMonth === monthNum ? '#b98f33' : '#3a3a3a',
-                          color: selectedMonth === monthNum ? '#000000' : '#ffffff',
-                          fontWeight: selectedMonth === monthNum ? 'bold' : 'normal',
-                          border: selectedMonth === monthNum ? '2px solid #8b6b1f' : '1px solid #555555',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            backgroundColor: selectedMonth === monthNum ? '#d4af5a' : '#4a4a4a',
-                          },
-                        }}
-                      />
-                    );
-                  })}
-                </Box>
-              </Box>
-            )}
-            
-            {/* Clear filter button */}
-            {(selectedYear !== null || selectedMonth !== null) && (
-              <Box sx={{ mt: 2 }}>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setSelectedYear(null);
-                    setSelectedMonth(null);
-                  }}
-                  sx={{
-                    color: '#b98f33',
-                    borderColor: '#b98f33',
-                    '&:hover': {
-                      borderColor: '#d4af5a',
-                      backgroundColor: 'rgba(185, 143, 51, 0.1)'
-                    }
-                  }}
-                >
-                  Clear Filter
-                </Button>
-              </Box>
-            )}
-          </Paper>
-        );
-      })()}
+                      sx={buttonStyles.cancelButton}
+                    >
+                      Clear Filter
+                    </Button>
+                  </Box>
+                )}
+              </Paper>
+            );
+          })()}
+        </Grid>
+      </Grid>
 
       {/* Search */}
       <Paper sx={{ p: 2, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
@@ -978,7 +1368,7 @@ const FinancePage = () => {
                           }}
                         >
                           <Box sx={{ cursor: 'help', fontWeight: 'bold' }}>
-                            {order.orderDetails?.billInvoice || 'N/A'}
+                            {order.invoiceNumber || order.orderDetails?.billInvoice || 'N/A'}
                           </Box>
                         </Tooltip>
                       </TableCell>
@@ -986,77 +1376,30 @@ const FinancePage = () => {
                         {startDate ? formatDateOnly(startDate) : 'N/A'}
                       </TableCell>
                       <TableCell>
-                        <FormControl 
-                          size="small" 
-                          sx={{ 
-                            minWidth: 150,
-                            '& .MuiOutlinedInput-root': {
-                              color: '#ffffff',
-                              '& fieldset': {
-                                borderColor: '#555555',
-                              },
-                              '&:hover fieldset': {
-                                borderColor: '#b98f33',
-                              },
-                              '&.Mui-focused fieldset': {
-                                borderColor: '#b98f33',
-                              },
+                        <Chip
+                          label={statusInfo.label}
+                          size="small"
+                          onClick={() => {
+                            setSelectedOrderForStatus(order);
+                            setEditingStatus(order.invoiceStatus);
+                            setStatusDialogOpen(true);
+                          }}
+                          sx={{
+                            backgroundColor: statusInfo.color,
+                            color: '#ffffff',
+                            fontWeight: 'bold',
+                            fontSize: '0.75rem',
+                            height: '24px',
+                            cursor: 'pointer',
+                            '& .MuiChip-label': {
+                              px: 1,
                             },
-                            '& .MuiSelect-icon': {
-                              color: '#ffffff',
+                            '&:hover': {
+                              opacity: 0.8,
+                              transform: 'scale(1.05)',
                             },
                           }}
-                        >
-                          <Select
-                            value={order.invoiceStatus || ''}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value, order.orderType)}
-                            disabled={updatingStatus === order.id}
-                            sx={{
-                              backgroundColor: statusInfo.color,
-                              color: '#ffffff',
-                              fontWeight: 'bold',
-                              '& .MuiSelect-select': {
-                                py: 0.5,
-                              },
-                            }}
-                            MenuProps={{
-                              PaperProps: {
-                                sx: {
-                                  backgroundColor: '#2a2a2a',
-                                  border: '1px solid #555555',
-                                  '& .MuiMenuItem-root': {
-                                    color: '#ffffff',
-                                    '&:hover': {
-                                      backgroundColor: '#3a3a3a',
-                                    },
-                                    '&.Mui-selected': {
-                                      backgroundColor: '#b98f33',
-                                      '&:hover': {
-                                        backgroundColor: '#d4af5a',
-                                      },
-                                    },
-                                  },
-                                },
-                              },
-                            }}
-                          >
-                            {invoiceStatuses.map((status) => (
-                              <MenuItem key={status.id} value={status.value}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    sx={{
-                                      width: 12,
-                                      height: 12,
-                                      borderRadius: '50%',
-                                      backgroundColor: status.color,
-                                    }}
-                                  />
-                                  {status.label}
-                                </Box>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        />
                       </TableCell>
                       <TableCell sx={{ color: '#ffffff', fontWeight: 'bold' }}>
                         {formatCurrency(partialAmounts.revenue)}
@@ -1080,48 +1423,555 @@ const FinancePage = () => {
                         {formatCurrency(partialAmounts.balance)}
                       </TableCell>
                       <TableCell>
-                        <Tooltip 
-                          title={hasAllocation ? formatAllocationDetails(order) : 'No allocation'}
-                          arrow
-                          placement="right"
-                          componentsProps={{
-                            tooltip: {
-                              sx: {
-                                backgroundColor: '#2a2a2a',
-                                border: '1px solid #b98f33',
-                                color: '#ffffff',
-                                fontSize: '0.875rem',
-                                whiteSpace: 'pre-line',
-                                maxWidth: '400px',
-                                '& .MuiTooltip-arrow': {
-                                  color: '#2a2a2a',
-                                  '&::before': {
-                                    border: '1px solid #b98f33'
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                          <Tooltip 
+                            title={hasAllocation ? formatAllocationDetails(order) : 'No allocation'}
+                            arrow
+                            placement="right"
+                            componentsProps={{
+                              tooltip: {
+                                sx: {
+                                  backgroundColor: '#2a2a2a',
+                                  border: '1px solid #b98f33',
+                                  color: '#ffffff',
+                                  fontSize: '0.875rem',
+                                  whiteSpace: 'pre-line',
+                                  maxWidth: '400px',
+                                  '& .MuiTooltip-arrow': {
+                                    color: '#2a2a2a',
+                                    '&::before': {
+                                      border: '1px solid #b98f33'
+                                    }
                                   }
                                 }
                               }
-                            }
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {hasAllocation ? (
-                              <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 20 }} />
-                            ) : (
-                              <CancelIcon sx={{ color: '#f44336', fontSize: 20 }} />
-                            )}
-                          </Box>
-                        </Tooltip>
+                            }}
+                          >
+                            <Box>
+                              {hasAllocation ? (
+                                <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 20 }} />
+                              ) : (
+                                <CancelIcon sx={{ color: '#f44336', fontSize: 20 }} />
+                              )}
+                            </Box>
+                          </Tooltip>
+                          <Tooltip title="Edit Allocation" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleAllocationDialog(order)}
+                              sx={{
+                                color: '#b98f33',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                  color: '#d4af5a',
+                                },
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );
                 })
               )}
+              
+              {/* Totals Row */}
+              {filteredOrders.length > 0 && (() => {
+                const totals = calculateTotals();
+                return (
+                  <TableRow sx={{ 
+                    backgroundColor: '#1a1a1a',
+                    borderTop: '2px solid #b98f33',
+                    '& .MuiTableCell-root': {
+                      borderTop: '2px solid #b98f33',
+                    }
+                  }}>
+                    <TableCell colSpan={3} sx={{ color: '#b98f33', fontWeight: 'bold', fontSize: '1rem' }}>
+                      TOTALS
+                    </TableCell>
+                    <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
+                      {formatCurrency(totals.revenue)}
+                    </TableCell>
+                    <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
+                      {formatCurrency(totals.cost)}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      color: totals.profit >= 0 ? '#4caf50' : '#f44336', 
+                      fontWeight: 'bold',
+                      fontSize: '1rem'
+                    }}>
+                      {formatCurrency(totals.profit)}
+                    </TableCell>
+                    <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
+                      {formatCurrency(totals.paid)}
+                    </TableCell>
+                    <TableCell sx={{ 
+                      color: totals.balance > 0 ? '#f44336' : '#4caf50', 
+                      fontWeight: 'bold',
+                      fontSize: '1rem'
+                    }}>
+                      {formatCurrency(totals.balance)}
+                    </TableCell>
+                    <TableCell></TableCell>
+                  </TableRow>
+                );
+              })()}
             </TableBody>
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* Status Dialog */}
+      <Dialog 
+        open={statusDialogOpen} 
+        onClose={() => {
+          setStatusDialogOpen(false);
+          setEditingStatus(null);
+          setSelectedOrderForStatus(null);
+        }} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 1000
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          fontWeight: 'bold'
+        }}>
+          <AssignmentIcon />
+          Update Invoice Status
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, backgroundColor: '#3a3a3a' }}>
+          {/* Current Status Display */}
+          {selectedOrderForStatus && (
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="subtitle2" sx={{ color: '#b98f33', mb: 1, fontWeight: 'bold' }}>
+                Invoice: {selectedOrderForStatus.invoiceNumber || selectedOrderForStatus.orderDetails?.billInvoice || 'N/A'}
+              </Typography>
+              <Typography variant="subtitle2" sx={{ color: '#b98f33', mb: 1, fontWeight: 'bold' }}>
+                Current Status
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: '50%',
+                    backgroundColor: getStatusInfo(selectedOrderForStatus.invoiceStatus)?.color || '#607d8b'
+                  }}
+                />
+                <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                  {getStatusInfo(selectedOrderForStatus.invoiceStatus)?.label || selectedOrderForStatus.invoiceStatus || 'Unknown Status'}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+
+          {/* Status Dropdown */}
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel sx={{ color: '#b98f33' }}>Select New Status</InputLabel>
+            <Select
+              value={editingStatus || ''}
+              onChange={(e) => setEditingStatus(e.target.value)}
+              label="Select New Status"
+              sx={{
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#333333',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33',
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#b98f33',
+                },
+                '& .MuiSelect-icon': {
+                  color: '#b98f33',
+                },
+                '& .MuiInputBase-input': {
+                  color: '#ffffff',
+                },
+              }}
+            >
+              {invoiceStatuses
+                .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
+                .map(status => (
+                  <MenuItem key={status.value} value={status.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          backgroundColor: status.color
+                        }}
+                      />
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                          {status.label}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#b98f33' }}>
+                          {status.description || `Order is ${status.label.toLowerCase()}`}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+
+          {/* Status Description */}
+          {editingStatus && (
+            <Box sx={{ p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                <strong>Selected:</strong> {getStatusInfo(editingStatus)?.label || editingStatus}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#ffffff', display: 'block', mt: 1 }}>
+                {getStatusInfo(editingStatus)?.description || 'Status will be updated for this order.'}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={() => {
+              setStatusDialogOpen(false);
+              setEditingStatus(null);
+              setSelectedOrderForStatus(null);
+            }}
+            variant="outlined"
+            size="small"
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              if (selectedOrderForStatus && editingStatus) {
+                updateInvoiceStatus(selectedOrderForStatus.id, editingStatus);
+              }
+            }}
+            variant="contained"
+            disabled={!editingStatus || updatingStatus === selectedOrderForStatus?.id}
+            size="small"
+            sx={{
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #444444',
+              },
+            }}
+          >
+            {updatingStatus === selectedOrderForStatus?.id ? 'Updating...' : 'Update Status'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Allocation Dialog */}
+      <Dialog 
+        open={allocationDialogOpen} 
+        onClose={() => {
+          setAllocationDialogOpen(false);
+          setSelectedOrderForAllocation(null);
+          setMonthlyAllocations([]);
+          setShowAllocationTable(false);
+        }} 
+        maxWidth="lg" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 1000
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <AssignmentIcon />
+          Financial Allocation
+        </DialogTitle>
+        
+        <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
+          {/* Order Summary */}
+          {selectedOrderForAllocation && (
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="h6" sx={{ mb: 1, color: '#b98f33', fontWeight: 'bold' }}>Order Summary</Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff', mb: 0.5 }}>
+                <strong>Invoice #:</strong> {selectedOrderForAllocation.invoiceNumber || selectedOrderForAllocation.orderDetails?.billInvoice || 'N/A'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff', mb: 0.5 }}>
+                <strong>Total Revenue:</strong> {formatCurrency(totalRevenue)}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff', mb: 0.5 }}>
+                <strong>Total Cost:</strong> {formatCurrency(totalCost)}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                <strong>Total Profit:</strong> {formatCurrency(totalRevenue - totalCost)}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Editable Dates */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Order Dates</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={5}>
+                <TextField
+                  label="Start Date"
+                  type="date"
+                  value={startDate && startDate instanceof Date && !isNaN(startDate) ? startDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    if (!isNaN(date.getTime())) {
+                      setStartDate(date);
+                    }
+                  }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#ffffff',
+                      '& fieldset': {
+                        borderColor: '#555555',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={5}>
+                <TextField
+                  label="End Date"
+                  type="date"
+                  value={endDate && endDate instanceof Date && !isNaN(endDate) ? endDate.toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    const date = new Date(e.target.value);
+                    if (!isNaN(date.getTime())) {
+                      setEndDate(date);
+                    }
+                  }}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: '#ffffff',
+                      '& fieldset': {
+                        borderColor: '#555555',
+                      },
+                      '&:hover fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: '#b98f33',
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid item xs={2}>
+                <Button
+                  variant="contained"
+                  onClick={handleSaveDates}
+                  fullWidth
+                  sx={{ 
+                    height: '56px',
+                    backgroundColor: '#b98f33',
+                    color: '#000000',
+                    '&:hover': { 
+                      backgroundColor: '#d4af5a',
+                    }
+                  }}
+                >
+                  Save Dates
+                </Button>
+              </Grid>
+            </Grid>
+            <Typography variant="body2" sx={{ mt: 1, color: '#b98f33', fontStyle: 'italic' }}>
+              Click "Save Dates" to update the allocation table with months between your selected dates
+            </Typography>
+          </Box>
+
+          {/* Financial Allocation Table */}
+          {showAllocationTable && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2, color: '#b98f33', fontWeight: 'bold' }}>Monthly Financial Allocation</Typography>
+              <Typography variant="body2" sx={{ mb: 2, color: '#ffffff' }}>
+                Distribute the order's revenue and costs across the months between your selected dates. Total percentage must equal 100%.
+              </Typography>
+            
+              <TableContainer component={Paper} sx={{ maxHeight: 400, backgroundColor: '#2a2a2a' }}>
+                <Table stickyHeader>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33', backgroundColor: '#1a1a1a' }}>Month</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33', backgroundColor: '#1a1a1a' }}>Percentage (%)</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33', backgroundColor: '#1a1a1a' }}>Revenue ($)</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33', backgroundColor: '#1a1a1a' }}>Cost ($)</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33', backgroundColor: '#1a1a1a' }}>Profit ($)</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {monthlyAllocations.map((allocation, index) => {
+                      const revenue = (totalRevenue * allocation.percentage / 100);
+                      const cost = (totalCost * allocation.percentage / 100);
+                      const profit = revenue - cost;
+                      
+                      return (
+                        <TableRow key={index} sx={{ '&:hover': { backgroundColor: '#333333' } }}>
+                          <TableCell sx={{ color: '#ffffff' }}>{allocation.label}</TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              value={allocation.percentage}
+                              onChange={(e) => updateAllocationPercentage(index, e.target.value)}
+                              size="small"
+                              sx={{ width: 80 }}
+                              inputProps={{ 
+                                min: 0, 
+                                max: 100, 
+                                step: 0.1 
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                            {formatCurrency(revenue)}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', color: '#f44336' }}>
+                            {formatCurrency(cost)}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', color: profit >= 0 ? '#4caf50' : '#f44336' }}>
+                            {formatCurrency(profit)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {/* Totals Row */}
+                    <TableRow sx={{ backgroundColor: '#1a1a1a', borderTop: '2px solid #b98f33' }}>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>TOTAL</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                        {calculateAllocationTotals(monthlyAllocations).totalPercentage.toFixed(1)}%
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                        {formatCurrency(calculateAllocationTotals(monthlyAllocations).totalRevenue)}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#f44336' }}>
+                        {formatCurrency(calculateAllocationTotals(monthlyAllocations).totalCost)}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#4caf50' }}>
+                        {formatCurrency(calculateAllocationTotals(monthlyAllocations).totalProfit)}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              {/* Allocation Status */}
+              {showAllocationTable && (
+                <Box sx={{ mt: 2 }}>
+                  {(() => {
+                    const status = getAllocationStatus();
+                    return (
+                      <Alert 
+                        severity={status.status === 'valid' ? 'success' : status.status === 'over' ? 'error' : 'warning'} 
+                        sx={{ 
+                          backgroundColor: status.status === 'valid' ? '#1b5e20' : status.status === 'over' ? '#b71c1c' : '#e65100',
+                          color: '#ffffff',
+                          '& .MuiAlert-message': { 
+                            color: '#ffffff',
+                            fontWeight: 'bold'
+                          }
+                        }}
+                      >
+                        {status.message}
+                      </Alert>
+                    );
+                  })()}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={() => {
+              setAllocationDialogOpen(false);
+              setSelectedOrderForAllocation(null);
+              setMonthlyAllocations([]);
+              setShowAllocationTable(false);
+            }}
+            variant="outlined"
+            size="small"
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={applyAllocation}
+            variant="contained"
+            disabled={!showAllocationTable || Math.abs(calculateAllocationTotals(monthlyAllocations).totalPercentage - 100) > 0.01}
+            size="small"
+            sx={{
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #444444',
+              },
+            }}
+          >
+            Apply Allocation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default FinancePage;
+
