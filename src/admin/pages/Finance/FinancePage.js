@@ -293,22 +293,35 @@ const FinancePage = () => {
     }
     
     const months = [];
-    const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    // Normalize to first day of each month to avoid day-of-month issues
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth(); // 0-indexed
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth(); // 0-indexed
     
-    while (current <= end) {
-      const monthIndex = current.getMonth();
-      const month = monthIndex + 1;
-      const year = current.getFullYear();
+    let currentYear = startYear;
+    let currentMonth = startMonth;
+    
+    // Compare using year/month only, not day
+    while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
+      // Use 1-indexed months (1-12) to match new allocation format
+      const month = currentMonth + 1; // Convert from 0-indexed to 1-indexed
+      const year = currentYear;
       
+      const dateForLabel = new Date(year, currentMonth, 1);
       months.push({
-        month: month,
+        month: month, // 1-indexed (1-12)
         year: year,
-        label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        percentage: months.length === 0 ? 100 : 0
+        label: dateForLabel.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: months.length === 0 ? 100 : 0 // Default 100% to first month
       });
       
-      current.setMonth(current.getMonth() + 1);
+      // Move to next month
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
     }
     
     return months;
@@ -343,24 +356,29 @@ const FinancePage = () => {
     setAllocationDialogOpen(true);
     setShowAllocationTable(false);
     
-    // Set default dates
-    let start, end;
-    
-    if (order.orderDetails?.startDate) {
-      if (order.orderDetails.startDate.toDate) {
-        start = order.orderDetails.startDate.toDate();
+    // Helper function to normalize date to local date-only (avoid timezone issues)
+    const normalizeToLocalDate = (dateValue) => {
+      if (!dateValue) return null;
+      
+      let date;
+      if (dateValue.toDate) {
+        // Firestore Timestamp
+        date = dateValue.toDate();
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
       } else {
-        start = new Date(order.orderDetails.startDate);
+        date = new Date(dateValue);
       }
-    }
+      
+      if (isNaN(date.getTime())) return null;
+      
+      // Normalize to local date only (ignore time component to avoid timezone shifts)
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
     
-    if (order.orderDetails?.endDate) {
-      if (order.orderDetails.endDate.toDate) {
-        end = order.orderDetails.endDate.toDate();
-      } else {
-        end = new Date(order.orderDetails.endDate);
-      }
-    }
+    // Set default dates with proper validation
+    const start = normalizeToLocalDate(order.orderDetails?.startDate);
+    const end = normalizeToLocalDate(order.orderDetails?.endDate);
     
     if (start && !isNaN(start.getTime())) {
       setStartDate(start);
@@ -376,13 +394,40 @@ const FinancePage = () => {
 
     // Check if order already has allocation data
     if (order.allocation && order.allocation.allocations) {
-      setMonthlyAllocations(order.allocation.allocations.map(allocation => ({
-        month: allocation.month,
-        year: allocation.year,
-        label: new Date(allocation.year, allocation.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        percentage: allocation.percentage
-      })));
-      setShowAllocationTable(true);
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+      
+      // Normalize allocation to ensure month/year are correct
+      const profitData = calculateOrderProfit(order);
+      const normalizedAllocation = normalizeAllocation(order.allocation, profitData);
+      
+      if (normalizedAllocation && normalizedAllocation.allocations) {
+        setMonthlyAllocations(normalizedAllocation.allocations.map(allocation => {
+          const month = Number(allocation.month);
+          const year = Number(allocation.year);
+          
+          // Validate month is in valid range (1-12)
+          if (isNaN(month) || month < 1 || month > 12) {
+            console.warn('Invalid month in allocation:', allocation);
+            return null;
+          }
+          
+          // Use month names array directly to avoid timezone issues with Date objects
+          const monthIndex = month - 1; // Convert 1-indexed to 0-indexed for array
+          const label = `${monthNames[monthIndex]} ${year}`;
+          
+          return {
+            month: month,
+            year: year,
+            label: label,
+            percentage: allocation.percentage
+          };
+        }).filter(alloc => alloc !== null));
+        setShowAllocationTable(true);
+      } else {
+        const initialAllocations = generateMonthlyAllocations(order);
+        setMonthlyAllocations(initialAllocations);
+      }
     } else {
       const initialAllocations = generateMonthlyAllocations(order);
       setMonthlyAllocations(initialAllocations);
@@ -1744,11 +1789,18 @@ const FinancePage = () => {
                 <TextField
                   label="Start Date"
                   type="date"
-                  value={startDate && startDate instanceof Date && !isNaN(startDate) ? startDate.toISOString().split('T')[0] : ''}
+                  value={startDate && startDate instanceof Date && !isNaN(startDate) 
+                    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}` 
+                    : ''}
                   onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setStartDate(date);
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      // Parse as local date to avoid timezone issues
+                      const [year, month, day] = dateValue.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      if (!isNaN(date.getTime())) {
+                        setStartDate(date);
+                      }
                     }
                   }}
                   fullWidth
@@ -1776,11 +1828,18 @@ const FinancePage = () => {
                 <TextField
                   label="End Date"
                   type="date"
-                  value={endDate && endDate instanceof Date && !isNaN(endDate) ? endDate.toISOString().split('T')[0] : ''}
+                  value={endDate && endDate instanceof Date && !isNaN(endDate) 
+                    ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}` 
+                    : ''}
                   onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setEndDate(date);
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      // Parse as local date to avoid timezone issues
+                      const [year, month, day] = dateValue.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      if (!isNaN(date.getTime())) {
+                        setEndDate(date);
+                      }
                     }
                   }}
                   fullWidth

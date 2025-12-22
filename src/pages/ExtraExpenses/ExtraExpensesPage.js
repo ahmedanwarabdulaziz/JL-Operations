@@ -53,7 +53,7 @@ import {
   Save as SaveIcon,
   Add as AddIcon
 } from '@mui/icons-material';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
@@ -94,6 +94,38 @@ const ExtraExpensesPage = () => {
   });
   const [savingBusinessExpense, setSavingBusinessExpense] = useState(false);
   
+  // Home expenses dialog state
+  const [homeExpenseDialogOpen, setHomeExpenseDialogOpen] = useState(false);
+  const [homeExpenseForm, setHomeExpenseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    quantity: '',
+    price: '',
+    taxType: 'percent',
+    tax: '',
+    total: 0
+  });
+  const [savingHomeExpense, setSavingHomeExpense] = useState(false);
+  
+  // Regular monthly expenses dialog state
+  const [regularMonthlyExpensesDialogOpen, setRegularMonthlyExpensesDialogOpen] = useState(false);
+  const [regularMonthlyExpenses, setRegularMonthlyExpenses] = useState([]);
+  const [loadingRegularMonthlyExpenses, setLoadingRegularMonthlyExpenses] = useState(false);
+  const [addRegularMonthlyExpenseDialogOpen, setAddRegularMonthlyExpenseDialogOpen] = useState(false);
+  const [regularMonthlyExpenseForm, setRegularMonthlyExpenseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    quantity: '',
+    price: '',
+    taxType: 'percent',
+    tax: '',
+    total: 0,
+    type: 'business' // 'business' or 'home'
+  });
+  const [savingRegularMonthlyExpense, setSavingRegularMonthlyExpense] = useState(false);
+  const [addingExpenseFromRegular, setAddingExpenseFromRegular] = useState(false);
+  const [editingExpenses, setEditingExpenses] = useState({}); // Track edited expenses by id
+  
   // Summary statistics
   const [summaryStats, setSummaryStats] = useState({
     totalExpenses: 0,
@@ -111,13 +143,14 @@ const ExtraExpensesPage = () => {
     try {
       setLoading(true);
       
-      // Fetch orders, corporate orders, done orders, general expenses, business expenses, and material companies
-      const [ordersSnapshot, corporateOrdersSnapshot, doneOrdersSnapshot, generalExpensesSnapshot, businessExpensesSnapshot, companiesSnapshot] = await Promise.all([
+      // Fetch orders, corporate orders, done orders, general expenses, business expenses, regular monthly expenses, and material companies
+      const [ordersSnapshot, corporateOrdersSnapshot, doneOrdersSnapshot, generalExpensesSnapshot, businessExpensesSnapshot, regularMonthlyExpensesSnapshot, companiesSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'corporate-orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'done-orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'businessExpenses'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'regularMonthlyExpenses'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'materialCompanies'), orderBy('createdAt', 'asc')))
       ]);
       
@@ -258,7 +291,7 @@ const ExtraExpensesPage = () => {
           orderBillNumber: 'GENERAL',
           customerName: 'General Expense',
           customerEmail: '',
-          orderDate: generalExpense.createdAt || generalExpense.date || '',
+          orderDate: generalExpense.date || generalExpense.createdAt || '',
           orderStatus: 'General',
           description: generalExpense.description || `${generalExpense.materialCode} - ${generalExpense.materialCompany}`,
           price: parseFloat(generalExpense.price) || 0,
@@ -278,32 +311,42 @@ const ExtraExpensesPage = () => {
         });
       });
       
-      // Extract business expenses
+      // Extract business and home expenses
       businessExpensesSnapshot.forEach((doc) => {
-        const businessExpense = { id: doc.id, ...doc.data() };
+        const expense = { id: doc.id, ...doc.data() };
+        const expenseType = expense.type || 'business'; // Default to 'business' for backward compatibility
+        const isHomeExpense = expenseType === 'home';
+        
         allExpenses.push({
-          id: `business_${businessExpense.id}`,
-          orderId: 'business',
-          orderBillNumber: 'BUSINESS',
-          customerName: 'Business Expense',
+          id: `${expenseType}_${expense.id}`,
+          orderId: expenseType,
+          orderBillNumber: isHomeExpense ? 'HOME' : 'BUSINESS',
+          customerName: isHomeExpense ? 'Home Expense' : 'Business Expense',
           customerEmail: '',
-          orderDate: businessExpense.createdAt || businessExpense.date || '',
-          orderStatus: 'Business',
-          description: businessExpense.description || 'Business Expense',
-          price: parseFloat(businessExpense.price) || 0,
-          unit: `${businessExpense.quantity}`,
-          tax: parseFloat(businessExpense.tax) || 0,
-          taxType: businessExpense.taxType || 'percent',
-          total: parseFloat(businessExpense.total) || 0,
-          originalExpense: businessExpense,
-          expenseType: 'business',
-          quantity: businessExpense.quantity,
+          orderDate: expense.date || expense.createdAt || '',
+          orderStatus: isHomeExpense ? 'Home' : 'Business',
+          description: expense.description || (isHomeExpense ? 'Home Expense' : 'Business Expense'),
+          price: parseFloat(expense.price) || 0,
+          unit: `${expense.quantity}`,
+          tax: parseFloat(expense.tax) || 0,
+          taxType: expense.taxType || 'percent',
+          total: parseFloat(expense.total) || 0,
+          originalExpense: expense,
+          expenseType: expenseType,
+          quantity: expense.quantity,
           // Include all fields needed for editing
-          date: businessExpense.date,
-          createdAt: businessExpense.createdAt,
-          updatedAt: businessExpense.updatedAt
+          date: expense.date,
+          createdAt: expense.createdAt,
+          updatedAt: expense.updatedAt
         });
       });
+      
+      // Process regular monthly expenses
+      const regularMonthlyExpensesData = regularMonthlyExpensesSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRegularMonthlyExpenses(regularMonthlyExpensesData);
       
       // Process material companies
       const companiesData = companiesSnapshot.docs.map((doc, index) => ({
@@ -426,6 +469,8 @@ const ExtraExpensesPage = () => {
         filtered = filtered.filter(expense => expense.expenseType === 'general');
       } else if (expenseTypeFilter === 'business') {
         filtered = filtered.filter(expense => expense.expenseType === 'business');
+      } else if (expenseTypeFilter === 'home') {
+        filtered = filtered.filter(expense => expense.expenseType === 'home');
       } else if (expenseTypeFilter === 'order-specific') {
         filtered = filtered.filter(expense => expense.expenseType === 'order-specific');
       } else if (expenseTypeFilter === 'taxed') {
@@ -502,11 +547,13 @@ const ExtraExpensesPage = () => {
         const expenseRef = doc(db, 'generalExpenses', expenseToDelete.id.replace('general_', ''));
         await deleteDoc(expenseRef);
         showSuccess('General expense deleted successfully');
-      } else if (expenseToDelete.expenseType === 'business') {
-        // Delete from businessExpenses collection
-        const expenseRef = doc(db, 'businessExpenses', expenseToDelete.id.replace('business_', ''));
+      } else if (expenseToDelete.expenseType === 'business' || expenseToDelete.expenseType === 'home') {
+        // Delete from businessExpenses collection (both business and home expenses are stored there)
+        const expenseId = expenseToDelete.id.replace('business_', '').replace('home_', '');
+        const expenseRef = doc(db, 'businessExpenses', expenseId);
         await deleteDoc(expenseRef);
-        showSuccess('Business expense deleted successfully');
+        const expenseTypeLabel = expenseToDelete.expenseType === 'home' ? 'Home' : 'Business';
+        showSuccess(`${expenseTypeLabel} expense deleted successfully`);
       } else {
         // For order-specific expenses, we would need to update the order
         // For now, just show a message that this needs to be done from the order page
@@ -632,12 +679,14 @@ const ExtraExpensesPage = () => {
       console.log('Updating expense with data:', expenseData);
       console.log('Firebase ID:', expenseToEdit.firebaseId);
       
-      const collectionName = expenseToEdit.expenseType === 'business' ? 'businessExpenses' : 'generalExpenses';
+      const collectionName = (expenseToEdit.expenseType === 'business' || expenseToEdit.expenseType === 'home') ? 'businessExpenses' : 'generalExpenses';
       const expenseRef = doc(db, collectionName, expenseToEdit.firebaseId);
       await updateDoc(expenseRef, expenseData);
       
       console.log('Expense updated successfully');
-      showSuccess(`${expenseToEdit.expenseType === 'business' ? 'Business' : 'General'} expense updated successfully`);
+      const expenseTypeLabel = expenseToEdit.expenseType === 'business' ? 'Business' : 
+                               expenseToEdit.expenseType === 'home' ? 'Home' : 'General';
+      showSuccess(`${expenseTypeLabel} expense updated successfully`);
       closeEditDialog();
       
       // Refresh expenses
@@ -665,9 +714,35 @@ const ExtraExpensesPage = () => {
     setBusinessExpenseDialogOpen(true);
   };
 
+  const openHomeExpenseDialog = () => {
+    setHomeExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+    setHomeExpenseDialogOpen(true);
+  };
+
   const closeBusinessExpenseDialog = () => {
     setBusinessExpenseDialogOpen(false);
     setBusinessExpenseForm({
+      date: new Date().toISOString().split('T')[0],
+      description: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0
+    });
+  };
+
+  const closeHomeExpenseDialog = () => {
+    setHomeExpenseDialogOpen(false);
+    setHomeExpenseForm({
       date: new Date().toISOString().split('T')[0],
       description: '',
       quantity: '',
@@ -701,8 +776,47 @@ const ExtraExpensesPage = () => {
     setBusinessExpenseForm(newForm);
   };
 
+  const handleHomeExpenseInputChange = (field, value) => {
+    const newForm = { ...homeExpenseForm, [field]: value };
+    
+    // Calculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(field === 'price' ? value : newForm.price) || 0;
+      const quantity = parseFloat(field === 'quantity' ? value : newForm.quantity) || 0;
+      const tax = parseFloat(field === 'tax' ? value : newForm.tax) || 0;
+      const taxType = field === 'taxType' ? value : newForm.taxType;
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      newForm.total = (price * quantity) + taxAmount;
+    }
+    
+    setHomeExpenseForm(newForm);
+  };
+
   const validateBusinessExpenseForm = () => {
     const { date, quantity, price, tax } = businessExpenseForm;
+    
+    if (!date || !quantity || !price || !tax) {
+      showError('All fields except description are required');
+      return false;
+    }
+    
+    if (parseFloat(quantity) <= 0 || parseFloat(price) <= 0 || parseFloat(tax) < 0) {
+      showError('Quantity and price must be greater than 0, tax cannot be negative');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const validateHomeExpenseForm = () => {
+    const { date, quantity, price, tax } = homeExpenseForm;
     
     if (!date || !quantity || !price || !tax) {
       showError('All fields except description are required');
@@ -723,12 +837,29 @@ const ExtraExpensesPage = () => {
     try {
       setSavingBusinessExpense(true);
       
+      // Recalculate total to ensure it's correct before saving
+      const quantity = parseFloat(businessExpenseForm.quantity) || 0;
+      const price = parseFloat(businessExpenseForm.price) || 0;
+      const tax = parseFloat(businessExpenseForm.tax) || 0;
+      const taxType = businessExpenseForm.taxType || 'percent';
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      const calculatedTotal = (price * quantity) + taxAmount;
+      
       const businessExpenseData = {
-        ...businessExpenseForm,
-        quantity: parseFloat(businessExpenseForm.quantity),
-        price: parseFloat(businessExpenseForm.price),
-        tax: parseFloat(businessExpenseForm.tax),
-        total: parseFloat(businessExpenseForm.total),
+        date: businessExpenseForm.date,
+        description: businessExpenseForm.description || '',
+        quantity: quantity,
+        price: price,
+        taxType: taxType,
+        tax: tax,
+        total: calculatedTotal,
         type: 'business',
         createdAt: new Date()
       };
@@ -746,6 +877,361 @@ const ExtraExpensesPage = () => {
     } finally {
       setSavingBusinessExpense(false);
     }
+  };
+
+  const saveHomeExpense = async () => {
+    if (!validateHomeExpenseForm()) return;
+    
+    try {
+      setSavingHomeExpense(true);
+      
+      // Recalculate total to ensure it's correct before saving
+      const quantity = parseFloat(homeExpenseForm.quantity) || 0;
+      const price = parseFloat(homeExpenseForm.price) || 0;
+      const tax = parseFloat(homeExpenseForm.tax) || 0;
+      const taxType = homeExpenseForm.taxType || 'percent';
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      const calculatedTotal = (price * quantity) + taxAmount;
+      
+      const homeExpenseData = {
+        date: homeExpenseForm.date,
+        description: homeExpenseForm.description || '',
+        quantity: quantity,
+        price: price,
+        taxType: taxType,
+        tax: tax,
+        total: calculatedTotal,
+        type: 'home',
+        createdAt: new Date()
+      };
+      
+      await addDoc(collection(db, 'businessExpenses'), homeExpenseData);
+      
+      showSuccess('Home expense added successfully');
+      closeHomeExpenseDialog();
+      
+      // Refresh expenses to show the new home expense
+      fetchOrders();
+    } catch (error) {
+      console.error('Error saving home expense:', error);
+      showError('Failed to save home expense');
+    } finally {
+      setSavingHomeExpense(false);
+    }
+  };
+
+  // Fetch regular monthly expenses
+  const fetchRegularMonthlyExpenses = async () => {
+    try {
+      setLoadingRegularMonthlyExpenses(true);
+      const snapshot = await getDocs(query(collection(db, 'regularMonthlyExpenses'), orderBy('createdAt', 'desc')));
+      const expensesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRegularMonthlyExpenses(expensesData);
+    } catch (error) {
+      console.error('Error fetching regular monthly expenses:', error);
+      showError('Failed to fetch regular monthly expenses');
+    } finally {
+      setLoadingRegularMonthlyExpenses(false);
+    }
+  };
+
+  // Handle regular monthly expense input change
+  const handleRegularMonthlyExpenseInputChange = (field, value) => {
+    const newForm = { ...regularMonthlyExpenseForm, [field]: value };
+    
+    // Calculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(field === 'price' ? value : newForm.price) || 0;
+      const quantity = parseFloat(field === 'quantity' ? value : newForm.quantity) || 0;
+      const tax = parseFloat(field === 'tax' ? value : newForm.tax) || 0;
+      const taxType = field === 'taxType' ? value : newForm.taxType;
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      newForm.total = (price * quantity) + taxAmount;
+    }
+    
+    setRegularMonthlyExpenseForm(newForm);
+  };
+
+  // Validate regular monthly expense form
+  const validateRegularMonthlyExpenseForm = () => {
+    const { quantity, price, tax } = regularMonthlyExpenseForm;
+    
+    if (!quantity || !price || !tax) {
+      showError('Quantity, price, and tax are required');
+      return false;
+    }
+    
+    if (parseFloat(quantity) <= 0 || parseFloat(price) <= 0 || parseFloat(tax) < 0) {
+      showError('Quantity and price must be greater than 0, tax cannot be negative');
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Save regular monthly expense
+  const saveRegularMonthlyExpense = async () => {
+    if (!validateRegularMonthlyExpenseForm()) return;
+    
+    try {
+      setSavingRegularMonthlyExpense(true);
+      
+      // Recalculate total to ensure it's correct before saving
+      const quantity = parseFloat(regularMonthlyExpenseForm.quantity) || 0;
+      const price = parseFloat(regularMonthlyExpenseForm.price) || 0;
+      const tax = parseFloat(regularMonthlyExpenseForm.tax) || 0;
+      const taxType = regularMonthlyExpenseForm.taxType || 'percent';
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      const calculatedTotal = (price * quantity) + taxAmount;
+      
+      const regularMonthlyExpenseData = {
+        date: regularMonthlyExpenseForm.date || new Date().toISOString().split('T')[0],
+        description: regularMonthlyExpenseForm.description || '',
+        quantity: quantity,
+        price: price,
+        taxType: taxType,
+        tax: tax,
+        total: calculatedTotal,
+        type: regularMonthlyExpenseForm.type || 'business', // 'business' or 'home'
+        createdAt: new Date()
+      };
+      
+      await addDoc(collection(db, 'regularMonthlyExpenses'), regularMonthlyExpenseData);
+      
+      showSuccess('Regular monthly expense added successfully');
+      closeAddRegularMonthlyExpenseDialog();
+      fetchRegularMonthlyExpenses();
+    } catch (error) {
+      console.error('Error saving regular monthly expense:', error);
+      showError('Failed to save regular monthly expense');
+    } finally {
+      setSavingRegularMonthlyExpense(false);
+    }
+  };
+
+  // Initialize editing state for an expense
+  const getEditingExpense = (expense) => {
+    if (!editingExpenses[expense.id]) {
+      return {
+        ...expense,
+        date: expense.date || new Date().toISOString().split('T')[0],
+        quantity: expense.quantity?.toString() || '',
+        price: expense.price?.toString() || '',
+        tax: expense.tax?.toString() || '',
+        total: expense.total?.toString() || ''
+      };
+    }
+    return editingExpenses[expense.id];
+  };
+
+  // Save and add expense from regular monthly expense to current expenses
+  const saveAndAddExpenseFromRegularMonthly = async (expenseId) => {
+    try {
+      setAddingExpenseFromRegular(true);
+      
+      // Get the expense from editingExpenses first (has latest changes), then fallback to original
+      const editedExpense = editingExpenses[expenseId];
+      const originalExpense = regularMonthlyExpenses.find(e => e.id === expenseId);
+      if (!originalExpense) return;
+      
+      // Use edited values if they exist, otherwise use original values
+      // For date, check if it exists in editedExpense first (even if empty string)
+      const quantity = parseFloat(editedExpense?.quantity ?? originalExpense.quantity) || 0;
+      const price = parseFloat(editedExpense?.price ?? originalExpense.price) || 0;
+      const tax = parseFloat(editedExpense?.tax ?? originalExpense.tax) || 0;
+      const taxType = editedExpense?.taxType ?? originalExpense.taxType ?? 'percent';
+      // Check if date exists in editedExpense, otherwise use original or today
+      // Priority: editedExpense.date > originalExpense.date > today's date
+      let date;
+      if (editedExpense && editedExpense.date) {
+        // Use the edited date if it exists
+        date = editedExpense.date;
+      } else if (originalExpense.date) {
+        // Use original date if it exists
+        date = originalExpense.date;
+      } else {
+        // Fallback to today's date
+        date = new Date().toISOString().split('T')[0];
+      }
+      
+      console.log('Save - expenseId:', expenseId, 'editedExpense:', editedExpense, 'date:', date);
+      
+      console.log('Saving expense with date:', date, 'editedExpense:', editedExpense, 'originalExpense.date:', originalExpense.date);
+      const description = editedExpense?.description ?? originalExpense.description ?? '';
+      const type = editedExpense?.type ?? originalExpense.type ?? 'business';
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      const calculatedTotal = (price * quantity) + taxAmount;
+      
+      // First, save the changes to the regular monthly expense
+      const expenseData = {
+        date: date,
+        description: description,
+        quantity: quantity,
+        price: price,
+        taxType: taxType,
+        tax: tax,
+        total: calculatedTotal,
+        type: type
+      };
+      
+      const expenseRef = doc(db, 'regularMonthlyExpenses', expenseId);
+      await updateDoc(expenseRef, expenseData);
+      
+      // Then add it to current expenses
+      const currentExpenseData = {
+        date: date,
+        description: description,
+        quantity: quantity,
+        price: price,
+        taxType: taxType,
+        tax: tax,
+        total: calculatedTotal,
+        type: type,
+        createdAt: new Date()
+      };
+      
+      await addDoc(collection(db, 'businessExpenses'), currentExpenseData);
+      
+      // Clear editing state for this expense
+      const newEditingExpenses = { ...editingExpenses };
+      delete newEditingExpenses[expenseId];
+      setEditingExpenses(newEditingExpenses);
+      
+      showSuccess(`${type === 'home' ? 'Home' : 'Business'} expense saved and added successfully`);
+      fetchOrders(); // Refresh expenses list
+      fetchRegularMonthlyExpenses(); // Refresh regular monthly expenses
+    } catch (error) {
+      console.error('Error saving and adding expense:', error);
+      showError('Failed to save and add expense');
+    } finally {
+      setAddingExpenseFromRegular(false);
+    }
+  };
+
+  // Handle edit input change for a specific expense
+  const handleEditRegularExpenseChange = (expenseId, field, value) => {
+    const currentExpense = editingExpenses[expenseId] || regularMonthlyExpenses.find(e => e.id === expenseId);
+    if (!currentExpense) return;
+    
+    // Get current values, ensuring strings for input fields
+    const currentQuantity = editingExpenses[expenseId]?.quantity?.toString() || currentExpense.quantity?.toString() || '';
+    const currentPrice = editingExpenses[expenseId]?.price?.toString() || currentExpense.price?.toString() || '';
+    const currentTax = editingExpenses[expenseId]?.tax?.toString() || currentExpense.tax?.toString() || '';
+    const currentTaxType = editingExpenses[expenseId]?.taxType || currentExpense.taxType || 'percent';
+    const currentDate = editingExpenses[expenseId]?.date || currentExpense.date || new Date().toISOString().split('T')[0];
+    const currentDescription = editingExpenses[expenseId]?.description || currentExpense.description || '';
+    const currentType = editingExpenses[expenseId]?.type || currentExpense.type || 'business';
+    
+    // Build updated object with the changed field
+    const updated = { 
+      ...currentExpense,
+      date: field === 'date' ? value : (editingExpenses[expenseId]?.date || currentDate),
+      description: field === 'description' ? value : currentDescription,
+      type: field === 'type' ? value : currentType,
+      quantity: field === 'quantity' ? value : currentQuantity,
+      price: field === 'price' ? value : currentPrice,
+      tax: field === 'tax' ? value : currentTax,
+      taxType: field === 'taxType' ? value : currentTaxType
+    };
+    
+    // Ensure date is always set
+    if (!updated.date) {
+      updated.date = new Date().toISOString().split('T')[0];
+    }
+    
+    // Recalculate total when price, quantity, or tax changes
+    if (field === 'price' || field === 'quantity' || field === 'tax' || field === 'taxType') {
+      const price = parseFloat(updated.price) || 0;
+      const quantity = parseFloat(updated.quantity) || 0;
+      const tax = parseFloat(updated.tax) || 0;
+      const taxType = updated.taxType || 'percent';
+      
+      let taxAmount = 0;
+      if (taxType === 'percent') {
+        taxAmount = (price * quantity * tax) / 100;
+      } else {
+        taxAmount = tax;
+      }
+      
+      updated.total = ((price * quantity) + taxAmount).toFixed(2);
+    } else {
+      // For other fields, preserve the existing total
+      updated.total = editingExpenses[expenseId]?.total || currentExpense.total?.toString() || '0';
+    }
+    
+    setEditingExpenses({ ...editingExpenses, [expenseId]: updated });
+  };
+
+  // Delete regular monthly expense
+  const deleteRegularMonthlyExpense = async (expenseId) => {
+    if (!window.confirm('Are you sure you want to delete this regular monthly expense?')) {
+      return;
+    }
+    
+    try {
+      const expenseRef = doc(db, 'regularMonthlyExpenses', expenseId);
+      await deleteDoc(expenseRef);
+      showSuccess('Regular monthly expense deleted successfully');
+      fetchRegularMonthlyExpenses();
+    } catch (error) {
+      console.error('Error deleting regular monthly expense:', error);
+      showError('Failed to delete regular monthly expense');
+    }
+  };
+
+  // Close dialogs
+  const closeRegularMonthlyExpensesDialog = () => {
+    setRegularMonthlyExpensesDialogOpen(false);
+  };
+
+  const closeAddRegularMonthlyExpenseDialog = () => {
+    setAddRegularMonthlyExpenseDialogOpen(false);
+    setRegularMonthlyExpenseForm({
+      description: '',
+      quantity: '',
+      price: '',
+      taxType: 'percent',
+      tax: '',
+      total: 0,
+      type: 'business'
+    });
+  };
+
+  // Open regular monthly expenses dialog
+  const openRegularMonthlyExpensesDialog = async () => {
+    setRegularMonthlyExpensesDialogOpen(true);
+    await fetchRegularMonthlyExpenses();
   };
 
   const getStatusColor = (status) => {
@@ -970,21 +1456,53 @@ const ExtraExpensesPage = () => {
             <FilterListIcon />
             Filters
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={openBusinessExpenseDialog}
-            sx={{
-              backgroundColor: '#f27921',
-              '&:hover': {
-                backgroundColor: '#e67e22'
-              },
-              color: '#000000',
-              fontWeight: 'bold'
-            }}
-          >
-            Business Expenses
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openBusinessExpenseDialog}
+              sx={{
+                backgroundColor: '#f27921',
+                '&:hover': {
+                  backgroundColor: '#e67e22'
+                },
+                color: '#000000',
+                fontWeight: 'bold'
+              }}
+            >
+              Business Expenses
+            </Button>
+            <Button
+              onClick={openHomeExpenseDialog}
+              variant="contained"
+              startIcon={<BusinessIcon />}
+              sx={{
+                backgroundColor: '#274290',
+                '&:hover': {
+                  backgroundColor: '#1e3269'
+                },
+                color: '#ffffff',
+                fontWeight: 'bold'
+              }}
+            >
+              Home Expenses
+            </Button>
+            <Button
+              onClick={openRegularMonthlyExpensesDialog}
+              variant="contained"
+              startIcon={<CalendarIcon />}
+              sx={{
+                backgroundColor: '#2e7d32',
+                '&:hover': {
+                  backgroundColor: '#1b5e20'
+                },
+                color: '#ffffff',
+                fontWeight: 'bold'
+              }}
+            >
+              Regular Monthly Expenses
+            </Button>
+          </Box>
         </Box>
         
         <Grid container spacing={2}>
@@ -1095,6 +1613,7 @@ const ExtraExpensesPage = () => {
                 <MenuItem value="all">All Types</MenuItem>
                 <MenuItem value="general">General</MenuItem>
                 <MenuItem value="business">Business</MenuItem>
+                <MenuItem value="home">Home</MenuItem>
                 <MenuItem value="order-specific">Order-Specific</MenuItem>
                 <MenuItem value="taxed">With Tax</MenuItem>
                 <MenuItem value="no_tax">No Tax</MenuItem>
@@ -1174,6 +1693,7 @@ const ExtraExpensesPage = () => {
                         label={
                           expense.expenseType === 'general' ? 'General' : 
                           expense.expenseType === 'business' ? 'Business' : 
+                          expense.expenseType === 'home' ? 'Home' :
                           'Order-Specific'
                         }
                         size="small"
@@ -1181,6 +1701,7 @@ const ExtraExpensesPage = () => {
                           backgroundColor: 
                             expense.expenseType === 'general' ? '#f27921' : 
                             expense.expenseType === 'business' ? '#9c27b0' : 
+                            expense.expenseType === 'home' ? '#274290' :
                             '#2196f3',
                           color: '#ffffff',
                           fontWeight: 'medium',
@@ -1273,7 +1794,7 @@ const ExtraExpensesPage = () => {
                             <ViewIcon />
                           </IconButton>
                         </Tooltip>
-                        {(expense.expenseType === 'general' || expense.expenseType === 'business') && (
+                        {(expense.expenseType === 'general' || expense.expenseType === 'business' || expense.expenseType === 'home') && (
                           <>
                             <Tooltip title="Edit Expense">
                               <IconButton
@@ -1745,6 +2266,609 @@ const ExtraExpensesPage = () => {
             sx={buttonStyles.primaryButton}
           >
             {savingBusinessExpense ? 'Saving...' : 'Save Business Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Home Expenses Dialog */}
+      <Dialog open={homeExpenseDialogOpen} onClose={closeHomeExpenseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #274290 0%, #1e3269 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <AddIcon />
+          Add Home Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Description Field */}
+            <TextField
+              fullWidth
+              label="Description"
+              value={homeExpenseForm.description}
+              onChange={(e) => handleHomeExpenseInputChange('description', e.target.value)}
+              placeholder="Enter expense description (optional)"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Date Field */}
+            <TextField
+              fullWidth
+              label="Date"
+              type="date"
+              value={homeExpenseForm.date}
+              onChange={(e) => handleHomeExpenseInputChange('date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Quantity and Price Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Quantity"
+                type="number"
+                value={homeExpenseForm.quantity}
+                onChange={(e) => handleHomeExpenseInputChange('quantity', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.1 }}
+                sx={{
+                  minWidth: '120px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <TextField
+                fullWidth
+                label="Price"
+                type="number"
+                value={homeExpenseForm.price}
+                onChange={(e) => handleHomeExpenseInputChange('price', e.target.value)}
+                placeholder="0.00"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Tax Type and Tax Amount Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Tax Type</InputLabel>
+                <Select
+                  value={homeExpenseForm.taxType}
+                  onChange={(e) => handleHomeExpenseInputChange('taxType', e.target.value)}
+                  label="Tax Type"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                >
+                  <MenuItem value="percent">Percentage (%)</MenuItem>
+                  <MenuItem value="fixed">Fixed Amount ($)</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <TextField
+                fullWidth
+                label={homeExpenseForm.taxType === 'percent' ? 'Tax Percentage' : 'Tax Amount'}
+                type="number"
+                value={homeExpenseForm.tax}
+                onChange={(e) => handleHomeExpenseInputChange('tax', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {homeExpenseForm.taxType === 'percent' ? '%' : '$'}
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+            
+            {/* Total Calculation Display */}
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                <strong>Total: ${homeExpenseForm.total}</strong>
+                <br />
+                Calculation: (${homeExpenseForm.price || 0} × {homeExpenseForm.quantity || 0}) + Tax
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeHomeExpenseDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveHomeExpense}
+            variant="contained"
+            disabled={savingHomeExpense}
+            startIcon={savingHomeExpense ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {savingHomeExpense ? 'Saving...' : 'Save Home Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Regular Monthly Expenses Dialog */}
+      <Dialog 
+        open={regularMonthlyExpensesDialogOpen} 
+        onClose={closeRegularMonthlyExpensesDialog} 
+        maxWidth={false}
+        fullWidth
+        PaperProps={{
+          sx: {
+            width: '95vw',
+            maxWidth: '95vw',
+            height: '95vh',
+            maxHeight: '95vh',
+            margin: '2.5vh'
+          }
+        }}
+      >
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CalendarIcon />
+            Regular Monthly Expenses
+          </Box>
+          <Button
+            onClick={() => setAddRegularMonthlyExpenseDialogOpen(true)}
+            variant="contained"
+            startIcon={<AddIcon />}
+            sx={{
+              backgroundColor: '#ffffff',
+              color: '#2e7d32',
+              '&:hover': {
+                backgroundColor: '#f5f5f5'
+              },
+              fontWeight: 'bold'
+            }}
+          >
+            Add New
+          </Button>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, height: 'calc(95vh - 200px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {loadingRegularMonthlyExpenses ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : regularMonthlyExpenses.length === 0 ? (
+            <Box sx={{ textAlign: 'center', p: 4 }}>
+              <Typography variant="body1" sx={{ color: '#ffffff', mb: 2 }}>
+                No regular monthly expenses found. Click "Add New" to create one.
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} sx={{ backgroundColor: '#2a2a2a', flex: 1, overflow: 'auto' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Date</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Quantity</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Price</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Tax</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Total</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', color: '#d4af5a', backgroundColor: '#1a1a1a' }}>Action</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {regularMonthlyExpenses.map((expense) => {
+                    const displayExpense = getEditingExpense(expense);
+                    
+                    return (
+                      <TableRow key={expense.id} sx={{ '&:hover': { backgroundColor: '#333333' } }}>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            type="date"
+                            value={displayExpense.date || new Date().toISOString().split('T')[0]}
+                            onChange={(e) => handleEditRegularExpenseChange(expense.id, 'date', e.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{
+                              width: 150,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': { borderColor: '#8b6b1f' },
+                                '&:hover fieldset': { borderColor: '#b98f33' },
+                                '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                              },
+                              '& .MuiInputBase-input': { color: '#ffffff' }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            value={displayExpense.description || ''}
+                            onChange={(e) => handleEditRegularExpenseChange(expense.id, 'description', e.target.value)}
+                            sx={{
+                              minWidth: 150,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': { borderColor: '#8b6b1f' },
+                                '&:hover fieldset': { borderColor: '#b98f33' },
+                                '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                              },
+                              '& .MuiInputBase-input': { color: '#ffffff' }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                              value={displayExpense.type || 'business'}
+                              onChange={(e) => handleEditRegularExpenseChange(expense.id, 'type', e.target.value)}
+                              sx={{
+                                color: '#ffffff',
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#8b6b1f' },
+                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' }
+                              }}
+                            >
+                              <MenuItem value="business">Business</MenuItem>
+                              <MenuItem value="home">Home</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={displayExpense.quantity || ''}
+                            onChange={(e) => handleEditRegularExpenseChange(expense.id, 'quantity', e.target.value)}
+                            inputProps={{ min: 0, step: 0.1 }}
+                            sx={{
+                              width: 100,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': { borderColor: '#8b6b1f' },
+                                '&:hover fieldset': { borderColor: '#b98f33' },
+                                '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                              },
+                              '& .MuiInputBase-input': { color: '#ffffff' }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={displayExpense.price || ''}
+                            onChange={(e) => handleEditRegularExpenseChange(expense.id, 'price', e.target.value)}
+                            inputProps={{ min: 0, step: 0.01 }}
+                            InputProps={{
+                              startAdornment: <InputAdornment position="start">$</InputAdornment>
+                            }}
+                            sx={{
+                              width: 120,
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': { borderColor: '#8b6b1f' },
+                                '&:hover fieldset': { borderColor: '#b98f33' },
+                                '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                              },
+                              '& .MuiInputBase-input': { color: '#ffffff' }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <FormControl size="small" sx={{ minWidth: 80 }}>
+                              <Select
+                                value={displayExpense.taxType || 'percent'}
+                                onChange={(e) => handleEditRegularExpenseChange(expense.id, 'taxType', e.target.value)}
+                                sx={{
+                                  color: '#ffffff',
+                                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#8b6b1f' },
+                                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' }
+                                }}
+                              >
+                                <MenuItem value="percent">%</MenuItem>
+                                <MenuItem value="fixed">$</MenuItem>
+                              </Select>
+                            </FormControl>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={displayExpense.tax || ''}
+                              onChange={(e) => handleEditRegularExpenseChange(expense.id, 'tax', e.target.value)}
+                              inputProps={{ min: 0, step: 0.01 }}
+                              sx={{
+                                width: 80,
+                                '& .MuiOutlinedInput-root': {
+                                  '& fieldset': { borderColor: '#8b6b1f' },
+                                  '&:hover fieldset': { borderColor: '#b98f33' },
+                                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                                },
+                                '& .MuiInputBase-input': { color: '#ffffff' }
+                              }}
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography sx={{ color: '#d4af5a', fontWeight: 'bold' }}>
+                            ${displayExpense.total || '0.00'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button
+                              onClick={() => saveAndAddExpenseFromRegularMonthly(expense.id)}
+                              variant="contained"
+                              size="small"
+                              disabled={addingExpenseFromRegular}
+                              startIcon={addingExpenseFromRegular ? <CircularProgress size={16} /> : <SaveIcon />}
+                              sx={{
+                                backgroundColor: '#2e7d32',
+                                '&:hover': { backgroundColor: '#1b5e20' },
+                                color: '#ffffff'
+                              }}
+                            >
+                              {addingExpenseFromRegular ? 'Saving...' : 'Save and Add'}
+                            </Button>
+                            <IconButton
+                              onClick={() => deleteRegularMonthlyExpense(expense.id)}
+                              size="small"
+                              sx={{
+                                color: '#f44336',
+                                '&:hover': { backgroundColor: '#ffebee' }
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button
+            onClick={closeRegularMonthlyExpensesDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Regular Monthly Expense Dialog */}
+      <Dialog open={addRegularMonthlyExpenseDialogOpen} onClose={closeAddRegularMonthlyExpenseDialog} maxWidth="md" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <AddIcon />
+          Add Regular Monthly Expense
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Date Field */}
+            <TextField
+              fullWidth
+              label="Date"
+              type="date"
+              value={regularMonthlyExpenseForm.date}
+              onChange={(e) => handleRegularMonthlyExpenseInputChange('date', e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Type Selection */}
+            <FormControl fullWidth>
+              <InputLabel>Expense Type</InputLabel>
+              <Select
+                value={regularMonthlyExpenseForm.type}
+                onChange={(e) => handleRegularMonthlyExpenseInputChange('type', e.target.value)}
+                label="Expense Type"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              >
+                <MenuItem value="business">Business</MenuItem>
+                <MenuItem value="home">Home</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Description Field */}
+            <TextField
+              fullWidth
+              label="Description"
+              value={regularMonthlyExpenseForm.description}
+              onChange={(e) => handleRegularMonthlyExpenseInputChange('description', e.target.value)}
+              placeholder="Enter expense description (optional)"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  '& fieldset': { borderColor: '#8b6b1f' },
+                  '&:hover fieldset': { borderColor: '#b98f33' },
+                  '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                }
+              }}
+            />
+
+            {/* Quantity and Price Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Quantity"
+                type="number"
+                value={regularMonthlyExpenseForm.quantity}
+                onChange={(e) => handleRegularMonthlyExpenseInputChange('quantity', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.1 }}
+                sx={{
+                  minWidth: '120px',
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+              
+              <TextField
+                fullWidth
+                label="Price"
+                type="number"
+                value={regularMonthlyExpenseForm.price}
+                onChange={(e) => handleRegularMonthlyExpenseInputChange('price', e.target.value)}
+                placeholder="0.00"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start">$</InputAdornment>
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+
+            {/* Tax Type and Tax Amount Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>Tax Type</InputLabel>
+                <Select
+                  value={regularMonthlyExpenseForm.taxType}
+                  onChange={(e) => handleRegularMonthlyExpenseInputChange('taxType', e.target.value)}
+                  label="Tax Type"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': { borderColor: '#8b6b1f' },
+                      '&:hover fieldset': { borderColor: '#b98f33' },
+                      '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                    }
+                  }}
+                >
+                  <MenuItem value="percent">Percentage (%)</MenuItem>
+                  <MenuItem value="fixed">Fixed Amount ($)</MenuItem>
+                </Select>
+              </FormControl>
+              
+              <TextField
+                fullWidth
+                label={regularMonthlyExpenseForm.taxType === 'percent' ? 'Tax Percentage' : 'Tax Amount'}
+                type="number"
+                value={regularMonthlyExpenseForm.tax}
+                onChange={(e) => handleRegularMonthlyExpenseInputChange('tax', e.target.value)}
+                placeholder="0"
+                required
+                inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {regularMonthlyExpenseForm.taxType === 'percent' ? '%' : '$'}
+                    </InputAdornment>
+                  )
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#8b6b1f' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' }
+                  }
+                }}
+              />
+            </Box>
+            
+            {/* Total Calculation Display */}
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                <strong>Total: ${regularMonthlyExpenseForm.total}</strong>
+                <br />
+                Calculation: (${regularMonthlyExpenseForm.price || 0} × {regularMonthlyExpenseForm.quantity || 0}) + Tax
+              </Typography>
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={closeAddRegularMonthlyExpenseDialog}
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={saveRegularMonthlyExpense}
+            variant="contained"
+            disabled={savingRegularMonthlyExpense}
+            startIcon={savingRegularMonthlyExpense ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={buttonStyles.primaryButton}
+          >
+            {savingRegularMonthlyExpense ? 'Saving...' : 'Save Regular Monthly Expense'}
           </Button>
         </DialogActions>
       </Dialog>

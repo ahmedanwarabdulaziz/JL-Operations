@@ -354,23 +354,35 @@ const WorkshopPage = () => {
     }
     
     const months = [];
-    const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    // Normalize to first day of each month to avoid day-of-month issues
+    const startYear = startDate.getFullYear();
+    const startMonth = startDate.getMonth(); // 0-indexed
+    const endYear = endDate.getFullYear();
+    const endMonth = endDate.getMonth(); // 0-indexed
     
-    while (current <= end) {
+    let currentYear = startYear;
+    let currentMonth = startMonth;
+    
+    // Compare using year/month only, not day
+    while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
       // Use 1-indexed months (1-12) to match new allocation format
-      const monthIndex = current.getMonth(); // 0-indexed
-      const month = monthIndex + 1; // Convert to 1-indexed (1-12)
-      const year = current.getFullYear();
+      const month = currentMonth + 1; // Convert from 0-indexed to 1-indexed
+      const year = currentYear;
       
+      const dateForLabel = new Date(year, currentMonth, 1);
       months.push({
         month: month, // 1-indexed (1-12)
         year: year,
-        label: current.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        label: dateForLabel.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
         percentage: months.length === 0 ? 100 : 0 // Default 100% to first month
       });
       
-      current.setMonth(current.getMonth() + 1);
+      // Move to next month
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
     }
     
     return months;
@@ -453,8 +465,12 @@ const WorkshopPage = () => {
     }
 
     try {
+      // Determine collection name based on order type
+      const isCorporateOrder = selectedOrderForAllocation.orderType === 'corporate';
+      const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
+      
       // Update order dates in database
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
+      const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, {
         'orderDetails.startDate': startDate,
         'orderDetails.endDate': endDate,
@@ -510,24 +526,29 @@ const WorkshopPage = () => {
     setAllocationDialogOpen(true);
     setShowAllocationTable(false);
     
+    // Helper function to normalize date to local date-only (avoid timezone issues)
+    const normalizeToLocalDate = (dateValue) => {
+      if (!dateValue) return null;
+      
+      let date;
+      if (dateValue.toDate) {
+        // Firestore Timestamp
+        date = dateValue.toDate();
+      } else if (dateValue instanceof Date) {
+        date = dateValue;
+      } else {
+        date = new Date(dateValue);
+      }
+      
+      if (isNaN(date.getTime())) return null;
+      
+      // Normalize to local date only (ignore time component to avoid timezone shifts)
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    };
+    
     // Set default dates with proper validation
-    let start, end;
-    
-    if (order.orderDetails?.startDate) {
-      if (order.orderDetails.startDate.toDate) {
-        start = order.orderDetails.startDate.toDate();
-      } else {
-        start = new Date(order.orderDetails.startDate);
-      }
-    }
-    
-    if (order.orderDetails?.endDate) {
-      if (order.orderDetails.endDate.toDate) {
-        end = order.orderDetails.endDate.toDate();
-      } else {
-        end = new Date(order.orderDetails.endDate);
-      }
-    }
+    const start = normalizeToLocalDate(order.orderDetails?.startDate);
+    const end = normalizeToLocalDate(order.orderDetails?.endDate);
     
     // Only set dates if they are valid
     if (start && !isNaN(start.getTime())) {
@@ -603,14 +624,17 @@ const WorkshopPage = () => {
         includeReviewRequest
       );
 
-      if (!confirmed.confirmed) {
+      if (!confirmed || !confirmed.confirmed) {
         // Reopen allocation dialog if user cancels
         setAllocationDialogHidden(false);
         setAllocationDialogOpen(true);
         return; // User cancelled
       }
       
-      const orderRef = doc(db, 'orders', selectedOrderForAllocation.id);
+      // Handle both corporate and regular orders
+      const isCorporateOrder = selectedOrderForAllocation.orderType === 'corporate';
+      const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
       
       // Send completion email if customer has email and user confirmed
@@ -694,13 +718,19 @@ const WorkshopPage = () => {
     try {
       if (!validationError.order) return;
       
-      const orderRef = doc(db, 'orders', validationError.order.id);
-      const totalAmount = calculateOrderProfit(validationError.order).revenue;
+      const order = validationError.order;
+      const isCorporate = order.orderType === 'corporate';
+      const orderRef = isCorporate 
+        ? doc(db, 'corporate-orders', order.id)
+        : doc(db, 'orders', order.id);
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = isCorporate ? order.paymentDetails : order.paymentData;
+      const totalAmount = calculateOrderProfit(order).revenue;
       
       await updateDoc(orderRef, {
-        'paymentData.amountPaid': totalAmount,
-        'paymentData.paymentHistory': [
-          ...(validationError.order.paymentData?.paymentHistory || []),
+        [`${paymentField}.amountPaid`]: totalAmount,
+        [`${paymentField}.paymentHistory`]: [
+          ...(currentPaymentData?.paymentHistory || []),
           {
             amount: validationError.pendingAmount,
             date: new Date(),
@@ -709,8 +739,32 @@ const WorkshopPage = () => {
         ]
       });
       
-      // Show allocation dialog for completed order
-      handleAllocationDialog(validationError.order, validationError.newStatus);
+      // Update local state with new payment data
+      const updatedOrder = {
+        ...order,
+        [paymentField]: {
+          ...currentPaymentData,
+          amountPaid: totalAmount,
+          paymentHistory: [
+            ...(currentPaymentData?.paymentHistory || []),
+            {
+              amount: validationError.pendingAmount,
+              date: new Date(),
+              notes: 'Auto-paid to complete order'
+            }
+          ]
+        }
+      };
+      
+      // Update orders list
+      setOrders(orders.map(o => o.id === order.id ? updatedOrder : o));
+      setFilteredOrders(filteredOrders.map(o => o.id === order.id ? updatedOrder : o));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(updatedOrder);
+      }
+      
+      // Show allocation dialog for completed order with updated order data
+      handleAllocationDialog(updatedOrder, validationError.newStatus);
       setValidationDialogOpen(false);
     } catch (error) {
       console.error('Error making fully paid:', error);
@@ -722,12 +776,18 @@ const WorkshopPage = () => {
     try {
       if (!validationError.order) return;
       
-      const orderRef = doc(db, 'orders', validationError.order.id);
+      const order = validationError.order;
+      const isCorporate = order.orderType === 'corporate';
+      const orderRef = isCorporate 
+        ? doc(db, 'corporate-orders', order.id)
+        : doc(db, 'orders', order.id);
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = isCorporate ? order.paymentDetails : order.paymentData;
       
       await updateDoc(orderRef, {
-        'paymentData.amountPaid': 0,
-        'paymentData.paymentHistory': [
-          ...(validationError.order.paymentData?.paymentHistory || []),
+        [`${paymentField}.amountPaid`]: 0,
+        [`${paymentField}.paymentHistory`]: [
+          ...(currentPaymentData?.paymentHistory || []),
           {
             amount: -validationError.currentAmount,
             date: new Date(),
@@ -736,8 +796,32 @@ const WorkshopPage = () => {
         ]
       });
       
+      // Update local state
+      const updatedOrder = {
+        ...order,
+        [paymentField]: {
+          ...currentPaymentData,
+          amountPaid: 0,
+          paymentHistory: [
+            ...(currentPaymentData?.paymentHistory || []),
+            {
+              amount: -validationError.currentAmount,
+              date: new Date(),
+              notes: 'Refunded to cancel order'
+            }
+          ]
+        }
+      };
+      
+      // Update orders list
+      setOrders(orders.map(o => o.id === order.id ? updatedOrder : o));
+      setFilteredOrders(filteredOrders.map(o => o.id === order.id ? updatedOrder : o));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(updatedOrder);
+      }
+      
       // Update status directly for cancelled orders
-      await updateInvoiceStatus(validationError.order.id, validationError.newStatus?.value);
+      await updateInvoiceStatus(order.id, validationError.newStatus?.value);
       setValidationDialogOpen(false);
     } catch (error) {
       console.error('Error setting payment to zero:', error);
@@ -762,7 +846,10 @@ const WorkshopPage = () => {
       // Payment validation for end states
       if (newStatusObj.isEndState) {
         const totalAmount = calculateOrderProfit(order).revenue;
-        const normalizedPayment = normalizePaymentData(order.paymentData);
+        // Handle both corporate and regular orders
+        const isCorporate = order.orderType === 'corporate';
+        const paymentData = isCorporate ? order.paymentDetails : order.paymentData;
+        const normalizedPayment = normalizePaymentData(paymentData);
         
         if (newStatusObj.endStateType === 'done') {
           // For "done" - must be fully paid
@@ -804,7 +891,11 @@ const WorkshopPage = () => {
         }
       }
 
-      const orderRef = doc(db, 'orders', orderId);
+      // Handle both corporate and regular orders
+      const isCorporate = order.orderType === 'corporate';
+      const orderRef = isCorporate 
+        ? doc(db, 'corporate-orders', orderId)
+        : doc(db, 'orders', orderId);
       await updateDoc(orderRef, { invoiceStatus: newStatus });
       
       // Update local state
@@ -4289,11 +4380,18 @@ const WorkshopPage = () => {
                 <TextField
                   label="Start Date"
                   type="date"
-                  value={startDate && startDate instanceof Date && !isNaN(startDate) ? startDate.toISOString().split('T')[0] : ''}
+                  value={startDate && startDate instanceof Date && !isNaN(startDate) 
+                    ? `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}` 
+                    : ''}
                   onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setStartDate(date);
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      // Parse as local date to avoid timezone issues
+                      const [year, month, day] = dateValue.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      if (!isNaN(date.getTime())) {
+                        setStartDate(date);
+                      }
                     }
                   }}
                   fullWidth
@@ -4304,11 +4402,18 @@ const WorkshopPage = () => {
                 <TextField
                   label="End Date"
                   type="date"
-                  value={endDate && endDate instanceof Date && !isNaN(endDate) ? endDate.toISOString().split('T')[0] : ''}
+                  value={endDate && endDate instanceof Date && !isNaN(endDate) 
+                    ? `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}` 
+                    : ''}
                   onChange={(e) => {
-                    const date = new Date(e.target.value);
-                    if (!isNaN(date.getTime())) {
-                      setEndDate(date);
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      // Parse as local date to avoid timezone issues
+                      const [year, month, day] = dateValue.split('-').map(Number);
+                      const date = new Date(year, month - 1, day);
+                      if (!isNaN(date.getTime())) {
+                        setEndDate(date);
+                      }
                     }
                   }}
                   fullWidth

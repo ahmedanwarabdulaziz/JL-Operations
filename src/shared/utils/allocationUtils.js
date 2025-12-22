@@ -50,10 +50,13 @@ const extractMonthYear = (allocation) => {
       return null;
     }
     
-    // If month is 0-11 (0-indexed), convert to 1-indexed
-    if (month >= 0 && month <= 11 && month !== 12) {
-      month = month + 1;
+    // In new format, months are already 1-indexed (1-12)
+    // Only convert if month is 0 (0-indexed January from old format)
+    // If month is 1-12, it's already correct, so don't convert
+    if (month === 0) {
+      month = 1; // Convert 0-indexed January to 1-indexed
     }
+    // If month is 1-12, it's already 1-indexed, so keep it as is
     
     // Final validation
     if (month < 1 || month > 12 || year <= 0 || !Number.isFinite(month) || !Number.isFinite(year)) {
@@ -308,3 +311,5 @@ export const getMonthKeyFromAllocation = (allocation) => {
   }
   return null;
 };
+
+
