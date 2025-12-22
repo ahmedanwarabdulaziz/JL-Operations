@@ -73,9 +73,33 @@ export const calculateInvoiceTotals = (order, materialTaxRates = {}) => {
 
   if (order.extraExpenses && order.extraExpenses.length > 0) {
     order.extraExpenses.forEach((exp) => {
-      const expenseTotal = parseFloat(exp.total) || 0;
-      jlSubtotalBeforeTax += expenseTotal;
-      jlGrandTotal += expenseTotal;
+      // For "Before Tax" calculation, use price × quantity (not total which includes tax)
+      const price = parseFloat(exp.price) || 0;
+      const quantity = parseFloat(exp.quantity) || parseFloat(exp.qty) || parseFloat(exp.unit) || 1;
+      const expenseSubtotal = price * quantity;
+      
+      jlSubtotalBeforeTax += expenseSubtotal;
+      
+      // Calculate tax for grand total
+      let expenseTax = 0;
+      if (exp.taxRate !== undefined && exp.taxRate !== null) {
+        expenseTax = expenseSubtotal * (parseFloat(exp.taxRate) || 0);
+      } else if (exp.tax !== undefined && exp.tax !== null) {
+        const taxType = exp.taxType || 'fixed';
+        if (taxType === 'percent') {
+          const taxPercent = parseFloat(exp.tax) || 0;
+          expenseTax = expenseSubtotal * (taxPercent / 100);
+        } else {
+          expenseTax = parseFloat(exp.tax) || 0;
+        }
+      } else {
+        // Default to 13% if no tax info
+        expenseTax = expenseSubtotal * 0.13;
+      }
+      
+      // Grand total = subtotal + tax
+      const expenseLineTotal = expenseSubtotal + expenseTax;
+      jlGrandTotal += expenseLineTotal;
     });
   }
 

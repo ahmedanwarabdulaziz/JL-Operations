@@ -79,7 +79,7 @@ import { db } from '../shared/firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../shared/utils/plCalculations';
-import { createAllocation } from '../shared/utils/allocationUtils';
+import { createAllocation, normalizeAllocation } from '../shared/utils/allocationUtils';
 import { formatDate, formatDateOnly, formatDateRange } from '../../../utils/dateUtils';
 import { useAutoSelect } from '../shared/hooks/useAutoSelect';
 
@@ -563,15 +563,58 @@ const WorkshopPage = () => {
       setEndDate(new Date()); // Default to today
     }
 
-    // Generate initial allocations
-    const initialAllocations = generateMonthlyAllocations(order);
+    // Calculate profit data first (needed for normalization)
     const profitData = calculateOrderProfit(order);
     const revenue = profitData.revenue;
     const cost = profitData.cost;
     
     setTotalRevenue(revenue);
     setTotalCost(cost);
-    setMonthlyAllocations(initialAllocations);
+    
+    // Check if order already has allocation data
+    if (order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0) {
+      // Normalize allocation to ensure structure is correct
+      const normalizedAllocation = normalizeAllocation(order.allocation, profitData);
+      
+      if (normalizedAllocation && normalizedAllocation.allocations) {
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                            'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        // Use existing allocation data - load it for confirmation/update
+        const existingAllocations = normalizedAllocation.allocations.map(allocation => {
+          const month = Number(allocation.month);
+          const year = Number(allocation.year);
+          
+          // Validate month is in valid range (1-12)
+          if (isNaN(month) || month < 1 || month > 12) {
+            console.warn('Invalid month in allocation:', allocation);
+            return null;
+          }
+          
+          // Use month names array directly to avoid timezone issues with Date objects
+          const monthIndex = month - 1; // Convert 1-indexed to 0-indexed for array
+          const label = `${monthNames[monthIndex]} ${year}`;
+          
+          return {
+            month: month,
+            year: year,
+            label: label,
+            percentage: allocation.percentage
+          };
+        }).filter(alloc => alloc !== null);
+        
+        setMonthlyAllocations(existingAllocations);
+        setShowAllocationTable(true); // Show table immediately since allocation exists
+      } else {
+        // If normalization failed, generate initial allocations
+        const initialAllocations = generateMonthlyAllocations(order);
+        setMonthlyAllocations(initialAllocations);
+      }
+    } else {
+      // Generate initial allocations if no existing allocation
+      const initialAllocations = generateMonthlyAllocations(order);
+      setMonthlyAllocations(initialAllocations);
+    }
   };
 
   const applyAllocation = async () => {

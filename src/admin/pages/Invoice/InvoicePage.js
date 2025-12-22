@@ -1691,35 +1691,62 @@ const InvoicePage = () => {
               </Box>
 
               {/* Extra Expenses Items */}
-              {selectedOrder.extraExpenses.map((expense, expenseIndex) => (
-                <Box key={expenseIndex} sx={{ 
-                  display: 'flex',
-                  border: '1px solid #ccc',
-                  borderTop: 'none',
-                  fontSize: '0.8rem',
-                  color: '#000000',
-                  minHeight: '24px'
-                }}>
-                  <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
-                    {expense.description || 'Extra Expense'}
+              {selectedOrder.extraExpenses.map((expense, expenseIndex) => {
+                // Handle different quantity field names (quantity, qty, unit)
+                const quantity = parseFloat(expense.quantity) || parseFloat(expense.qty) || parseFloat(expense.unit) || 1;
+                const price = parseFloat(expense.price) || 0;
+                const subtotal = quantity * price;
+                
+                // Calculate tax - check for taxRate first, then tax field with taxType
+                let tax = 0;
+                if (expense.taxRate !== undefined && expense.taxRate !== null) {
+                  tax = subtotal * (parseFloat(expense.taxRate) || 0);
+                } else if (expense.tax !== undefined && expense.tax !== null) {
+                  const taxType = expense.taxType || 'fixed';
+                  if (taxType === 'percent') {
+                    const taxPercent = parseFloat(expense.tax) || 0;
+                    tax = subtotal * (taxPercent / 100);
+                  } else {
+                    tax = parseFloat(expense.tax) || 0;
+                  }
+                } else {
+                  // Default to 13% if no tax info
+                  tax = subtotal * 0.13;
+                }
+                
+                // Line Total should always be subtotal + tax
+                const lineTotal = subtotal + tax;
+                
+                return (
+                  <Box key={expenseIndex} sx={{ 
+                    display: 'flex',
+                    border: '1px solid #ccc',
+                    borderTop: 'none',
+                    fontSize: '0.8rem',
+                    color: '#000000',
+                    minHeight: '24px'
+                  }}>
+                    <Box sx={{ flex: 2, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', display: 'flex', alignItems: 'center' }}>
+                      {expense.description || 'Extra Expense'}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      {quantity.toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${price.toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${subtotal.toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${tax.toFixed(2)}
+                    </Box>
+                    <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      ${lineTotal.toFixed(2)}
+                    </Box>
                   </Box>
-                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                    {(parseFloat(expense.quantity) || 1).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                    ${(parseFloat(expense.price) || 0).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                    ${((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, borderRight: '1px solid #ccc', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                    ${(((parseFloat(expense.quantity) || 1) * (parseFloat(expense.price) || 0)) * (parseFloat(expense.taxRate) || 0.13)).toFixed(2)}
-                  </Box>
-                  <Box sx={{ flex: 1, py: 0.25, px: 0.5, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                    ${(parseFloat(expense.total) || 0).toFixed(2)}
-                  </Box>
-                </Box>
-              ))}
+                );
+              })}
             </>
           )}
         </Box>

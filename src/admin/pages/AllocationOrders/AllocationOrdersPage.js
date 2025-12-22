@@ -49,7 +49,7 @@ import {
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
-import { calculateOrderProfit } from '../../../shared/utils/orderCalculations';
+import { calculateOrderProfit, normalizePaymentData } from '../../../shared/utils/orderCalculations';
 import { formatCurrency, formatPercentage } from '../../../shared/utils/plCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../../shared/utils/materialTaxRates';
 
@@ -312,7 +312,28 @@ const AllocationOrdersPage = () => {
 
   // Calculate order totals
   const getOrderTotals = (order) => {
-    const profitData = calculateOrderProfit(order, materialTaxRates);
+    // Normalize order structure for consistent calculations
+    // Corporate orders use furnitureGroups and paymentDetails
+    // Regular orders use furnitureData.groups and paymentData
+    let normalizedOrder = { ...order };
+    
+    if (order.orderType === 'corporate') {
+      normalizedOrder = {
+        ...order,
+        furnitureData: {
+          groups: order.furnitureGroups || []
+        },
+        paymentData: order.paymentDetails || {}
+      };
+    } else {
+      normalizedOrder = {
+        ...order,
+        furnitureData: order.furnitureData || { groups: [] },
+        paymentData: order.paymentData || {}
+      };
+    }
+    
+    const profitData = calculateOrderProfit(normalizedOrder, materialTaxRates);
     return profitData;
   };
 
@@ -858,5 +879,6 @@ const AllocationOrdersPage = () => {
 };
 
 export default AllocationOrdersPage;
+
 
 

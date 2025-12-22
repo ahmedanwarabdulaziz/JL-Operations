@@ -30,7 +30,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
-import { addDoc, collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
 import { formatDate } from '../../../utils/dateUtils';
@@ -44,6 +44,7 @@ const CreateInvoicePage = () => {
   
   const [loading, setLoading] = useState(false);
   const [orderData, setOrderData] = useState(null);
+  const [originalPaidAmount, setOriginalPaidAmount] = useState(0); // Store original paid amount from order
   
   // Invoice header settings
   const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -51,6 +52,7 @@ const CreateInvoicePage = () => {
   const [creditCardFeeEnabled, setCreditCardFeeEnabled] = useState(false);
   const [creditCardFeePercentage, setCreditCardFeePercentage] = useState(2.5);
   const [paidAmount, setPaidAmount] = useState(0);
+  const [showRemainingAmountAlert, setShowRemainingAmountAlert] = useState(false);
   
   // Invoice data (copied from order but editable)
   const [customerInfo, setCustomerInfo] = useState({
@@ -114,6 +116,7 @@ const CreateInvoicePage = () => {
         }
         
         setPaidAmount(orderPaidAmount);
+        setOriginalPaidAmount(orderPaidAmount); // Store original paid amount
       
       // Convert furniture groups to invoice items with proper details
       const invoiceItems = [];
@@ -239,6 +242,29 @@ const CreateInvoicePage = () => {
     
     loadOrderData();
   }, [location.state, navigate]);
+
+  // Watch for total changes and show remaining amount alert
+  useEffect(() => {
+    if (!orderData) return;
+    
+    // Calculate new total
+    const subtotal = items.filter(item => !item.isGroup).reduce((sum, item) => {
+      return sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.price) || 0);
+    }, 0);
+    
+    const taxAmount = (subtotal * taxPercentage) / 100;
+    const creditCardFee = creditCardFeeEnabled ? (subtotal * creditCardFeePercentage) / 100 : 0;
+    const newTotal = subtotal + taxAmount + creditCardFee;
+    
+    const remainingAmount = newTotal - originalPaidAmount;
+    
+    // Show alert if there's a remaining amount and paid amount hasn't been updated to match new total
+    if (remainingAmount > 0.01 && Math.abs(paidAmount - newTotal) > 0.01) {
+      setShowRemainingAmountAlert(true);
+    } else {
+      setShowRemainingAmountAlert(false);
+    }
+  }, [items, taxPercentage, creditCardFeeEnabled, creditCardFeePercentage, orderData, originalPaidAmount, paidAmount]);
 
   // Get next invoice number (T- format)
   const getNextInvoiceNumber = async () => {
@@ -485,6 +511,37 @@ const CreateInvoicePage = () => {
     const isValid = await validateForm();
     if (!isValid) return;
     
+    // Check if paid amount matches new total (required for T-invoices from Done orders)
+    const newTotal = calculateTotal();
+    const balance = Math.abs(newTotal - paidAmount);
+    
+    // Prevent saving if paid amount doesn't match total
+    if (balance > 0.01) {
+      const confirmed = window.confirm(
+        `The T-invoice total is $${newTotal.toFixed(2)}, but paid amount is $${paidAmount.toFixed(2)}. ` +
+        `The difference is $${balance.toFixed(2)}. ` +
+        `\n\nFor Done orders, the paid amount MUST equal the new total. ` +
+        `Would you like to set paid amount to $${newTotal.toFixed(2)} before saving?`
+      );
+      
+      if (confirmed) {
+        setPaidAmount(newTotal); // Update state for UI
+        // Continue with save after updating paid amount
+      } else {
+        // User chose not to update - prevent saving
+        showError(`Cannot save: Paid amount ($${paidAmount.toFixed(2)}) must equal the total ($${newTotal.toFixed(2)}). Please update the paid amount to match the total.`);
+        return; // Block save
+      }
+    }
+    
+    // Double-check after potential update
+    const finalTotal = calculateTotal();
+    const finalBalance = Math.abs(finalTotal - paidAmount);
+    if (finalBalance > 0.01) {
+      showError(`Cannot save: Paid amount ($${paidAmount.toFixed(2)}) must equal the total ($${finalTotal.toFixed(2)}). Please update the paid amount to match the total.`);
+      return; // Block save
+    }
+    
     try {
       setLoading(true);
       
@@ -493,15 +550,30 @@ const CreateInvoicePage = () => {
       const finalNumberPart = numberPart.length === 6 ? numberPart : numberPart.padStart(6, '0');
       const finalInvoiceNumber = `T-${finalNumberPart}`;
       
+      // Fetch fresh order data to ensure we have the latest allocation
+      let freshOrderData = orderData;
+      if (orderData.id) {
+        try {
+          const orderCollectionName = orderData.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+          const orderDoc = await getDoc(doc(db, orderCollectionName, orderData.id));
+          if (orderDoc.exists()) {
+            freshOrderData = { id: orderDoc.id, ...orderDoc.data() };
+          }
+        } catch (error) {
+          console.error('Error fetching fresh order data:', error);
+          // Continue with existing orderData if fetch fails
+        }
+      }
+      
       const invoiceData = {
         invoiceNumber: finalInvoiceNumber,
-        originalOrderId: orderData.id,
-        originalOrderNumber: orderData.orderDetails?.billInvoice || 'N/A',
+        originalOrderId: freshOrderData.id,
+        originalOrderNumber: freshOrderData.orderDetails?.billInvoice || 'N/A',
         originalCustomerInfo: {
-          customerName: orderData.personalInfo?.customerName || '',
-          email: orderData.personalInfo?.email || '',
-          phone: orderData.personalInfo?.phone || '',
-          address: orderData.personalInfo?.address || ''
+          customerName: freshOrderData.personalInfo?.customerName || '',
+          email: freshOrderData.personalInfo?.email || '',
+          phone: freshOrderData.personalInfo?.phone || '',
+          address: freshOrderData.personalInfo?.address || ''
         },
         headerSettings: {
           taxPercentage,
@@ -524,15 +596,26 @@ const CreateInvoicePage = () => {
           creditCardFeeAmount: calculateCreditCardFee(),
           total: calculateTotal(),
           paidAmount: parseFloat(paidAmount) || 0,
-          balance: calculateBalance()
+          balance: calculateTotal() - parseFloat(paidAmount)
         },
+        // Copy allocation data from original order if it exists
+        ...(freshOrderData.allocation && { allocation: freshOrderData.allocation }),
         createdAt: new Date(),
         updatedAt: new Date()
       };
       
-      await addDoc(collection(db, 'customer-invoices'), invoiceData);
+      // Save the T-invoice
+      const invoiceRef = await addDoc(collection(db, 'customer-invoices'), invoiceData);
       
-      showSuccess('Invoice created successfully!');
+      // Mark the original order with hasTInvoice flag
+      const orderCollectionName = orderData.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, orderCollectionName, orderData.id);
+      await updateDoc(orderRef, {
+        hasTInvoice: true,
+        tInvoiceId: invoiceRef.id
+      });
+      
+      showSuccess('T-invoice created successfully!');
       navigate('/admin/customer-invoices');
     } catch (error) {
       console.error('Error creating invoice:', error);
@@ -711,19 +794,95 @@ const CreateInvoicePage = () => {
                 sx={{ mb: 2 }}
               />
               
-              <TextField
-                fullWidth
-                label="Paid Amount ($)"
-                type="number"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
-                onFocus={(e) => e.target.select()}
-                inputProps={{ min: 0, step: 0.01 }}
-                helperText="Amount already paid by customer"
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">$</InputAdornment>,
-                }}
-              />
+              {(() => {
+                const currentTotal = calculateTotal();
+                const remainingAmount = currentTotal - originalPaidAmount;
+                const needsUpdate = remainingAmount > 0.01 && Math.abs(paidAmount - currentTotal) > 0.01;
+                
+                return (
+                  <>
+                    {showRemainingAmountAlert && needsUpdate && (
+                      <Alert 
+                        severity="warning" 
+                        sx={{ mb: 2 }}
+                        action={
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setPaidAmount(currentTotal);
+                              setShowRemainingAmountAlert(false);
+                            }}
+                            sx={{ color: '#f27921', fontWeight: 'bold' }}
+                          >
+                            Set to New Total
+                          </Button>
+                        }
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                          New Remaining Amount: ${remainingAmount.toFixed(2)}
+                        </Typography>
+                        <Typography variant="body2">
+                          The T-invoice total is ${currentTotal.toFixed(2)}. Original paid amount was ${originalPaidAmount.toFixed(2)}. 
+                          Please set the paid amount to ${currentTotal.toFixed(2)} to ensure the order is fully paid.
+                        </Typography>
+                      </Alert>
+                    )}
+                    <TextField
+                      fullWidth
+                      label="Paid Amount ($)"
+                      type="number"
+                      value={paidAmount}
+                      onChange={(e) => {
+                        const newPaidAmount = parseFloat(e.target.value) || 0;
+                        setPaidAmount(newPaidAmount);
+                        // Hide alert when user manually updates paid amount to match total
+                        if (Math.abs(newPaidAmount - currentTotal) < 0.01) {
+                          setShowRemainingAmountAlert(false);
+                        }
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      helperText={showRemainingAmountAlert && needsUpdate
+                        ? `Original paid: $${originalPaidAmount.toFixed(2)} | New total: $${currentTotal.toFixed(2)} | Remaining: $${remainingAmount.toFixed(2)}`
+                        : "Amount already paid by customer"}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                      }}
+                      sx={{ 
+                        mb: 2,
+                        '& .MuiOutlinedInput-root': {
+                          backgroundColor: needsUpdate ? '#fff3cd' : '#2a2a2a',
+                          '& fieldset': {
+                            borderColor: needsUpdate ? '#f27921' : '#333333',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: needsUpdate ? '#f27921' : '#b98f33',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: needsUpdate ? '#f27921' : '#b98f33',
+                          },
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: '#b98f33',
+                          '&.Mui-focused': {
+                            color: '#b98f33',
+                          },
+                        },
+                        '& .MuiInputBase-input': {
+                          color: needsUpdate ? '#000000' : '#ffffff',
+                        },
+                        '& .MuiInputAdornment-root': {
+                          color: needsUpdate ? '#000000' : '#b98f33',
+                        },
+                        '& .MuiFormHelperText-root': {
+                          color: showRemainingAmountAlert && needsUpdate ? '#f27921' : undefined,
+                          fontWeight: showRemainingAmountAlert && needsUpdate ? 'bold' : undefined,
+                        }
+                      }}
+                    />
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 

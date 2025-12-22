@@ -74,6 +74,11 @@ export const validatePaymentData = (paymentData) => {
  * This is the customer-facing total that should match the invoice
  */
 export const calculateOrderTotal = (order) => {
+  // For T-invoices (customer-invoices with calculations.total), use that directly
+  if (order.isTInvoice && order.calculations?.total !== undefined) {
+    return parseFloat(order.calculations.total) || 0;
+  }
+  
   let itemsSubtotal = 0;
   let taxableAmount = 0;
   
@@ -289,12 +294,34 @@ export const calculateOrderCost = (order, materialTaxRates = {}) => {
     });
   }
 
-  // Add extra expenses
+  // Add extra expenses with tax
   if (order.extraExpenses && Array.isArray(order.extraExpenses)) {
-    const extraExpensesTotal = order.extraExpenses.reduce((sum, exp) => {
-      return sum + (parseFloat(exp.total) || 0);
-    }, 0);
-    totalCost += extraExpensesTotal;
+    order.extraExpenses.forEach((exp) => {
+      const price = parseFloat(exp.price) || 0;
+      const quantity = parseFloat(exp.quantity) || parseFloat(exp.qty) || parseFloat(exp.unit) || 1;
+      const expenseSubtotal = price * quantity;
+      
+      // Calculate tax
+      let expenseTax = 0;
+      if (exp.taxRate !== undefined && exp.taxRate !== null) {
+        expenseTax = expenseSubtotal * (parseFloat(exp.taxRate) || 0);
+      } else if (exp.tax !== undefined && exp.tax !== null) {
+        const taxType = exp.taxType || 'fixed';
+        if (taxType === 'percent') {
+          const taxPercent = parseFloat(exp.tax) || 0;
+          expenseTax = expenseSubtotal * (taxPercent / 100);
+        } else {
+          expenseTax = parseFloat(exp.tax) || 0;
+        }
+      } else {
+        // Default to 13% if no tax info
+        expenseTax = expenseSubtotal * 0.13;
+      }
+      
+      // Total cost = subtotal + tax
+      const expenseTotal = expenseSubtotal + expenseTax;
+      totalCost += expenseTotal;
+    });
   }
 
   return totalCost;

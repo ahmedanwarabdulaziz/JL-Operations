@@ -765,6 +765,20 @@ const OrdersPage = () => {
                             }} 
                           />
                         )}
+                        {order.hasTInvoice === true && (
+                          <Chip 
+                            label="Has T-Invoice" 
+                            size="small" 
+                            sx={{ 
+                              mt: 0.5,
+                              ml: order.orderType === 'corporate' ? 0.5 : 0,
+                              backgroundColor: '#b98f33',
+                              color: 'white',
+                              fontWeight: 'bold',
+                              fontSize: '0.75rem'
+                            }} 
+                          />
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>

@@ -88,7 +88,7 @@ const CustomerInvoicesPage = () => {
     });
   };
 
-  // Fetch orders from Firebase for invoice creation (ALL orders including completed/done ones)
+  // Fetch orders from Firebase for invoice creation (ONLY Done orders)
   const fetchOrders = useCallback(async () => {
     try {
       const ordersCollection = collection(db, 'orders');
@@ -96,8 +96,9 @@ const CustomerInvoicesPage = () => {
       const ordersSnapshot = await getDocs(ordersQuery);
       const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Include ALL orders - don't filter by status (include completed, done, etc.)
-      setOrders(ordersData);
+      // Filter to only include Done orders (invoiceStatus === 'done')
+      const doneOrders = ordersData.filter(order => order.invoiceStatus === 'done');
+      setOrders(doneOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showError('Failed to fetch orders');
@@ -165,7 +166,13 @@ const CustomerInvoicesPage = () => {
   // Update available orders when invoices change
   const updateAvailableOrders = useCallback(() => {
     const ordersWithoutInvoices = orders.filter(order => {
-      return !invoices.some(invoice => invoice.originalOrderId === order.id);
+      // Exclude orders that already have a T-invoice (check both invoices and hasTInvoice flag)
+      const hasTInvoice = invoices.some(invoice => {
+        const isTFormat = invoice.invoiceNumber && String(invoice.invoiceNumber).startsWith('T-');
+        return isTFormat && invoice.originalOrderId === order.id;
+      });
+      const orderHasTInvoiceFlag = order.hasTInvoice === true;
+      return !hasTInvoice && !orderHasTInvoiceFlag;
     });
     setAvailableOrders(ordersWithoutInvoices);
   }, [orders, invoices]);
@@ -265,10 +272,43 @@ const CustomerInvoicesPage = () => {
     try {
       setDeleting(true);
       const invoicesCollection = collection(db, 'customer-invoices');
+      
+      // Check if this is a T-invoice (starts with T-)
+      const isTInvoice = invoiceToDelete.invoiceNumber && String(invoiceToDelete.invoiceNumber).startsWith('T-');
+      const originalOrderId = invoiceToDelete.originalOrderId;
+      
+      // Delete the invoice
       await deleteDoc(doc(invoicesCollection, invoiceToDelete.id));
       
       setInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToDelete.id));
       setFilteredInvoices(prev => prev.filter(invoice => invoice.id !== invoiceToDelete.id));
+
+      // If it's a T-invoice, restore the original order by removing hasTInvoice flag
+      if (isTInvoice && originalOrderId) {
+        try {
+          const orderRef = doc(db, 'orders', originalOrderId);
+          const orderDoc = await getDoc(orderRef);
+          
+          if (orderDoc.exists()) {
+            await updateDoc(orderRef, {
+              hasTInvoice: false,
+              tInvoiceId: null
+            });
+            
+            // Update local state
+            setOrders(prevOrders =>
+              prevOrders.map(order =>
+                order.id === originalOrderId
+                  ? { ...order, hasTInvoice: false, tInvoiceId: null }
+                  : order
+              )
+            );
+          }
+        } catch (orderError) {
+          console.error('Error restoring original order:', orderError);
+          // Don't fail the deletion if order update fails
+        }
+      }
 
       await clearInvoiceNumberReferences(invoiceToDelete);
       
@@ -433,6 +473,29 @@ const CustomerInvoicesPage = () => {
       // Corporate orders should not use customer invoices - they have their own system
       if (order.orderType === 'corporate') {
         showError('Corporate orders use a separate invoice system. Please use Corporate Invoices page.');
+        return;
+      }
+
+      // Check if order is Done status
+      if (order.invoiceStatus !== 'done') {
+        showError('Only Done orders can be converted to T-invoices. Please mark the order as Done first.');
+        return;
+      }
+
+      // Check if order already has a T-invoice
+      const existingTInvoice = invoices.find(invoice => {
+        const isTFormat = invoice.invoiceNumber && String(invoice.invoiceNumber).startsWith('T-');
+        return isTFormat && invoice.originalOrderId === order.id;
+      });
+
+      if (existingTInvoice) {
+        showError(`This order already has a T-invoice: ${existingTInvoice.invoiceNumber}. Please edit or delete the existing T-invoice first.`);
+        return;
+      }
+
+      // Check if order has hasTInvoice flag
+      if (order.hasTInvoice === true) {
+        showError('This order already has a T-invoice. Please check the Customer Invoices list.');
         return;
       }
 

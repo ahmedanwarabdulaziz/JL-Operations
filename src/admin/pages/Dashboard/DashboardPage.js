@@ -474,21 +474,35 @@ const DashboardPage = () => {
                   >
                     <ListItemText
                       primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
                           <Typography variant="body1" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
                             Invoice #{order.orderDetails?.billInvoice || 'N/A'}
                           </Typography>
-                          <Chip
-                            label={isPast 
-                              ? `${Math.abs(order.daysLeft)} day${Math.abs(order.daysLeft) !== 1 ? 's' : ''} overdue`
-                              : `${order.daysLeft} day${order.daysLeft !== 1 ? 's' : ''} left`}
-                            size="small"
-                            sx={{
-                              backgroundColor: getDaysLeftColor(order.daysLeft),
-                              color: '#ffffff',
-                              fontWeight: 'bold'
-                            }}
-                          />
+                          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                            {order.hasTInvoice === true && (
+                              <Chip
+                                label="Has T-Invoice"
+                                size="small"
+                                sx={{
+                                  backgroundColor: '#b98f33',
+                                  color: '#ffffff',
+                                  fontWeight: 'bold',
+                                  fontSize: '0.7rem'
+                                }}
+                              />
+                            )}
+                            <Chip
+                              label={isPast 
+                                ? `${Math.abs(order.daysLeft)} day${Math.abs(order.daysLeft) !== 1 ? 's' : ''} overdue`
+                                : `${order.daysLeft} day${order.daysLeft !== 1 ? 's' : ''} left`}
+                              size="small"
+                              sx={{
+                                backgroundColor: getDaysLeftColor(order.daysLeft),
+                                color: '#ffffff',
+                                fontWeight: 'bold'
+                              }}
+                            />
+                          </Box>
                         </Box>
                       }
                       secondary={

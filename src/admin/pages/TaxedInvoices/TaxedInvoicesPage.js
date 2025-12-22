@@ -325,11 +325,16 @@ const TaxedInvoicesPage = () => {
       taxAmount: 0
     };
     
+    // Check if this is a T-invoice from customer-invoices
+    const isTInvoice = invoice.source === 'customer-invoices' || 
+                      (invoice.invoiceNumber && isTFormatInvoice(invoice.invoiceNumber)) ||
+                      (invoice.orderDetails?.billInvoice && isTFormatInvoice(invoice.orderDetails.billInvoice));
+    
     // Check if the invoice has stored calculations
     if (invoice.calculations) {
-      const subtotal = invoice.calculations.subtotal || 0;
+      const grandTotal = invoice.calculations.total || 0;
       const taxAmount = invoice.calculations.taxAmount || 0;
-      const grandTotal = invoice.calculations.total || (subtotal + taxAmount);
+      const subtotal = invoice.calculations.subtotal || 0;
       
       return {
         grandTotal: grandTotal,
@@ -337,10 +342,10 @@ const TaxedInvoicesPage = () => {
         taxAmount: taxAmount,
       amountPaid: invoice.orderType === 'corporate' 
         ? (invoice.paymentDetails?.amountPaid || 0)
-        : (invoice.paymentData?.amountPaid || 0),
+        : (invoice.paidAmount || invoice.paymentData?.amountPaid || 0),
       balanceDue: grandTotal - (invoice.orderType === 'corporate' 
         ? (invoice.paymentDetails?.amountPaid || 0)
-        : (invoice.paymentData?.amountPaid || 0))
+        : (invoice.paidAmount || invoice.paymentData?.amountPaid || 0))
       };
     }
     
@@ -357,7 +362,7 @@ const TaxedInvoicesPage = () => {
     const taxAmount = calculateOrderTax(invoice);
     const subtotal = total - taxAmount;
     
-    console.log('Calculation results:', { total, taxAmount, subtotal });
+    console.log('Calculation results:', { total, taxAmount, subtotal, isTInvoice });
     
     // If calculations are 0, try to calculate manually for corporate orders
     if (total === 0 && invoice.orderType === 'corporate' && invoice.furnitureGroups) {
@@ -419,10 +424,10 @@ const TaxedInvoicesPage = () => {
       taxAmount: taxAmount,
       amountPaid: invoice.orderType === 'corporate' 
         ? (invoice.paymentDetails?.amountPaid || 0)
-        : (invoice.paymentData?.amountPaid || 0),
+        : (invoice.paidAmount || invoice.paymentData?.amountPaid || 0),
       balanceDue: total - (invoice.orderType === 'corporate' 
         ? (invoice.paymentDetails?.amountPaid || 0)
-        : (invoice.paymentData?.amountPaid || 0))
+        : (invoice.paidAmount || invoice.paymentData?.amountPaid || 0))
     };
   };
 
