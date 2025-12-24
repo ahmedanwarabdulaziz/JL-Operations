@@ -24,7 +24,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button
+  Button,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -59,6 +61,7 @@ import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { formatCurrency } from '../../utils/plCalculations';
 import { formatDate } from '../../utils/plCalculations';
 import { normalizeAllocation } from '../../shared/utils/allocationUtils';
+import { sendCompletionEmailWithGmail } from '../../services/emailService';
 
 const EndDonePage = () => {
   const [orders, setOrders] = useState([]);
@@ -70,9 +73,16 @@ const EndDonePage = () => {
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState(null);
+  const [completionEmailDialog, setCompletionEmailDialog] = useState({
+    open: false,
+    sendEmail: true,
+    includeReview: true,
+    order: null
+  });
+  const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
 
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
 
   // Fetch orders with "done" end state
   const fetchOrders = useCallback(async () => {
@@ -218,7 +228,15 @@ const EndDonePage = () => {
     
     if (!normalizedAllocation || !normalizedAllocation.allocations) return null;
     
-    const totalAllocations = normalizedAllocation.allocations.length;
+    // Filter out allocations with 0% or very small percentages (< 0.01%)
+    const validAllocations = normalizedAllocation.allocations.filter(
+      alloc => alloc && (alloc.percentage || 0) > 0.01
+    );
+    
+    // Only return allocation info if there are valid allocations with actual percentages
+    if (!validAllocations || validAllocations.length === 0) return null;
+    
+    const totalAllocations = validAllocations.length;
     const appliedAt = normalizedAllocation.appliedAt;
     const originalRevenue = profitData.revenue;
     
@@ -1126,6 +1144,9 @@ const EndDonePage = () => {
                          <Typography variant="body2" sx={{ color: '#ffffff' }}>
                            {formatDateDisplay(order.completedAt || order.statusUpdatedAt || order.updatedAt)}
                          </Typography>
+                         <Typography variant="caption" sx={{ color: '#b98f33', display: 'block', fontSize: '0.7rem' }}>
+                           Status: Done
+                         </Typography>
                        </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -1142,6 +1163,37 @@ const EndDonePage = () => {
                               }}
                             >
                               <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Send Completion Email">
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                const customerEmail = order.orderType === 'corporate' 
+                                  ? order.contactPerson?.email || order.corporateCustomer?.email
+                                  : order.personalInfo?.email;
+                                
+                                if (!customerEmail) {
+                                  showError('No customer email available for this order');
+                                  return;
+                                }
+                                
+                                setCompletionEmailDialog({
+                                  open: true,
+                                  sendEmail: true,
+                                  includeReview: true,
+                                  order: order
+                                });
+                              }}
+                              sx={{ 
+                                color: '#b98f33',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                  color: '#d4af5a'
+                                }
+                              }}
+                            >
+                              <EmailIcon />
                             </IconButton>
                           </Tooltip>
                           <MuiIconButton
@@ -1330,45 +1382,6 @@ const EndDonePage = () => {
                                     </Card>
                                   </Box>
                                 )}
-
-                                {/* Completion Details */}
-                                <Box>
-                                  <Typography variant="h6" sx={{ mb: 2, color: '#b98f33' }}>
-                                    <CheckCircleIcon sx={{ mr: 1, verticalAlign: 'middle', color: '#b98f33' }} />
-                                    Completion Details
-                                  </Typography>
-                                  <Card sx={{ 
-                                    background: 'linear-gradient(135deg, #2a2a2a 0%, #3a3a3a 100%)', 
-                                    color: 'white',
-                                    boxShadow: 3,
-                                    border: '1px solid #333333'
-                                  }}>
-                                    <CardContent>
-                                      <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={6}>
-                                          <Box sx={{ textAlign: 'center' }}>
-                                                                                         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                               {formatDateDisplay(order.completedAt || order.statusUpdatedAt || order.updatedAt)}
-                                             </Typography>
-                                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                              Order Completed
-                                            </Typography>
-                                          </Box>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                          <Box sx={{ textAlign: 'center' }}>
-                                                                                         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
-                                               {formatDateDisplay(order.statusUpdatedAt || order.updatedAt || order.completedAt)}
-                                             </Typography>
-                                            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                                              Status Updated
-                                            </Typography>
-                                          </Box>
-                                        </Grid>
-                                      </Grid>
-                                    </CardContent>
-                                  </Card>
-                                </Box>
                               </CardContent>
                             </Card>
                           </Box>
@@ -1493,6 +1506,241 @@ const EndDonePage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Completion Email Dialog */}
+      <Dialog
+        open={completionEmailDialog.open}
+        onClose={() => setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false, order: null })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #b98f33',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#2a2a2a', 
+          color: '#ffffff',
+          borderBottom: '2px solid #b98f33',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <EmailIcon sx={{ color: '#b98f33' }} />
+          Send Completion Email
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          {completionEmailDialog.order && (
+            <Box sx={{ 
+              p: 3, 
+              backgroundColor: '#2a2a2a', 
+              borderRadius: 1, 
+              mb: 2,
+              border: '1px solid #b98f33'
+            }}>
+              <Typography variant="h6" sx={{ color: '#b98f33', mb: 1, fontWeight: 'bold' }}>
+                Order #{completionEmailDialog.order.orderDetails?.billInvoice || 'N/A'}
+              </Typography>
+              <Typography variant="body1" sx={{ color: '#ffffff', mb: 1 }}>
+                Customer: {completionEmailDialog.order.orderType === 'corporate' 
+                  ? (completionEmailDialog.order.corporateCustomer?.corporateName || 'N/A')
+                  : (completionEmailDialog.order.personalInfo?.customerName || 'N/A')}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                Email: {completionEmailDialog.order.orderType === 'corporate' 
+                  ? (completionEmailDialog.order.contactPerson?.email || completionEmailDialog.order.corporateCustomer?.email || 'N/A')
+                  : (completionEmailDialog.order.personalInfo?.email || 'N/A')}
+              </Typography>
+            </Box>
+          )}
+          
+          <Box sx={{ p: 2 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.sendEmail}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, sendEmail: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Send completion email to customer"
+              sx={{ 
+                color: '#ffffff',
+                mb: 1,
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={completionEmailDialog.includeReview}
+                  onChange={(e) => setCompletionEmailDialog(prev => ({ ...prev, includeReview: e.target.checked }))}
+                  sx={{
+                    color: '#b98f33',
+                    '&.Mui-checked': {
+                      color: '#b98f33',
+                    },
+                  }}
+                />
+              }
+              label="Include Google review request"
+              sx={{ 
+                color: '#ffffff',
+                '& .MuiFormControlLabel-label': {
+                  fontWeight: 500
+                }
+              }}
+            />
+            
+            <Typography variant="body2" sx={{ 
+              mt: 1, 
+              color: '#cccccc', 
+              fontStyle: 'italic',
+              fontSize: '13px'
+            }}>
+              The email will include a warm thank you message, treatment care instructions, and a review request.
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false, order: null })}
+            sx={{
+              color: '#ffffff',
+              borderColor: '#666666',
+              '&:hover': {
+                borderColor: '#b98f33',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)'
+              }
+            }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                const order = completionEmailDialog.order;
+                if (!order) return;
+                
+                setSendingCompletionEmail(true);
+                setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false, order: null });
+                
+                // Prepare order data for email
+                const orderDataForEmail = order.orderType === 'corporate' ? {
+                  corporateCustomer: order.corporateCustomer,
+                  contactPerson: order.contactPerson,
+                  orderDetails: order.orderDetails,
+                  furnitureData: {
+                    groups: order.furnitureData?.groups || order.furnitureGroups || []
+                  },
+                  paymentData: order.paymentData
+                } : {
+                  personalInfo: order.personalInfo,
+                  orderDetails: order.orderDetails,
+                  furnitureData: {
+                    groups: order.furnitureData?.groups || order.furnitureGroups || []
+                  },
+                  paymentData: order.paymentData
+                };
+
+                // Get customer email
+                const customerEmail = order.orderType === 'corporate' 
+                  ? order.contactPerson?.email || order.corporateCustomer?.email
+                  : order.personalInfo?.email;
+
+                // Progress callback for email sending
+                const onEmailProgress = (message) => {
+                  console.log('📧 Completion email progress:', message);
+                  showSuccess(`📧 ${message}`);
+                };
+
+                // Send the completion email
+                const emailResult = await sendCompletionEmailWithGmail(
+                  orderDataForEmail, 
+                  customerEmail, 
+                  completionEmailDialog.includeReview,
+                  onEmailProgress
+                );
+                
+                if (emailResult.success) {
+                  showSuccess('✅ Completion email sent successfully!');
+                } else {
+                  showError(`❌ Failed to send completion email: ${emailResult.message}`);
+                }
+              } catch (error) {
+                console.error('Error sending completion email:', error);
+                showError(`Failed to send completion email: ${error.message}`);
+              } finally {
+                setSendingCompletionEmail(false);
+              }
+            }}
+            variant="contained"
+            startIcon={<EmailIcon />}
+            disabled={!completionEmailDialog.sendEmail || sendingCompletionEmail}
+            sx={{
+              background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+              color: '#000000',
+              fontWeight: 'bold',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #d4af5a 0%, #b98f33 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              },
+              '&:disabled': {
+                background: '#666666',
+                color: '#999999'
+              }
+            }}
+          >
+            {sendingCompletionEmail ? 'Sending...' : 'Send Email'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Email Sending Overlay */}
+      {sendingCompletionEmail && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white'
+          }}
+        >
+          <CircularProgress size={60} sx={{ color: '#b98f33', mb: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            Sending Completion Email...
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8, textAlign: 'center', maxWidth: 400 }}>
+            Please wait while we send the email. This may take a few moments.
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 };

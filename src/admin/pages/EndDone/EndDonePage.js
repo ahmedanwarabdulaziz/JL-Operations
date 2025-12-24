@@ -221,7 +221,15 @@ const EndDonePage = () => {
     
     if (!normalizedAllocation || !normalizedAllocation.allocations) return null;
     
-    const totalAllocations = normalizedAllocation.allocations.length;
+    // Filter out allocations with 0% or very small percentages (< 0.01%)
+    const validAllocations = normalizedAllocation.allocations.filter(
+      alloc => alloc && (alloc.percentage || 0) > 0.01
+    );
+    
+    // Only return allocation info if there are valid allocations with actual percentages
+    if (!validAllocations || validAllocations.length === 0) return null;
+    
+    const totalAllocations = validAllocations.length;
     const appliedAt = normalizedAllocation.appliedAt;
     const originalRevenue = profitData.revenue;
     
