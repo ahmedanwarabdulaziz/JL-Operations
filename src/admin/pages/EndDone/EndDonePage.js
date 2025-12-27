@@ -19,7 +19,12 @@ import {
   TableRow,
   Collapse,
   IconButton as MuiIconButton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import { Grid } from '@mui/material';
 
@@ -40,7 +45,8 @@ import {
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Business as BusinessIcon,
-  Visibility as VisibilityIcon
+  Visibility as VisibilityIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
@@ -52,6 +58,7 @@ import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
 import { formatCurrency } from '../shared/utils/plCalculations';
 import { formatDate } from '../shared/utils/plCalculations';
 import { normalizeAllocation } from '../shared/utils/allocationUtils';
+import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
 
 const EndDonePage = () => {
   const [orders, setOrders] = useState([]);
@@ -61,6 +68,8 @@ const EndDonePage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [materialTaxRates, setMaterialTaxRates] = useState({});
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const navigate = useNavigate();
   const { showError } = useNotification();
@@ -79,10 +88,12 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders from both regular orders and done-orders collections
-      const [ordersRef, doneOrdersRef] = await Promise.all([
+      // Get all orders from regular orders, done-orders, closed-corporate-orders, and customer-invoices (T-invoices) collections
+      const [ordersRef, doneOrdersRef, closedCorporateOrdersRef, customerInvoicesRef] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
-        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc')))
+        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'closed-corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc')))
       ]);
 
       const ordersData = ordersRef.docs.map(doc => ({
@@ -96,13 +107,31 @@ const EndDonePage = () => {
         ...doc.data()
       }));
 
-      // Combine both collections
-      const allOrders = [...ordersData, ...doneOrdersData];
+      const closedCorporateOrdersData = closedCorporateOrdersRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'corporate',
+        source: 'closed-corporate-orders'
+      }));
+
+      // Process customer invoices (T-invoices) - include all as they're already completed invoices
+      const customerInvoicesData = customerInvoicesRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        source: 'customer-invoices',
+        orderType: 'customer',
+        status: 'closed' // T-invoices are considered closed/completed
+      }));
+
+      // Combine all collections
+      const allOrders = [...ordersData, ...doneOrdersData, ...closedCorporateOrdersData, ...customerInvoicesData];
       
       console.log('All orders fetched:', allOrders.length);
       console.log('Regular orders:', ordersData.length);
       console.log('Done orders:', doneOrdersData.length);
-      console.log('Done orders data:', doneOrdersData);
+      console.log('Closed corporate orders:', closedCorporateOrdersData.length);
+      console.log('Customer invoices (T-invoices):', customerInvoicesData.length);
+      console.log('Sample customer invoice:', customerInvoicesData[0]);
 
       // Filter for orders with "done" end state status
       const doneStatuses = statusesData.filter(status => 
@@ -111,18 +140,28 @@ const EndDonePage = () => {
       const doneStatusValues = doneStatuses.map(status => status.value);
 
       const doneOrders = allOrders.filter(order => {
+        // T-invoices from customer-invoices collection are always included (they're completed invoices)
+        if (order.source === 'customer-invoices') {
+          console.log('T-invoice check:', order.invoiceNumber, 'source:', order.source, 'isDone:', true);
+          return true;
+        }
         // For regular orders, check invoiceStatus
         if (order.invoiceStatus) {
           const isRegularDone = doneStatusValues.includes(order.invoiceStatus);
           console.log('Regular order check:', order.orderDetails?.billInvoice, 'invoiceStatus:', order.invoiceStatus, 'isDone:', isRegularDone);
           return isRegularDone;
         }
+        // For corporate orders from closed-corporate-orders collection
+        if (order.source === 'closed-corporate-orders' || order.status === 'closed') {
+          console.log('Closed corporate order check:', order.orderDetails?.billInvoice, 'status:', order.status, 'source:', order.source, 'isDone:', true);
+          return true;
+        }
         // For corporate orders moved to done-orders, check status field
-        if (order.status === 'done' || order.orderType === 'corporate') {
+        if (order.status === 'done' || (order.orderType === 'corporate' && !order.invoiceStatus)) {
           console.log('Corporate order check:', order.orderDetails?.billInvoice, 'status:', order.status, 'orderType:', order.orderType, 'isDone:', true);
           return true;
         }
-        console.log('Order not matching any criteria:', order.orderDetails?.billInvoice, 'invoiceStatus:', order.invoiceStatus, 'status:', order.status, 'orderType:', order.orderType);
+        console.log('Order not matching any criteria:', order.orderDetails?.billInvoice || order.invoiceNumber, 'invoiceStatus:', order.invoiceStatus, 'status:', order.status, 'orderType:', order.orderType, 'source:', order.source);
         return false;
       });
 
@@ -245,6 +284,100 @@ const EndDonePage = () => {
     if (!date) return 'N/A';
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     return dateObj.toLocaleDateString();
+  };
+
+  // Check if invoice number is T- format
+  const isTFormatInvoice = (invoiceNumber) => {
+    if (!invoiceNumber) return false;
+    const str = String(invoiceNumber).trim();
+    return str.toUpperCase().startsWith('T-');
+  };
+
+  // Calculate invoice totals for dialog display
+  const calculateInvoiceTotals = (order) => {
+    if (!order) return { 
+      grandTotal: 0, 
+      amountPaid: 0, 
+      balanceDue: 0,
+      subtotal: 0,
+      taxAmount: 0
+    };
+    
+    // Check if this is a T-invoice
+    const isTInvoice = order.source === 'customer-invoices' || 
+                      (order.invoiceNumber && isTFormatInvoice(order.invoiceNumber)) ||
+                      (order.orderDetails?.billInvoice && isTFormatInvoice(order.orderDetails.billInvoice));
+    
+    // For T-invoices, use stored calculations if available
+    if (isTInvoice && order.calculations) {
+      const grandTotal = order.calculations.total || 0;
+      const taxAmount = order.calculations.taxAmount || 0;
+      const subtotal = order.calculations.subtotal || 0;
+      
+      return {
+        grandTotal: grandTotal,
+        subtotal: subtotal,
+        taxAmount: taxAmount,
+        amountPaid: order.orderType === 'corporate' 
+          ? (order.paymentDetails?.amountPaid || 0)
+          : (order.paidAmount || order.paymentData?.amountPaid || 0),
+        balanceDue: grandTotal - (order.orderType === 'corporate' 
+          ? (order.paymentDetails?.amountPaid || 0)
+          : (order.paidAmount || order.paymentData?.amountPaid || 0))
+      };
+    }
+    
+    const total = calculateOrderTotal(order);
+    const taxAmount = calculateOrderTax(order);
+    const subtotal = total - taxAmount;
+    const amountPaid = order.orderType === 'corporate' 
+      ? (parseFloat(order.paymentDetails?.amountPaid || 0))
+      : (parseFloat(order.paymentData?.amountPaid || 0));
+    const balanceDue = total - amountPaid;
+    
+    return {
+      grandTotal: total,
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      amountPaid: amountPaid,
+      balanceDue: balanceDue
+    };
+  };
+
+  // Handle view invoice dialog
+  const handleViewInvoice = (order) => {
+    try {
+      // Force console logs
+      console.log('=== VIEW INVOICE CLICKED ===');
+      console.log('Viewing invoice - Full object:', order);
+      console.log('Viewing invoice - Summary:', {
+        id: order.id,
+        invoiceNumber: order.invoiceNumber || order.orderDetails?.billInvoice,
+        orderType: order.orderType,
+        source: order.source,
+        hasItems: !!order.items,
+        itemsLength: order.items?.length,
+        itemsSample: order.items?.slice(0, 2),
+        hasFurnitureGroups: !!order.furnitureGroups,
+        furnitureGroupsLength: order.furnitureGroups?.length,
+        furnitureGroupsSample: order.furnitureGroups?.slice(0, 1),
+        hasFurnitureData: !!order.furnitureData,
+        furnitureDataGroupsLength: order.furnitureData?.groups?.length,
+        furnitureDataGroupsSample: order.furnitureData?.groups?.slice(0, 1),
+        allKeys: Object.keys(order)
+      });
+      alert(`Opening invoice dialog for: ${order.invoiceNumber || order.orderDetails?.billInvoice || order.id}\nCheck console for details.`);
+      setSelectedInvoice(order);
+      setViewDialogOpen(true);
+    } catch (error) {
+      console.error('Error in handleViewInvoice:', error);
+      alert('Error opening invoice: ' + error.message);
+    }
+  };
+
+  // Handle print invoice
+  const handlePrintInvoice = (order) => {
+    handleReviewInvoice(order);
   };
 
   // Handle review/print preview
@@ -384,6 +517,21 @@ const EndDonePage = () => {
         <Typography variant="body1" sx={{ color: '#ffffff' }}>
           All orders that have been successfully completed and allocated
         </Typography>
+        {/* DEBUG: Test button */}
+        <Button 
+          onClick={() => {
+            console.log('TEST BUTTON CLICKED');
+            alert('Test button works!');
+            if (filteredOrders.length > 0) {
+              console.log('First order:', filteredOrders[0]);
+              handleViewInvoice(filteredOrders[0]);
+            }
+          }}
+          variant="contained"
+          sx={{ mt: 2, backgroundColor: '#b98f33' }}
+        >
+          TEST: Click to Test View Invoice
+        </Button>
       </Box>
 
       {/* Search Bar */}
@@ -454,7 +602,7 @@ const EndDonePage = () => {
                   <React.Fragment key={order.id}>
                     <TableRow hover>
                       <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                        #{order.orderDetails?.billInvoice || order.id}
+                        #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
                       </TableCell>
                       <TableCell>
                         <Box>
@@ -520,21 +668,57 @@ const EndDonePage = () => {
                        </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <Tooltip title="Review Invoice">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleReviewInvoice(order)}
-                              sx={{ 
-                                color: '#b98f33',
-                                '&:hover': {
-                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                                  color: '#d4af5a'
-                                }
-                              }}
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                          </Tooltip>
+                          {(() => {
+                            const invoiceNumber = order.orderDetails?.billInvoice || order.invoiceNumber;
+                            const isTInvoice = invoiceNumber && isTFormatInvoice(invoiceNumber);
+                            const isCorporate = order.orderType === 'corporate';
+                            const isCustomerInvoice = order.source === 'customer-invoices';
+                            
+                            // DEBUG: Always show view button for testing
+                            const shouldShowView = isCorporate || isTInvoice || isCustomerInvoice;
+                            
+                            console.log('Button render check:', {
+                              invoiceNumber,
+                              isTInvoice,
+                              isCorporate,
+                              isCustomerInvoice,
+                              shouldShowView,
+                              source: order.source,
+                              orderType: order.orderType,
+                              orderId: order.id
+                            });
+                            
+                            // Show view dialog for corporate invoices, T-invoices, and customer-invoices
+                            return (
+                              <Tooltip title={shouldShowView ? "View Invoice" : "Review Invoice"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    window.testClick = true;
+                                    console.log('=== BUTTON CLICKED ===');
+                                    console.log('Invoice number:', invoiceNumber);
+                                    console.log('Order:', order);
+                                    alert('Button clicked! Invoice: ' + invoiceNumber);
+                                    if (shouldShowView) {
+                                      handleViewInvoice(order);
+                                    } else {
+                                      handleReviewInvoice(order);
+                                    }
+                                  }}
+                                  sx={{ 
+                                    color: '#b98f33',
+                                    backgroundColor: shouldShowView ? 'rgba(185, 143, 51, 0.2)' : 'transparent',
+                                    '&:hover': {
+                                      backgroundColor: 'rgba(185, 143, 51, 0.3)',
+                                      color: '#d4af5a'
+                                    }
+                                  }}
+                                >
+                                  <VisibilityIcon />
+                                </IconButton>
+                              </Tooltip>
+                            );
+                          })()}
                           <MuiIconButton
                             size="small"
                             onClick={() => handleRowToggle(order.id)}
@@ -823,6 +1007,374 @@ const EndDonePage = () => {
           </Table>
         </TableContainer>
       </Paper>
+
+      {/* View Invoice Dialog */}
+      <Dialog 
+        open={viewDialogOpen} 
+        onClose={() => setViewDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {(() => {
+            if (!selectedInvoice) return 'Invoice - N/A';
+            const invoiceNumber = selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice;
+            const isTInvoice = invoiceNumber && isTFormatInvoice(invoiceNumber);
+            const status = selectedInvoice.status === 'closed' ? 'Closed' : 'Completed';
+            return `Invoice #${formatCorporateInvoiceForInvoice(invoiceNumber) || 'N/A'} - ${status} Invoice`;
+          })()}
+        </DialogTitle>
+        <DialogContent>
+          {selectedInvoice && (() => {
+            console.log('=== DIALOG RENDERING ===');
+            console.log('selectedInvoice:', selectedInvoice);
+            
+            const isTInvoice = selectedInvoice.source === 'customer-invoices' || 
+                              (selectedInvoice.invoiceNumber && isTFormatInvoice(selectedInvoice.invoiceNumber)) ||
+                              (selectedInvoice.orderDetails?.billInvoice && isTFormatInvoice(selectedInvoice.orderDetails.billInvoice));
+            
+            console.log('isTInvoice:', isTInvoice);
+            
+            // Get items based on invoice type - check all possible locations
+            let invoiceItems = [];
+            let furnitureGroups = [];
+            
+            console.log('Dialog - Processing invoice data:', {
+              isTInvoice,
+              hasItems: !!selectedInvoice.items,
+              itemsLength: selectedInvoice.items?.length,
+              hasFurnitureGroups: !!selectedInvoice.furnitureGroups,
+              furnitureGroupsLength: selectedInvoice.furnitureGroups?.length,
+              hasFurnitureData: !!selectedInvoice.furnitureData,
+              furnitureDataGroupsLength: selectedInvoice.furnitureData?.groups?.length,
+              orderType: selectedInvoice.orderType,
+              source: selectedInvoice.source,
+              invoiceNumber: selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice
+            });
+            
+            // Log sample furniture group to see structure
+            if (selectedInvoice.furnitureGroups && selectedInvoice.furnitureGroups.length > 0) {
+              console.log('Sample furniture group:', selectedInvoice.furnitureGroups[0]);
+            }
+            if (selectedInvoice.furnitureData?.groups && selectedInvoice.furnitureData.groups.length > 0) {
+              console.log('Sample furnitureData group:', selectedInvoice.furnitureData.groups[0]);
+            }
+            
+            // Check all possible locations for items/furniture data
+            // For T-invoices: use items array with furnitureGroups for grouping
+            // For corporate invoices: use furnitureGroups with material/labour/foam/painting data
+            
+            if (isTInvoice && selectedInvoice.items && Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0) {
+              // T-invoice: use items array
+              invoiceItems = selectedInvoice.items.filter(item => item && !item.isGroup && (item.name || item.description));
+              console.log('T-invoice - Using items array:', invoiceItems);
+            } else {
+              // Corporate invoice or regular order: use furnitureGroups
+              if (selectedInvoice.furnitureGroups && Array.isArray(selectedInvoice.furnitureGroups) && selectedInvoice.furnitureGroups.length > 0) {
+                furnitureGroups = selectedInvoice.furnitureGroups.filter(group => group && (
+                  group.furnitureType || 
+                  group.materialPrice || 
+                  group.labourPrice || 
+                  group.foamPrice || 
+                  group.paintingLabour ||
+                  group.materialCode
+                ));
+                console.log('Using furnitureGroups:', furnitureGroups);
+              } else if (selectedInvoice.furnitureData?.groups && Array.isArray(selectedInvoice.furnitureData.groups) && selectedInvoice.furnitureData.groups.length > 0) {
+                furnitureGroups = selectedInvoice.furnitureData.groups.filter(group => group && (
+                  group.furnitureType || 
+                  group.furnitureName ||
+                  group.materialPrice || 
+                  group.labourPrice || 
+                  group.foamPrice || 
+                  group.paintingLabour
+                ));
+                console.log('Using furnitureData.groups:', furnitureGroups);
+              }
+            }
+            
+            // Debug: log what we found
+            console.log('Final data for display:', {
+              isTInvoice,
+              invoiceItemsLength: invoiceItems.length,
+              furnitureGroupsLength: furnitureGroups.length,
+              firstItem: invoiceItems[0],
+              firstGroup: furnitureGroups[0]
+            });
+            
+            console.log('Final data for display:', {
+              invoiceItemsLength: invoiceItems.length,
+              furnitureGroupsLength: furnitureGroups.length
+            });
+            
+            return (
+              <Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h6" sx={{ mb: 1 }}>Customer Information</Typography>
+                    <Typography><strong>Name:</strong> {selectedInvoice.orderType === 'corporate' 
+                      ? (selectedInvoice.corporateCustomer?.corporateName || selectedInvoice.customerInfo?.customerName || selectedInvoice.originalCustomerInfo?.customerName || 'N/A')
+                      : (selectedInvoice.personalInfo?.customerName || selectedInvoice.customerInfo?.customerName || selectedInvoice.originalCustomerInfo?.customerName || 'N/A')
+                    }</Typography>
+                    <Typography><strong>Phone:</strong> {selectedInvoice.orderType === 'corporate'
+                      ? (selectedInvoice.contactPerson?.phone || selectedInvoice.customerInfo?.phone || selectedInvoice.originalCustomerInfo?.phone || 'N/A')
+                      : (selectedInvoice.personalInfo?.phone || selectedInvoice.customerInfo?.phone || selectedInvoice.originalCustomerInfo?.phone || 'N/A')
+                    }</Typography>
+                    <Typography><strong>Email:</strong> {selectedInvoice.orderType === 'corporate'
+                      ? (selectedInvoice.contactPerson?.email || selectedInvoice.customerInfo?.email || selectedInvoice.originalCustomerInfo?.email || 'N/A')
+                      : (selectedInvoice.personalInfo?.email || selectedInvoice.customerInfo?.email || selectedInvoice.originalCustomerInfo?.email || 'N/A')
+                    }</Typography>
+                    <Typography><strong>Address:</strong> {selectedInvoice.orderType === 'corporate'
+                      ? (selectedInvoice.corporateCustomer?.address || selectedInvoice.customerInfo?.address || selectedInvoice.originalCustomerInfo?.address || 'N/A')
+                      : (selectedInvoice.personalInfo?.address || selectedInvoice.customerInfo?.address || selectedInvoice.originalCustomerInfo?.address || 'N/A')
+                    }</Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h6" sx={{ mb: 1 }}>Invoice Details</Typography>
+                    <Typography><strong>Invoice #:</strong> {formatCorporateInvoiceForInvoice(selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice) || 'N/A'}</Typography>
+                    <Typography><strong>Status:</strong> 
+                      <Chip
+                        label={selectedInvoice.status === 'closed' ? 'Closed' : 'Completed'}
+                        size="small"
+                        color={selectedInvoice.status === 'closed' ? 'success' : 'success'}
+                        sx={{ ml: 1 }}
+                      />
+                    </Typography>
+                    <Typography><strong>Date Completed:</strong> {formatDateDisplay(selectedInvoice.closedAt || selectedInvoice.completedAt || selectedInvoice.statusUpdatedAt || selectedInvoice.updatedAt)}</Typography>
+                    <Typography><strong>Subtotal:</strong> {formatCurrency(calculateInvoiceTotals(selectedInvoice).subtotal)}</Typography>
+                    <Typography><strong>Tax (13%):</strong> {formatCurrency(calculateInvoiceTotals(selectedInvoice).taxAmount)}</Typography>
+                    <Typography><strong>Total Amount:</strong> {formatCurrency(calculateInvoiceTotals(selectedInvoice).grandTotal)}</Typography>
+                    <Typography><strong>Amount Paid:</strong> {formatCurrency(calculateInvoiceTotals(selectedInvoice).amountPaid)}</Typography>
+                  </Grid>
+                  
+                  {/* Invoice Items */}
+                  <Grid item xs={12}>
+                    <Typography variant="h6" sx={{ mb: 1, mt: 2, fontWeight: 'bold', color: '#274290' }}>Items & Services</Typography>
+                    <TableContainer component={Paper} sx={{ maxHeight: 400, border: '1px solid #ddd' }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f8f9fa', color: '#274290', fontSize: '14px', textTransform: 'uppercase' }}>Description</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold', backgroundColor: '#f8f9fa', color: '#274290', fontSize: '14px', textTransform: 'uppercase' }}>Price</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 'bold', backgroundColor: '#f8f9fa', color: '#274290', fontSize: '14px', textTransform: 'uppercase' }}>Qty</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#f8f9fa', color: '#274290', fontSize: '14px', textTransform: 'uppercase' }}>Total</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(() => {
+                            // For T-invoices: combine items with furnitureGroups
+                            if (isTInvoice && invoiceItems.length > 0) {
+                              const furnitureGroups = selectedInvoice.furnitureGroups || [];
+                              const rows = [];
+                              
+                              // Group items by furniture group
+                              const itemsByGroup = {};
+                              invoiceItems.forEach(item => {
+                                const match = item.id?.match(/item-(\d+)-/);
+                                const groupIndex = match ? parseInt(match[1]) : -1;
+                                if (groupIndex >= 0 && groupIndex < furnitureGroups.length) {
+                                  if (!itemsByGroup[groupIndex]) {
+                                    itemsByGroup[groupIndex] = [];
+                                  }
+                                  itemsByGroup[groupIndex].push(item);
+                                }
+                              });
+                              
+                              // Render groups with items
+                              if (furnitureGroups.length > 0 && Object.keys(itemsByGroup).length > 0) {
+                                furnitureGroups.forEach((group, groupIndex) => {
+                                  // Group header
+                                  rows.push(
+                                    <TableRow key={`group-${groupIndex}`} sx={{ backgroundColor: '#f8f9fa' }}>
+                                      <TableCell colSpan={4} sx={{ fontWeight: 'bold', color: '#274290', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', py: 1 }}>
+                                        {group.name || `Furniture Group ${groupIndex + 1}`}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                  
+                                  // Items in this group
+                                  const groupItems = itemsByGroup[groupIndex] || [];
+                                  groupItems.forEach((item, itemIndex) => (
+                                    rows.push(
+                                      <TableRow key={item.id || `item-${groupIndex}-${itemIndex}`}>
+                                        <TableCell sx={{ color: '#333333' }}>{item.name || item.description}</TableCell>
+                                        <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(item.price || 0)}</TableCell>
+                                        <TableCell align="center" sx={{ color: '#333333' }}>{item.quantity || item.qty || 1}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                          {formatCurrency((parseFloat(item.price || 0) * parseFloat(item.quantity || item.qty || 1)))}
+                                        </TableCell>
+                                      </TableRow>
+                                    )
+                                  ));
+                                });
+                                
+                                // Add ungrouped items
+                                const ungroupedItems = invoiceItems.filter(item => {
+                                  const match = item.id?.match(/item-(\d+)-/);
+                                  const groupIndex = match ? parseInt(match[1]) : -1;
+                                  return groupIndex < 0 || groupIndex >= furnitureGroups.length;
+                                });
+                                
+                                ungroupedItems.forEach((item, index) => (
+                                  rows.push(
+                                    <TableRow key={item.id || `ungrouped-${index}`}>
+                                      <TableCell sx={{ color: '#333333' }}>{item.name || item.description}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(item.price || 0)}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{item.quantity || item.qty || 1}</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                        {formatCurrency((parseFloat(item.price || 0) * parseFloat(item.quantity || item.qty || 1)))}
+                                      </TableCell>
+                                    </TableRow>
+                                  )
+                                ));
+                                
+                                return rows;
+                              } else {
+                                // Fallback: show items without grouping
+                                return invoiceItems.map((item, index) => (
+                                  <TableRow key={item.id || `item-${index}`}>
+                                    <TableCell sx={{ color: '#333333' }}>{item.name || item.description}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(item.price || 0)}</TableCell>
+                                    <TableCell align="center" sx={{ color: '#333333' }}>{item.quantity || item.qty || 1}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                      {formatCurrency((parseFloat(item.price || 0) * parseFloat(item.quantity || item.qty || 1)))}
+                                    </TableCell>
+                                  </TableRow>
+                                ));
+                              }
+                            } else if (furnitureGroups.length > 0) {
+                              // Corporate invoices: render from furnitureGroups (matching TaxedInvoicesPage style)
+                              const rows = [];
+                              furnitureGroups.forEach((group, groupIndex) => {
+                                // Furniture Group Header
+                                if (group.furnitureType) {
+                                  rows.push(
+                                    <TableRow key={`group-header-${groupIndex}`} sx={{ backgroundColor: '#f8f9fa' }}>
+                                      <TableCell colSpan={4} sx={{ fontWeight: 'bold', color: '#274290', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', py: 1 }}>
+                                        {group.furnitureType}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                
+                                // Material
+                                if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+                                  const materialName = group.materialCode 
+                                    ? `${group.materialCompany || 'Material'} - ${group.materialCode}`
+                                    : (group.materialCompany || 'Material');
+                                  rows.push(
+                                    <TableRow key={`material-${groupIndex}`}>
+                                      <TableCell sx={{ color: '#333333' }}>{materialName}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(group.materialPrice)}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{group.materialQnty || group.materialQuantity || 1}</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                        {formatCurrency((parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty || group.materialQuantity) || 1))}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                
+                                // Labour
+                                if (group.labourPrice && parseFloat(group.labourPrice) > 0) {
+                                  const labourName = group.labourNote ? `Labour Work - ${group.labourNote}` : 'Labour Work';
+                                  rows.push(
+                                    <TableRow key={`labour-${groupIndex}`}>
+                                      <TableCell sx={{ color: '#333333' }}>{labourName}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(group.labourPrice)}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{group.labourQnty || group.labourQuantity || 1}</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                        {formatCurrency((parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty || group.labourQuantity) || 1))}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                
+                                // Foam
+                                if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+                                  const foamName = group.foamNote ? `Foam - ${group.foamNote}` : 'Foam';
+                                  rows.push(
+                                    <TableRow key={`foam-${groupIndex}`}>
+                                      <TableCell sx={{ color: '#333333' }}>{foamName}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(group.foamPrice)}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{group.foamQnty || group.foamQuantity || 1}</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                        {formatCurrency((parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty || group.foamQuantity) || 1))}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                                
+                                // Painting
+                                if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+                                  const paintingName = group.paintingNote ? `Painting - ${group.paintingNote}` : 'Painting';
+                                  rows.push(
+                                    <TableRow key={`painting-${groupIndex}`}>
+                                      <TableCell sx={{ color: '#333333' }}>{paintingName}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{formatCurrency(group.paintingLabour)}</TableCell>
+                                      <TableCell align="center" sx={{ color: '#333333' }}>{group.paintingQnty || group.paintingQuantity || 1}</TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: 'bold', color: '#333333' }}>
+                                        {formatCurrency((parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty || group.paintingQuantity) || 1))}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                }
+                              });
+                              
+                              return rows.length > 0 ? rows : (
+                                <TableRow>
+                                  <TableCell colSpan={4} align="center" sx={{ fontStyle: 'italic', color: '#666', py: 3 }}>
+                                    No items found
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            } else {
+                              // Debug: Show what data we have
+                              console.log('No items found - showing debug info');
+                              console.log('selectedInvoice keys:', Object.keys(selectedInvoice));
+                              console.log('selectedInvoice.items:', selectedInvoice.items);
+                              console.log('selectedInvoice.furnitureGroups:', selectedInvoice.furnitureGroups);
+                              console.log('selectedInvoice.furnitureData:', selectedInvoice.furnitureData);
+                              
+                              return (
+                                <TableRow>
+                                  <TableCell colSpan={4} align="center" sx={{ fontStyle: 'italic', color: '#666', py: 3 }}>
+                                    No items found
+                                    <Box sx={{ mt: 2, fontSize: '0.75rem', color: '#999', textAlign: 'left', p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                                      <Typography variant="caption" component="div">
+                                        <strong>Debug Info:</strong><br/>
+                                        Source: {selectedInvoice.source || 'N/A'}<br/>
+                                        Order Type: {selectedInvoice.orderType || 'N/A'}<br/>
+                                        Has items array: {selectedInvoice.items ? `Yes (${selectedInvoice.items.length} items)` : 'No'}<br/>
+                                        Has furnitureGroups: {selectedInvoice.furnitureGroups ? `Yes (${selectedInvoice.furnitureGroups.length} groups)` : 'No'}<br/>
+                                        Has furnitureData: {selectedInvoice.furnitureData ? 'Yes' : 'No'}<br/>
+                                        Invoice Number: {selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice || 'N/A'}
+                                      </Typography>
+                                    </Box>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            }
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Grid>
+                </Grid>
+              </Box>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          <Button 
+            onClick={() => selectedInvoice && handlePrintInvoice(selectedInvoice)}
+            variant="contained"
+            startIcon={<PrintIcon />}
+            sx={{ backgroundColor: '#b98f33' }}
+          >
+            Print Invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

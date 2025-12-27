@@ -49,19 +49,22 @@ import {
   Business as BusinessIcon,
   Visibility as VisibilityIcon,
   Close as CloseIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { calculateOrderProfit, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
+import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { formatCurrency } from '../../utils/plCalculations';
 import { formatDate } from '../../utils/plCalculations';
+import { formatDateOnly } from '../../utils/dateUtils';
 import { normalizeAllocation } from '../../shared/utils/allocationUtils';
 import { sendCompletionEmailWithGmail } from '../../services/emailService';
+import { formatCorporateInvoiceForInvoice } from '../../utils/invoiceNumberUtils';
 
 const EndDonePage = () => {
   const [orders, setOrders] = useState([]);
@@ -73,6 +76,8 @@ const EndDonePage = () => {
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [previewOrder, setPreviewOrder] = useState(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [completionEmailDialog, setCompletionEmailDialog] = useState({
     open: false,
     sendEmail: true,
@@ -98,10 +103,12 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders from both regular orders and done-orders collections
-      const [ordersRef, doneOrdersRef] = await Promise.all([
+      // Get all orders from regular orders, done-orders, closed-corporate-orders, and customer-invoices (T-invoices) collections
+      const [ordersRef, doneOrdersRef, closedCorporateOrdersRef, customerInvoicesRef] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
-        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc')))
+        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'closed-corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc')))
       ]);
 
       const ordersData = ordersRef.docs.map(doc => ({
@@ -115,8 +122,24 @@ const EndDonePage = () => {
         ...doc.data()
       }));
 
-      // Combine both collections
-      const allOrders = [...ordersData, ...doneOrdersData];
+      const closedCorporateOrdersData = closedCorporateOrdersRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        orderType: 'corporate',
+        source: 'closed-corporate-orders'
+      }));
+
+      // Process customer invoices (T-invoices) - include all as they're already completed invoices
+      const customerInvoicesData = customerInvoicesRef.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        source: 'customer-invoices',
+        orderType: 'customer',
+        status: 'closed' // T-invoices are considered closed/completed
+      }));
+
+      // Combine all collections
+      const allOrders = [...ordersData, ...doneOrdersData, ...closedCorporateOrdersData, ...customerInvoicesData];
 
       // Filter for orders with "done" end state status
       const doneStatuses = statusesData.filter(status => 
@@ -125,12 +148,20 @@ const EndDonePage = () => {
       const doneStatusValues = doneStatuses.map(status => status.value);
 
       const doneOrders = allOrders.filter(order => {
+        // T-invoices from customer-invoices collection are always included (they're completed invoices)
+        if (order.source === 'customer-invoices') {
+          return true;
+        }
         // For regular orders, check invoiceStatus
         if (order.invoiceStatus) {
           return doneStatusValues.includes(order.invoiceStatus);
         }
+        // For corporate orders from closed-corporate-orders collection
+        if (order.source === 'closed-corporate-orders' || order.status === 'closed') {
+          return true;
+        }
         // For corporate orders moved to done-orders, check status field
-        if (order.status === 'done' || order.orderType === 'corporate') {
+        if (order.status === 'done' || (order.orderType === 'corporate' && !order.invoiceStatus)) {
           return true;
         }
         return false;
@@ -254,6 +285,64 @@ const EndDonePage = () => {
     return dateObj.toLocaleDateString();
   };
 
+  // Check if invoice number is T- format
+  const isTFormatInvoice = (invoiceNumber) => {
+    if (!invoiceNumber) return false;
+    const str = String(invoiceNumber).trim();
+    return str.toUpperCase().startsWith('T-');
+  };
+
+  // Calculate invoice totals (same as InvoicePage) - Updated to handle T-invoices
+  const calculateInvoiceTotalsForDialog = (order) => {
+    if (!order) return { 
+      grandTotal: 0, 
+      amountPaid: 0, 
+      balanceDue: 0,
+      subtotal: 0,
+      taxAmount: 0
+    };
+    
+    // Check if this is a T-invoice
+    const isTInvoice = order.source === 'customer-invoices' || 
+                      (order.invoiceNumber && isTFormatInvoice(order.invoiceNumber)) ||
+                      (order.orderDetails?.billInvoice && isTFormatInvoice(order.orderDetails.billInvoice));
+    
+    // For T-invoices, use stored calculations if available
+    if (isTInvoice && order.calculations) {
+      const grandTotal = order.calculations.total || 0;
+      const taxAmount = order.calculations.taxAmount || 0;
+      const subtotal = order.calculations.subtotal || 0;
+      
+      return {
+        grandTotal: grandTotal,
+        subtotal: subtotal,
+        taxAmount: taxAmount,
+        amountPaid: order.orderType === 'corporate' 
+          ? (order.paymentDetails?.amountPaid || 0)
+          : (order.paidAmount || order.paymentData?.amountPaid || 0),
+        balanceDue: grandTotal - (order.orderType === 'corporate' 
+          ? (order.paymentDetails?.amountPaid || 0)
+          : (order.paidAmount || order.paymentData?.amountPaid || 0))
+      };
+    }
+    
+    const total = calculateOrderTotal(order);
+    const taxAmount = calculateOrderTax(order);
+    const subtotal = total - taxAmount;
+    const amountPaid = order.orderType === 'corporate' 
+      ? (parseFloat(order.paymentDetails?.amountPaid || 0))
+      : (parseFloat(order.paymentData?.amountPaid || 0));
+    const balanceDue = total - amountPaid;
+    
+    return {
+      grandTotal: total,
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      amountPaid: amountPaid,
+      balanceDue: balanceDue
+    };
+  };
+
   // Calculate invoice totals (same as InvoicePage)
   const calculateInvoiceTotals = (order) => {
     if (!order) return { 
@@ -318,6 +407,23 @@ const EndDonePage = () => {
       jlSubtotalBeforeTax,
       jlGrandTotal
     };
+  };
+
+  // Handle view invoice dialog
+  const handleViewInvoice = (order) => {
+    try {
+      // Open view invoice dialog
+      setSelectedInvoice(order);
+      setViewDialogOpen(true);
+    } catch (error) {
+      console.error('Error in handleViewInvoice:', error);
+      showError('Error opening invoice');
+    }
+  };
+
+  // Handle print invoice
+  const handlePrintInvoice = (order) => {
+    handleReviewInvoice(order);
   };
 
       // Handle review/print preview
@@ -1077,11 +1183,11 @@ const EndDonePage = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrders.map((order) => (
-                  <React.Fragment key={order.id}>
+                filteredOrders.map((order, index) => (
+                  <React.Fragment key={`${order.source || 'orders'}-${order.id}-${index}`}>
                     <TableRow hover>
                       <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                        #{order.orderDetails?.billInvoice || order.id}
+                        #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
                       </TableCell>
                       <TableCell>
                         <Box>
@@ -1150,21 +1256,52 @@ const EndDonePage = () => {
                        </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          <Tooltip title="Review Invoice">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleReviewInvoice(order)}
-                              sx={{ 
-                                color: '#b98f33',
-                                '&:hover': {
-                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
-                                  color: '#d4af5a'
-                                }
-                              }}
-                            >
-                              <VisibilityIcon />
-                            </IconButton>
-                          </Tooltip>
+                          {(() => {
+                            const invoiceNumber = order.orderDetails?.billInvoice || order.invoiceNumber;
+                            const isTInvoice = invoiceNumber && isTFormatInvoice(invoiceNumber);
+                            const isCorporate = order.orderType === 'corporate';
+                            const isCustomerInvoice = order.source === 'customer-invoices';
+                            
+                            // Show view dialog for corporate invoices, T-invoices, and customer-invoices
+                            if (isCorporate || isTInvoice || isCustomerInvoice) {
+                              return (
+                                <Tooltip title="View Invoice">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleViewInvoice(order)}
+                                    sx={{ 
+                                      color: '#b98f33',
+                                      backgroundColor: 'rgba(185, 143, 51, 0.2)',
+                                      '&:hover': {
+                                        backgroundColor: 'rgba(185, 143, 51, 0.3)',
+                                        color: '#d4af5a'
+                                      }
+                                    }}
+                                  >
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              );
+                            } else {
+                              return (
+                                <Tooltip title="Review Invoice">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleReviewInvoice(order)}
+                                    sx={{ 
+                                      color: '#b98f33',
+                                      '&:hover': {
+                                        backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                        color: '#d4af5a'
+                                      }
+                                    }}
+                                  >
+                                    <VisibilityIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              );
+                            }
+                          })()}
                           <Tooltip title="Send Completion Email">
                             <IconButton
                               size="small"
@@ -1665,7 +1802,6 @@ const EndDonePage = () => {
 
                 // Progress callback for email sending
                 const onEmailProgress = (message) => {
-                  console.log('📧 Completion email progress:', message);
                   showSuccess(`📧 ${message}`);
                 };
 
@@ -1741,6 +1877,584 @@ const EndDonePage = () => {
           </Typography>
         </Box>
       )}
+
+      {/* View Invoice Dialog */}
+      <Dialog 
+        open={viewDialogOpen} 
+        onClose={() => setViewDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {(() => {
+            if (!selectedInvoice) return 'Invoice - N/A';
+            const invoiceNumber = selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice;
+            const isTInvoice = invoiceNumber && isTFormatInvoice(invoiceNumber);
+            const status = selectedInvoice.status === 'closed' ? 'Closed' : 'Completed';
+            return `Invoice #${formatCorporateInvoiceForInvoice(invoiceNumber) || 'N/A'} - ${status} Invoice`;
+          })()}
+        </DialogTitle>
+        <DialogContent>
+          {selectedInvoice && (() => {
+            const isTInvoice = selectedInvoice.source === 'customer-invoices' || 
+                              (selectedInvoice.invoiceNumber && isTFormatInvoice(selectedInvoice.invoiceNumber)) ||
+                              (selectedInvoice.orderDetails?.billInvoice && isTFormatInvoice(selectedInvoice.orderDetails.billInvoice));
+            
+            // Get items based on invoice type - check all possible locations
+            let invoiceItems = [];
+            let furnitureGroups = [];
+            
+            // Check all possible locations for items/furniture data
+            if (isTInvoice && selectedInvoice.items && Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0) {
+              // T-invoice: use items array
+              invoiceItems = selectedInvoice.items.filter(item => item && !item.isGroup && (item.name || item.description));
+            } else {
+              // Corporate invoice or regular order: use furnitureGroups
+              if (selectedInvoice.furnitureGroups && Array.isArray(selectedInvoice.furnitureGroups) && selectedInvoice.furnitureGroups.length > 0) {
+                furnitureGroups = selectedInvoice.furnitureGroups.filter(group => group && (
+                  group.furnitureType || 
+                  group.materialPrice || 
+                  group.labourPrice || 
+                  group.foamPrice || 
+                  group.paintingLabour ||
+                  group.materialCode
+                ));
+              } else if (selectedInvoice.furnitureData?.groups && Array.isArray(selectedInvoice.furnitureData.groups) && selectedInvoice.furnitureData.groups.length > 0) {
+                furnitureGroups = selectedInvoice.furnitureData.groups.filter(group => group && (
+                  group.furnitureType || 
+                  group.furnitureName ||
+                  group.materialPrice || 
+                  group.labourPrice || 
+                  group.foamPrice || 
+                  group.paintingLabour
+                ));
+              }
+            }
+            
+            return (
+              <Paper 
+                elevation={3} 
+                sx={{ 
+                  p: 4, 
+                  width: '100%',
+                  mx: 'auto',
+                  backgroundColor: 'white',
+                  '& .MuiTableHead-root': {
+                    backgroundColor: '#ffffff !important'
+                  },
+                  '& .MuiTableCell-head': {
+                    backgroundColor: '#ffffff !important'
+                  },
+                  '& .MuiTableRow-head': {
+                    backgroundColor: '#ffffff !important'
+                  }
+                }}
+              >
+                {/* Professional Invoice Header - Image Only */}
+                <Box className="invoice-header" sx={{ 
+                  mb: 4,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <img 
+                    src="/assets/images/invoice-headers/Invoice Header.png" 
+                    alt="Invoice Header" 
+                    style={{ 
+                      width: '100%',
+                      height: 'auto',
+                      maxWidth: '100%',
+                      objectFit: 'contain',
+                      display: 'block'
+                    }}
+                  />
+                </Box>
+
+                {/* Invoice Information Row - Left: Customer Info, Right: Date/Invoice/Tax */}
+                <Box className="invoice-info-section" sx={{ 
+                  mb: 4,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start'
+                }}>
+                  {/* Left Side - Customer Information */}
+                  <Box sx={{ flex: 1, mr: 4 }}>
+                    <Typography variant="h6" sx={{ 
+                      fontWeight: 'bold', 
+                      color: 'black',
+                      mb: 2
+                    }}>
+                      Invoice to:
+                    </Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'black' }}>
+                      {selectedInvoice.orderType === 'corporate' 
+                        ? (selectedInvoice.corporateCustomer?.corporateName || selectedInvoice.customerInfo?.customerName || selectedInvoice.originalCustomerInfo?.customerName || 'N/A')
+                        : (selectedInvoice.personalInfo?.customerName || selectedInvoice.customerInfo?.customerName || selectedInvoice.originalCustomerInfo?.customerName || 'N/A')
+                      }
+                    </Typography>
+                    {selectedInvoice.orderType === 'corporate' && selectedInvoice.contactPerson?.name && (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', display: 'inline' }}>
+                          Contact: {selectedInvoice.contactPerson.name}
+                        </Typography>
+                        {selectedInvoice.orderDetails?.note?.value && (
+                          <Typography variant="body1" sx={{ color: 'black', display: 'inline', ml: 1 }}>
+                            • <strong>{selectedInvoice.orderDetails.note.caption || 'Note'}:</strong> {selectedInvoice.orderDetails.note.value}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                    {(selectedInvoice.orderType === 'corporate' ? selectedInvoice.contactPerson?.phone : selectedInvoice.personalInfo?.phone || selectedInvoice.customerInfo?.phone || selectedInvoice.originalCustomerInfo?.phone) && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <PhoneIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                        <Typography variant="body1" sx={{ color: 'black' }}>
+                          {selectedInvoice.orderType === 'corporate'
+                            ? (selectedInvoice.contactPerson?.phone || selectedInvoice.customerInfo?.phone || selectedInvoice.originalCustomerInfo?.phone || 'N/A')
+                            : (selectedInvoice.personalInfo?.phone || selectedInvoice.customerInfo?.phone || selectedInvoice.originalCustomerInfo?.phone || 'N/A')
+                          }
+                        </Typography>
+                      </Box>
+                    )}
+                    {(selectedInvoice.orderType === 'corporate' ? selectedInvoice.contactPerson?.email : selectedInvoice.personalInfo?.email || selectedInvoice.customerInfo?.email || selectedInvoice.originalCustomerInfo?.email) && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <EmailIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                        <Typography variant="body1" sx={{ color: 'black' }}>
+                          {selectedInvoice.orderType === 'corporate'
+                            ? (selectedInvoice.contactPerson?.email || selectedInvoice.customerInfo?.email || selectedInvoice.originalCustomerInfo?.email || 'N/A')
+                            : (selectedInvoice.personalInfo?.email || selectedInvoice.customerInfo?.email || selectedInvoice.originalCustomerInfo?.email || 'N/A')
+                          }
+                        </Typography>
+                      </Box>
+                    )}
+                    {(selectedInvoice.orderType === 'corporate' ? selectedInvoice.corporateCustomer?.address : selectedInvoice.personalInfo?.address || selectedInvoice.customerInfo?.address || selectedInvoice.originalCustomerInfo?.address) && (
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5 }}>
+                        <LocationIcon sx={{ mr: 1, fontSize: '16px', color: '#666666', mt: 0.2 }} />
+                        <Typography variant="body1" sx={{ whiteSpace: 'pre-line', color: 'black' }}>
+                          {selectedInvoice.orderType === 'corporate'
+                            ? (selectedInvoice.corporateCustomer?.address || selectedInvoice.customerInfo?.address || selectedInvoice.originalCustomerInfo?.address || 'N/A')
+                            : (selectedInvoice.personalInfo?.address || selectedInvoice.customerInfo?.address || selectedInvoice.originalCustomerInfo?.address || 'N/A')
+                          }
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+
+                  {/* Right Side - Invoice Details */}
+                  <Box sx={{ 
+                    minWidth: '250px',
+                    flexShrink: 0
+                  }}>
+                    <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                      <strong>Date:</strong> {formatDateOnly(selectedInvoice.createdAt || selectedInvoice.closedAt || selectedInvoice.completedAt || selectedInvoice.statusUpdatedAt || selectedInvoice.updatedAt)}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                      <strong>Invoice #</strong> {formatCorporateInvoiceForInvoice(selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice) || 'N/A'}
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                      <strong>Tax #</strong> 798633319-RT0001
+                    </Typography>
+                  </Box>
+                </Box>
+                
+                {/* Items Table and Totals - Professional Layout */}
+                <Box className="invoice-table-section" sx={{ mb: 4 }}>
+                  <Box sx={{ 
+                    border: '2px solid #333333',
+                    borderRadius: 0,
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}>
+                    <table style={{ 
+                      width: '100%', 
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                      tableLayout: 'fixed'
+                    }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f5f5f5' }}>
+                          <th style={{ 
+                            width: '66.67%',
+                            padding: '8px 16px',
+                            textAlign: 'left',
+                            fontWeight: 'bold',
+                            color: '#333333',
+                            backgroundColor: '#f5f5f5',
+                            border: 'none',
+                            borderBottom: '2px solid #333333',
+                            borderRight: '1px solid #ddd',
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Description</th>
+                          <th style={{ 
+                            width: '11.11%',
+                            padding: '8px 16px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            color: '#333333',
+                            backgroundColor: '#f5f5f5',
+                            border: 'none',
+                            borderBottom: '2px solid #333333',
+                            borderRight: '1px solid #ddd',
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Price</th>
+                          <th style={{ 
+                            width: '11.11%',
+                            padding: '8px 16px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            color: '#333333',
+                            backgroundColor: '#f5f5f5',
+                            border: 'none',
+                            borderBottom: '2px solid #333333',
+                            borderRight: '1px solid #ddd',
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Unit</th>
+                          <th style={{ 
+                            width: '11.11%',
+                            padding: '8px 16px',
+                            textAlign: 'right',
+                            fontWeight: 'bold',
+                            color: '#333333',
+                            backgroundColor: '#f5f5f5',
+                            border: 'none',
+                            borderBottom: '2px solid #333333',
+                            fontSize: '14px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const totals = calculateInvoiceTotalsForDialog(selectedInvoice);
+                          const furnitureGroups = selectedInvoice.furnitureGroups || [];
+                          const rows = [];
+                          
+                          // If no furniture groups, show a message
+                          if (furnitureGroups.length === 0 && (!isTInvoice || invoiceItems.length === 0)) {
+                            rows.push(
+                              <tr key="no-items">
+                                <td colSpan="4" style={{ 
+                                  padding: '16px',
+                                  textAlign: 'center',
+                                  color: '#666666',
+                                  fontStyle: 'italic',
+                                  border: 'none'
+                                }}>
+                                  No items found
+                                </td>
+                              </tr>
+                            );
+                          } else {
+                            // Render each furniture group with its items
+                            furnitureGroups.forEach((group, groupIndex) => {
+                              // Add furniture group header
+                              rows.push(
+                                <tr key={`group-${groupIndex}`} style={{ backgroundColor: '#f8f9fa' }}>
+                                  <td colSpan="4" style={{ 
+                                    padding: '10px 16px',
+                                    fontWeight: 'bold',
+                                    color: '#274290',
+                                    border: 'none',
+                                    borderBottom: '1px solid #ddd',
+                                    fontSize: '14px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.5px'
+                                  }}>
+                                    {group.furnitureType || `Furniture Group ${groupIndex + 1}`}
+                                  </td>
+                                </tr>
+                              );
+                              
+                              // Create items from furniture group data
+                              const groupItems = [];
+                              
+                              // Add material item
+                              if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+                                groupItems.push({
+                                  id: `item-${groupIndex}-material`,
+                                  name: `${group.materialCompany || 'Material'} - ${group.materialCode || 'Code'}`,
+                                  price: parseFloat(group.materialPrice) || 0,
+                                  quantity: parseFloat(group.materialQnty) || 0
+                                });
+                              }
+                              
+                              // Add labour item
+                              if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+                                groupItems.push({
+                                  id: `item-${groupIndex}-labour`,
+                                  name: `Labour Work${group.labourNote ? ` - ${group.labourNote}` : ''}`,
+                                  price: parseFloat(group.labourPrice) || 0,
+                                  quantity: parseFloat(group.labourQnty) || 0
+                                });
+                              }
+                              
+                              // Add foam item if enabled
+                              if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+                                groupItems.push({
+                                  id: `item-${groupIndex}-foam`,
+                                  name: `Foam${group.foamNote ? ` - ${group.foamNote}` : ''}`,
+                                  price: parseFloat(group.foamPrice) || 0,
+                                  quantity: parseFloat(group.foamQnty) || 0
+                                });
+                              }
+                              
+                              // Add painting item if enabled
+                              if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+                                groupItems.push({
+                                  id: `item-${groupIndex}-painting`,
+                                  name: `Painting${group.paintingNote ? ` - ${group.paintingNote}` : ''}`,
+                                  price: parseFloat(group.paintingLabour) || 0,
+                                  quantity: parseFloat(group.paintingQnty) || 0
+                                });
+                              }
+                              
+                              // Add all items from this group
+                              groupItems.forEach((item, itemIndex) => {
+                                rows.push(
+                                  <tr key={item.id || `item-${groupIndex}-${itemIndex}`} style={{ 
+                                    borderBottom: '1px solid #ddd'
+                                  }}>
+                                    <td style={{ 
+                                      width: '66.67%',
+                                      padding: '8px 16px',
+                                      color: '#333333',
+                                      border: 'none',
+                                      borderRight: '1px solid #eee',
+                                      fontSize: '14px'
+                                    }}>
+                                      {item.name}
+                                    </td>
+                                    <td style={{ 
+                                      width: '11.11%',
+                                      padding: '8px 16px',
+                                      textAlign: 'center',
+                                      color: '#333333',
+                                      border: 'none',
+                                      borderRight: '1px solid #eee',
+                                      fontSize: '14px',
+                                      fontWeight: '500'
+                                    }}>
+                                      ${parseFloat(item.price || 0).toFixed(2)}
+                                    </td>
+                                    <td style={{ 
+                                      width: '11.11%',
+                                      padding: '8px 16px',
+                                      textAlign: 'center',
+                                      color: '#333333',
+                                      border: 'none',
+                                      borderRight: '1px solid #eee',
+                                      fontSize: '14px',
+                                      fontWeight: '500'
+                                    }}>
+                                      {item.quantity || 0}
+                                    </td>
+                                    <td style={{ 
+                                      width: '11.11%',
+                                      padding: '8px 16px',
+                                      textAlign: 'right',
+                                      fontWeight: 'bold',
+                                      color: '#333333',
+                                      border: 'none',
+                                      fontSize: '14px'
+                                    }}>
+                                      ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                );
+                              });
+                              
+                              // If no items were added, show a placeholder
+                              if (groupItems.length === 0) {
+                                rows.push(
+                                  <tr key={`no-items-${groupIndex}`} style={{ 
+                                    borderBottom: '1px solid #ddd'
+                                  }}>
+                                    <td colSpan="4" style={{ 
+                                      padding: '8px 16px',
+                                      color: '#666666',
+                                      fontStyle: 'italic',
+                                      border: 'none',
+                                      fontSize: '14px'
+                                    }}>
+                                      No items in this group
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                            });
+                          }
+
+                          return rows;
+                        })()}
+                      </tbody>
+                    </table>
+                  </Box>
+                  
+                  {/* Terms and Conditions + Totals Section - Side by side */}
+                  <Box sx={{ mt: 1 }}>
+                    {/* Left Side - Terms and Conditions */}
+                    <Box sx={{ 
+                      display: 'flex',
+                      width: '100%',
+                      gap: 4
+                    }}>
+                      <Box sx={{ 
+                        flex: '0 0 50%',
+                        maxWidth: '50%'
+                      }}>
+                        <Box className="terms-header" sx={{ 
+                          backgroundColor: '#cc820d',
+                          color: 'white',
+                          p: 1,
+                          mb: 2
+                        }}>
+                          <Typography variant="h6" sx={{ 
+                            fontWeight: 'bold', 
+                            color: 'white',
+                            textAlign: 'center',
+                            textTransform: 'uppercase'
+                          }}>
+                            Terms and Conditions
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                              Payment by Cheque: <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#666' }}>(for corporates only)</span>
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'black' }}>
+                              Mail to: 322 Etheridge ave, Milton, ON CANADA L9E 1H7
+                            </Typography>
+                          </Box>
+                          
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                              Payment by direct deposit:
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'black' }}>
+                              Transit Number: 07232
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'black' }}>
+                              Institution Number: 010
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'black' }}>
+                              Account Number: 1090712
+                            </Typography>
+                          </Box>
+                          
+                          <Box>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                              Payment by e-transfer:
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'black' }}>
+                              JL@JLupholstery.com
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+
+                      {/* Right Side - Totals Section - Far Right */}
+                      <Box sx={{ 
+                        flex: '1',
+                        display: 'flex', 
+                        justifyContent: 'flex-end', 
+                        alignItems: 'flex-start'
+                      }}>
+                        <Box className="totals-section" sx={{ 
+                          minWidth: '300px',
+                          maxWidth: '400px'
+                        }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body1" sx={{ color: 'black' }}>Subtotal:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                              ${calculateInvoiceTotalsForDialog(selectedInvoice).subtotal.toFixed(2)}
+                            </Typography>
+                          </Box>
+                          
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                              13%
+                            </Typography>
+                          </Box>
+                          
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                            <Typography variant="body1" sx={{ color: 'black' }}>Tax Due:</Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                              ${calculateInvoiceTotalsForDialog(selectedInvoice).taxAmount.toFixed(2)}
+                            </Typography>
+                          </Box>
+                          
+                          <Box className="total-box" sx={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            mb: 1,
+                            backgroundColor: '#2c2c2c',
+                            color: 'white',
+                            p: 1,
+                            borderRadius: 1
+                          }}>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
+                              Total:
+                            </Typography>
+                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white !important' }}>
+                              ${calculateInvoiceTotalsForDialog(selectedInvoice).grandTotal.toFixed(2)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Professional Invoice Footer - Image Only */}
+                <Box className="invoice-footer" sx={{ 
+                  mt: 4,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  <img 
+                    src="/assets/images/invoice-headers/invoice Footer.png" 
+                    alt="Invoice Footer" 
+                    style={{ 
+                      width: '100%',
+                      height: 'auto',
+                      maxWidth: '100%',
+                      objectFit: 'contain',
+                      display: 'block'
+                    }}
+                  />
+                </Box>
+              </Paper>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
+          <Button 
+            onClick={() => selectedInvoice && handlePrintInvoice(selectedInvoice)}
+            variant="contained"
+            startIcon={<PrintIcon />}
+            sx={{ backgroundColor: '#b98f33' }}
+          >
+            Print Invoice
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
