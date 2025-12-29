@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Box, Card, CardContent, CircularProgress, List, ListItem, ListItemText, Chip, Grid } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EventIcon from '@mui/icons-material/Event';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { formatDateOnly, toDateObject } from '../../../utils/dateUtils';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,11 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [deadlineLoading, setDeadlineLoading] = useState(true);
   const [financeLoading, setFinanceLoading] = useState(true);
+  const [expenses, setExpenses] = useState({
+    general: [],
+    business: [],
+    home: []
+  });
 
   useEffect(() => {
     fetchUpcomingOrders();
@@ -118,26 +124,33 @@ const DashboardPage = () => {
     try {
       setFinanceLoading(true);
       
-      // Fetch from collections (excluding customer-invoices)
-      const [ordersSnapshot, corporateOrdersSnapshot, taxedInvoicesSnapshot] = await Promise.all([
+      // Fetch from collections and expenses (including customer-invoices for T-invoices)
+      const [ordersSnapshot, corporateOrdersSnapshot, taxedInvoicesSnapshot, customerInvoicesSnapshot, generalExpensesSnapshot, businessExpensesSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
         getDocs(query(collection(db, 'corporate-orders'), orderBy('createdAt', 'desc'))),
-        getDocs(query(collection(db, 'taxedInvoices'), orderBy('createdAt', 'desc')))
+        getDocs(query(collection(db, 'taxedInvoices'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'customer-invoices'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'generalExpenses'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'businessExpenses'), orderBy('createdAt', 'desc')))
       ]);
       
-      // Map regular orders
-      const regularOrders = ordersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: 'regular'
-      }));
+      // Map regular orders - EXCLUDE orders with hasTInvoice flag
+      const regularOrders = ordersSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderType: 'regular'
+        }))
+        .filter(order => order.hasTInvoice !== true);
       
-      // Map corporate orders
-      const corporateOrders = corporateOrdersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: 'corporate'
-      }));
+      // Map corporate orders - EXCLUDE orders with hasTInvoice flag
+      const corporateOrders = corporateOrdersSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderType: 'corporate'
+        }))
+        .filter(order => order.hasTInvoice !== true);
       
       // Map taxed invoices - filter out customer invoices (only include corporate)
       const taxedInvoices = taxedInvoicesSnapshot.docs
@@ -148,14 +161,87 @@ const DashboardPage = () => {
           source: 'taxedInvoices'
         }))
         .filter(invoice => {
+          // Exclude customer invoices - only include corporate invoices
           const isCustomerInvoice = invoice.orderType === 'customer' || invoice.source === 'customer-invoices';
           return !isCustomerInvoice;
         });
       
-      // Combine all orders (excluding customer invoices)
-      const allOrders = [...regularOrders, ...corporateOrders, ...taxedInvoices];
+      // Map T-invoices from customer-invoices (only T- format)
+      const tInvoices = customerInvoicesSnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          const invoiceNumber = data.invoiceNumber || '';
+          const isTFormat = String(invoiceNumber).startsWith('T-');
+          return isTFormat ? {
+            id: doc.id,
+            ...data,
+            orderType: 'regular',
+            source: 'customer-invoices',
+            isTInvoice: true
+          } : null;
+        })
+        .filter(invoice => invoice !== null);
+      
+      // Fetch original orders for T-invoices to get cost data
+      const tInvoicesWithCosts = await Promise.all(
+        tInvoices.map(async (tInvoice) => {
+          if (tInvoice.originalOrderId) {
+            try {
+              const orderDoc = await getDoc(doc(db, 'orders', tInvoice.originalOrderId));
+              if (orderDoc.exists()) {
+                const orderData = orderDoc.data();
+                // Attach cost data from original order to T-invoice
+                return {
+                  ...tInvoice,
+                  // Cost data from original order
+                  furnitureData: orderData.furnitureData,
+                  furnitureGroups: orderData.furnitureGroups,
+                  extraExpenses: orderData.extraExpenses,
+                  // Keep revenue data from T-invoice (items, calculations, etc.)
+                };
+              }
+            } catch (error) {
+              console.error('Error fetching original order for T-invoice:', tInvoice.id, error);
+            }
+          }
+          return tInvoice;
+        })
+      );
+      
+      // Combine all orders (excluding orders with hasTInvoice, but including T-invoices)
+      const allOrders = [...regularOrders, ...corporateOrders, ...taxedInvoices, ...tInvoicesWithCosts];
+      
+      // Sort by createdAt descending
+      allOrders.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+        return dateB - dateA;
+      });
+      
+      // Process expenses
+      const generalExpenses = generalExpensesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      const businessExpenses = [];
+      const homeExpenses = [];
+      businessExpensesSnapshot.docs.forEach(doc => {
+        const expense = { id: doc.id, ...doc.data() };
+        const expenseType = expense.type || 'business';
+        if (expenseType === 'home') {
+          homeExpenses.push(expense);
+        } else {
+          businessExpenses.push(expense);
+        }
+      });
       
       setOrders(allOrders);
+      setExpenses({
+        general: generalExpenses,
+        business: businessExpenses,
+        home: homeExpenses
+      });
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {
@@ -187,6 +273,194 @@ const DashboardPage = () => {
     if (!invoiceNumber) return false;
     const str = String(invoiceNumber).trim();
     return str.toUpperCase().startsWith('T-');
+  };
+
+  // Calculate current year summary
+  const calculateCurrentYearSummary = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    let revenue = 0;
+    let cost = 0;
+    let profit = 0;
+    let totalTaxedInvoice = 0;
+    
+    // Process each order once and aggregate all allocations for the current year
+    orders.forEach(order => {
+      const hasAllocation = order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0;
+      
+      // Normalize order structure
+      const normalizedOrder = normalizeOrderForCalculations(order);
+      
+      // Calculate base totals
+      const profitData = calculateOrderProfit(normalizedOrder);
+      const baseRevenue = profitData.revenue || 0;
+      const baseCost = calculateJLCostAnalysisBeforeTax(normalizedOrder) || 0;
+      const baseTotalTaxedInvoice = calculateOrderTotal(normalizedOrder) || 0;
+      
+      // Check if this is a T-invoice (taxed invoice)
+      const isTaxedInvoice = isTFormatInvoice(order);
+      
+      if (hasAllocation) {
+        // Process all allocations for the current year
+        try {
+          const normalizedAllocation = normalizeAllocation(order.allocation, profitData);
+          
+          if (normalizedAllocation && normalizedAllocation.allocations) {
+            normalizedAllocation.allocations.forEach(allocation => {
+              const allocationYear = Number(allocation.year);
+              const allocationMonth = Number(allocation.month);
+              
+              // Only process allocations for the current year
+              if (allocationYear === currentYear && allocationMonth >= 1 && allocationMonth <= 12) {
+                const allocationMultiplier = (allocation.percentage || 0) / 100;
+                const orderRevenue = baseRevenue * allocationMultiplier;
+                const orderCost = baseCost * allocationMultiplier;
+                const orderTotalTaxedInvoice = baseTotalTaxedInvoice * allocationMultiplier;
+                
+                revenue += orderRevenue;
+                cost += orderCost;
+                
+                if (isTaxedInvoice) {
+                  totalTaxedInvoice += orderTotalTaxedInvoice;
+                }
+              }
+            });
+          }
+        } catch (error) {
+          console.error('Error processing allocation:', error);
+        }
+      } else {
+        // For unallocated orders, check if order date is in the current year
+        const startDate = order.orderDetails?.startDate || order.createdAt;
+        let orderDate;
+        
+        try {
+          if (startDate?.toDate) {
+            orderDate = startDate.toDate();
+          } else if (startDate) {
+            orderDate = toDateObject(startDate);
+          } else {
+            return; // Skip if no date
+          }
+          
+          const orderYear = orderDate.getFullYear();
+          
+          if (orderYear === currentYear) {
+            revenue += baseRevenue;
+            cost += baseCost;
+            
+            if (isTaxedInvoice) {
+              totalTaxedInvoice += baseTotalTaxedInvoice;
+            }
+          }
+        } catch (error) {
+          console.error('Error checking order date:', error);
+        }
+      }
+    });
+    
+    // Calculate expenses for the current year
+    let generalExpensesTotal = 0;
+    let businessExpensesTotal = 0;
+    let homeExpensesTotal = 0;
+    
+    // Helper function to get year from date
+    const getYearFromDate = (dateValue) => {
+      if (!dateValue) return null;
+      try {
+        const date = toDateObject(dateValue);
+        if (!date) {
+          console.warn('Could not parse date:', dateValue);
+          return null;
+        }
+        return date.getFullYear();
+      } catch (error) {
+        console.error('Error parsing expense date:', error, dateValue);
+        return null;
+      }
+    };
+    
+    // Calculate general expenses for current year
+    if (expenses && expenses.general && Array.isArray(expenses.general)) {
+      expenses.general.forEach(expense => {
+        try {
+          const expenseDate = expense.date || expense.createdAt;
+          if (!expenseDate) {
+            console.warn('General expense missing date:', expense.id);
+            return;
+          }
+          
+          const expenseYear = getYearFromDate(expenseDate);
+          if (expenseYear === currentYear) {
+            const expenseTotal = parseFloat(expense.total || 0);
+            generalExpensesTotal += expenseTotal;
+          }
+        } catch (error) {
+          console.error('Error processing general expense:', error, expense);
+        }
+      });
+    }
+    
+    // Calculate business expenses for current year
+    if (expenses && expenses.business && Array.isArray(expenses.business)) {
+      expenses.business.forEach(expense => {
+        try {
+          const expenseDate = expense.date || expense.createdAt;
+          if (!expenseDate) {
+            console.warn('Business expense missing date:', expense.id);
+            return;
+          }
+          
+          const expenseYear = getYearFromDate(expenseDate);
+          if (expenseYear === currentYear) {
+            const expenseTotal = parseFloat(expense.total || 0);
+            businessExpensesTotal += expenseTotal;
+          }
+        } catch (error) {
+          console.error('Error processing business expense:', error, expense);
+        }
+      });
+    }
+    
+    // Calculate home expenses for current year
+    if (expenses && expenses.home && Array.isArray(expenses.home)) {
+      expenses.home.forEach(expense => {
+        try {
+          const expenseDate = expense.date || expense.createdAt;
+          if (!expenseDate) {
+            console.warn('Home expense missing date:', expense.id);
+            return;
+          }
+          
+          const expenseYear = getYearFromDate(expenseDate);
+          if (expenseYear === currentYear) {
+            const expenseTotal = parseFloat(expense.total || 0);
+            homeExpensesTotal += expenseTotal;
+          }
+        } catch (error) {
+          console.error('Error processing home expense:', error, expense);
+        }
+      });
+    }
+    
+    // Calculate total cost (cost + all expenses)
+    const totalCost = cost + generalExpensesTotal + businessExpensesTotal + homeExpensesTotal;
+    
+    // Calculate profit (revenue - total cost)
+    profit = revenue - totalCost;
+    
+    return {
+      revenue,
+      cost,
+      generalExpenses: generalExpensesTotal,
+      businessExpenses: businessExpensesTotal,
+      homeExpenses: homeExpensesTotal,
+      totalCost,
+      profit,
+      totalTaxedInvoice,
+      year: currentYear
+    };
   };
 
   // Calculate monthly summaries (previous, current, next month)
@@ -293,11 +567,103 @@ const DashboardPage = () => {
         }
       });
       
-      profit = revenue - cost;
+      // Calculate expenses for this month
+      let generalExpensesTotal = 0;
+      let businessExpensesTotal = 0;
+      let homeExpensesTotal = 0;
+      
+      // Helper function to get year and month from date
+      const getYearMonthFromDate = (dateValue) => {
+        if (!dateValue) return null;
+        try {
+          const date = toDateObject(dateValue);
+          if (!date) {
+            console.warn('Could not parse date:', dateValue);
+            return null;
+          }
+          return { year: date.getFullYear(), month: date.getMonth() + 1 };
+        } catch (error) {
+          console.error('Error parsing expense date:', error, dateValue);
+          return null;
+        }
+      };
+      
+      // Calculate general expenses for this month
+      if (expenses && expenses.general && Array.isArray(expenses.general)) {
+        expenses.general.forEach(expense => {
+          try {
+            const expenseDate = expense.date || expense.createdAt;
+            if (!expenseDate) {
+              console.warn('General expense missing date:', expense.id);
+              return;
+            }
+            
+            const dateInfo = getYearMonthFromDate(expenseDate);
+            if (dateInfo && dateInfo.year === year && dateInfo.month === month) {
+              const expenseTotal = parseFloat(expense.total || 0);
+              generalExpensesTotal += expenseTotal;
+            }
+          } catch (error) {
+            console.error('Error processing general expense:', error, expense);
+          }
+        });
+      }
+      
+      // Calculate business expenses for this month
+      if (expenses && expenses.business && Array.isArray(expenses.business)) {
+        expenses.business.forEach(expense => {
+          try {
+            const expenseDate = expense.date || expense.createdAt;
+            if (!expenseDate) {
+              console.warn('Business expense missing date:', expense.id);
+              return;
+            }
+            
+            const dateInfo = getYearMonthFromDate(expenseDate);
+            if (dateInfo && dateInfo.year === year && dateInfo.month === month) {
+              const expenseTotal = parseFloat(expense.total || 0);
+              businessExpensesTotal += expenseTotal;
+            }
+          } catch (error) {
+            console.error('Error processing business expense:', error, expense);
+          }
+        });
+      }
+      
+      // Calculate home expenses for this month
+      if (expenses && expenses.home && Array.isArray(expenses.home)) {
+        expenses.home.forEach(expense => {
+          try {
+            const expenseDate = expense.date || expense.createdAt;
+            if (!expenseDate) {
+              console.warn('Home expense missing date:', expense.id);
+              return;
+            }
+            
+            const dateInfo = getYearMonthFromDate(expenseDate);
+            if (dateInfo && dateInfo.year === year && dateInfo.month === month) {
+              const expenseTotal = parseFloat(expense.total || 0);
+              homeExpensesTotal += expenseTotal;
+            }
+          } catch (error) {
+            console.error('Error processing home expense:', error, expense);
+          }
+        });
+      }
+      
+      // Calculate total cost (cost + all expenses)
+      const totalCost = cost + generalExpensesTotal + businessExpensesTotal + homeExpensesTotal;
+      
+      // Calculate profit (revenue - total cost)
+      profit = revenue - totalCost;
       
       return {
         revenue,
         cost,
+        generalExpenses: generalExpensesTotal,
+        businessExpenses: businessExpensesTotal,
+        homeExpenses: homeExpensesTotal,
+        totalCost,
         profit,
         totalTaxedInvoice,
         monthName: monthNames[month - 1],
@@ -325,6 +691,7 @@ const DashboardPage = () => {
   };
 
   const monthlySummaries = calculateMonthlySummaries();
+  const currentYearSummary = calculateCurrentYearSummary();
 
   return (
     <Box sx={{ width: '100%', maxWidth: '100%' }}>
@@ -338,9 +705,122 @@ const DashboardPage = () => {
         </Box>
       </Box>
 
-      {/* Main Content Grid */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {/* Left Side - Monthly Summary Cards */}
+      {/* Current Year Summary Card */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <Card 
+            sx={{ 
+              backgroundColor: '#2a2a2a', 
+              border: '2px solid #b98f33', 
+              height: '100%',
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                backgroundColor: '#333333',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 8px rgba(185, 143, 51, 0.3)',
+              },
+            }}
+          >
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <TrendingUpIcon sx={{ color: '#b98f33', fontSize: 28 }} />
+                <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                  Current Year Summary
+                </Typography>
+                <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold', ml: 'auto' }}>
+                  {currentYearSummary.year}
+                </Typography>
+              </Box>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Total Taxed Invoice
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.totalTaxedInvoice)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Revenue
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.revenue)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Cost
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.cost)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    General Expenses
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.generalExpenses)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Home Expenses
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.homeExpenses)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Business Expenses
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.businessExpenses)}
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ borderTop: '1px solid #555555', pt: 1, mt: 0.5 }}>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5, fontWeight: 'bold' }}>
+                    Total Cost
+                  </Typography>
+                  <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                    {formatCurrency(currentYearSummary.totalCost)}
+                  </Typography>
+                </Box>
+                
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                    Profit
+                  </Typography>
+                  <Typography 
+                    variant="h6" 
+                    sx={{ 
+                      color: currentYearSummary.profit >= 0 ? '#4caf50' : '#f44336', 
+                      fontWeight: 'bold' 
+                    }}
+                  >
+                    {formatCurrency(currentYearSummary.profit)}
+                  </Typography>
+                  {currentYearSummary.revenue > 0 && (
+                    <Typography variant="caption" sx={{ color: '#b98f33' }}>
+                      {((currentYearSummary.profit / currentYearSummary.revenue) * 100).toFixed(1)}% margin
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Monthly Summary Cards */}
         <Grid item xs={12} md={8}>
           <Grid container spacing={2}>
             {[
@@ -403,6 +883,42 @@ const DashboardPage = () => {
                   
                   <Box>
                     <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                      General Expenses
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                      {formatCurrency(data.generalExpenses)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                      Home Expenses
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                      {formatCurrency(data.homeExpenses)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
+                      Business Expenses
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                      {formatCurrency(data.businessExpenses)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ borderTop: '1px solid #555555', pt: 1, mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5, fontWeight: 'bold' }}>
+                      Total Cost
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                      {formatCurrency(data.totalCost)}
+                    </Typography>
+                  </Box>
+                  
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#b98f33', mb: 0.5 }}>
                       Profit
                     </Typography>
                     <Typography 
@@ -427,6 +943,10 @@ const DashboardPage = () => {
             ))}
           </Grid>
         </Grid>
+      </Grid>
+
+      {/* Main Content Grid */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
 
         {/* Right Side - All Invoices with Deadlines Card */}
         <Grid item xs={12} md={4}>

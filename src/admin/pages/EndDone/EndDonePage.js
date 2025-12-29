@@ -46,19 +46,26 @@ import {
   KeyboardArrowUp as KeyboardArrowUpIcon,
   Business as BusinessIcon,
   Visibility as VisibilityIcon,
-  Print as PrintIcon
+  Print as PrintIcon,
+  PictureAsPdf as PdfIcon,
+  Close as CloseIcon,
+  LocationOn as LocationIcon
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
-import { useNotification } from '../shared/components/Common/NotificationSystem';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
-import { db } from '../shared/firebase/config';
-import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../shared/utils/orderCalculations';
-import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
-import { formatCurrency } from '../shared/utils/plCalculations';
-import { formatDate } from '../shared/utils/plCalculations';
-import { normalizeAllocation } from '../shared/utils/allocationUtils';
+import { useNotification } from '../../../shared/components/Common/NotificationSystem';
+import { collection, getDocs, query, orderBy, where, getDoc, doc } from 'firebase/firestore';
+import { db } from '../../../shared/firebase/config';
+import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
+import { fetchMaterialCompanyTaxRates } from '../../../shared/utils/materialTaxRates';
+import { formatCurrency } from '../../../shared/utils/plCalculations';
+import { formatDate } from '../../../shared/utils/plCalculations';
+import { normalizeAllocation } from '../../../shared/utils/allocationUtils';
 import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
+import { formatDateOnly } from '../../../utils/dateUtils';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import InvoicePreviewDialog from '../../../shared/components/InvoicePreviewDialog';
 
 const EndDonePage = () => {
   const [orders, setOrders] = useState([]);
@@ -70,9 +77,14 @@ const EndDonePage = () => {
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [customerInvoiceDialogOpen, setCustomerInvoiceDialogOpen] = useState(false);
+  const [customerInvoiceData, setCustomerInvoiceData] = useState(null);
+  const [allOrdersData, setAllOrdersData] = useState([]); // Store all fetched orders for cost lookup
+  const [invoicePreviewDialogOpen, setInvoicePreviewDialogOpen] = useState(false);
+  const [previewOrder, setPreviewOrder] = useState(null);
 
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showSuccess, showError } = useNotification();
 
   // Fetch orders with "done" end state
   const fetchOrders = useCallback(async () => {
@@ -88,11 +100,11 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders from regular orders, done-orders, closed-corporate-orders, and customer-invoices (T-invoices) collections
-      const [ordersRef, doneOrdersRef, closedCorporateOrdersRef, customerInvoicesRef] = await Promise.all([
+      // Get all orders from regular orders, done-orders, corporate-orders (with status closed), and customer-invoices (T-invoices) collections
+      const [ordersRef, doneOrdersRef, corporateOrdersRef, customerInvoicesRef] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
         getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
-        getDocs(query(collection(db, 'closed-corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
         getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc')))
       ]);
 
@@ -107,61 +119,111 @@ const EndDonePage = () => {
         ...doc.data()
       }));
 
-      const closedCorporateOrdersData = closedCorporateOrdersRef.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: 'corporate',
-        source: 'closed-corporate-orders'
-      }));
-
-      // Process customer invoices (T-invoices) - include all as they're already completed invoices
-      const customerInvoicesData = customerInvoicesRef.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        source: 'customer-invoices',
-        orderType: 'customer',
-        status: 'closed' // T-invoices are considered closed/completed
-      }));
-
-      // Combine all collections
-      const allOrders = [...ordersData, ...doneOrdersData, ...closedCorporateOrdersData, ...customerInvoicesData];
-      
-      console.log('All orders fetched:', allOrders.length);
-      console.log('Regular orders:', ordersData.length);
-      console.log('Done orders:', doneOrdersData.length);
-      console.log('Closed corporate orders:', closedCorporateOrdersData.length);
-      console.log('Customer invoices (T-invoices):', customerInvoicesData.length);
-      console.log('Sample customer invoice:', customerInvoicesData[0]);
-
-      // Filter for orders with "done" end state status
+      // Filter corporate orders to only include closed ones (check invoiceStatus end states)
       const doneStatuses = statusesData.filter(status => 
         status.isEndState && status.endStateType === 'done'
       );
       const doneStatusValues = doneStatuses.map(status => status.value);
+      
+      const corporateOrdersData = corporateOrdersRef.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderType: 'corporate'
+        }))
+        .filter(order => {
+          // Use invoiceStatus to determine if closed
+          if (order.invoiceStatus) {
+            return doneStatusValues.includes(order.invoiceStatus);
+          }
+          return false;
+        });
+
+      // Process customer invoices (T-invoices) - include all as they're already completed invoices
+      const customerInvoicesData = customerInvoicesRef.docs.map(doc => {
+        const data = doc.data();
+        // Deep clone to ensure all nested objects are preserved
+        const invoiceData = {
+          id: doc.id,
+          ...data,
+          source: 'customer-invoices',
+          orderType: 'customer',
+          status: 'closed', // T-invoices are considered closed/completed
+          // Explicitly preserve nested objects
+          calculations: data.calculations ? { ...data.calculations } : {},
+          items: Array.isArray(data.items) ? [...data.items] : [],
+          headerSettings: data.headerSettings ? { ...data.headerSettings } : {},
+          paidAmount: data.paidAmount || 0,
+          originalOrderId: data.originalOrderId || null,
+          originalOrderNumber: data.originalOrderNumber || null,
+          invoiceNumber: data.invoiceNumber || null,
+          customerInfo: data.customerInfo ? { ...data.customerInfo } : {},
+          personalInfo: data.personalInfo ? { ...data.personalInfo } : {},
+          customerName: data.customerName || data.customerInfo?.customerName || null
+        };
+        
+        return invoiceData;
+      });
+      
+
+      // Create sets to track orders that have corresponding T-invoices
+      const ordersWithTInvoices = new Set(); // Order IDs
+      const billInvoicesWithTInvoices = new Set(); // Bill invoice numbers
+      
+      customerInvoicesData.forEach(tInvoice => {
+        // Track by originalOrderId
+        if (tInvoice.originalOrderId) {
+          ordersWithTInvoices.add(tInvoice.originalOrderId);
+        }
+        // Track by originalOrderNumber (billInvoice from original order)
+        if (tInvoice.originalOrderNumber) {
+          billInvoicesWithTInvoices.add(tInvoice.originalOrderNumber);
+        }
+        // Also check by billInvoice in orderDetails (fallback)
+        if (tInvoice.orderDetails?.billInvoice && !tInvoice.originalOrderNumber) {
+          billInvoicesWithTInvoices.add(tInvoice.orderDetails.billInvoice);
+        }
+      });
+
+      // Filter out orders that have corresponding T-invoices (by ID or billInvoice)
+      const filteredOrdersData = ordersData.filter(order => 
+        !ordersWithTInvoices.has(order.id) && 
+        !(order.orderDetails?.billInvoice && billInvoicesWithTInvoices.has(order.orderDetails.billInvoice))
+      );
+      const filteredDoneOrdersData = doneOrdersData.filter(order => 
+        !ordersWithTInvoices.has(order.id) && 
+        !(order.orderDetails?.billInvoice && billInvoicesWithTInvoices.has(order.orderDetails.billInvoice))
+      );
+
+      // Combine all collections (excluding orders that have T-invoices)
+      const allOrders = [...filteredOrdersData, ...filteredDoneOrdersData, ...corporateOrdersData, ...customerInvoicesData];
+      
+      // Store all orders data for cost lookup in calculateOrderTotals
+      setAllOrdersData([...ordersData, ...doneOrdersData]);
+
+      // Reuse doneStatusValues already calculated above for filtering
 
       const doneOrders = allOrders.filter(order => {
         // T-invoices from customer-invoices collection are always included (they're completed invoices)
         if (order.source === 'customer-invoices') {
-          console.log('T-invoice check:', order.invoiceNumber, 'source:', order.source, 'isDone:', true);
           return true;
         }
         // For regular orders, check invoiceStatus
         if (order.invoiceStatus) {
-          const isRegularDone = doneStatusValues.includes(order.invoiceStatus);
-          console.log('Regular order check:', order.orderDetails?.billInvoice, 'invoiceStatus:', order.invoiceStatus, 'isDone:', isRegularDone);
-          return isRegularDone;
+          return doneStatusValues.includes(order.invoiceStatus);
         }
-        // For corporate orders from closed-corporate-orders collection
-        if (order.source === 'closed-corporate-orders' || order.status === 'closed') {
-          console.log('Closed corporate order check:', order.orderDetails?.billInvoice, 'status:', order.status, 'source:', order.source, 'isDone:', true);
+        // For corporate orders, ONLY check invoiceStatus (not status field)
+        if (order.orderType === 'corporate') {
+          if (order.invoiceStatus) {
+            return doneStatusValues.includes(order.invoiceStatus);
+          }
+          // Corporate orders without invoiceStatus should not be shown
+          return false;
+        }
+        // For orders moved to done-orders collection (not corporate orders), check status field
+        if (order.status === 'done') {
           return true;
         }
-        // For corporate orders moved to done-orders, check status field
-        if (order.status === 'done' || (order.orderType === 'corporate' && !order.invoiceStatus)) {
-          console.log('Corporate order check:', order.orderDetails?.billInvoice, 'status:', order.status, 'orderType:', order.orderType, 'isDone:', true);
-          return true;
-        }
-        console.log('Order not matching any criteria:', order.orderDetails?.billInvoice || order.invoiceNumber, 'invoiceStatus:', order.invoiceStatus, 'status:', order.status, 'orderType:', order.orderType, 'source:', order.source);
         return false;
       });
 
@@ -169,13 +231,9 @@ const EndDonePage = () => {
       const taxRates = await fetchMaterialCompanyTaxRates();
       setMaterialTaxRates(taxRates);
       
-      console.log('Final done orders:', doneOrders.length);
-      console.log('Final done orders data:', doneOrders);
-      
       setOrders(doneOrders);
       setFilteredOrders(doneOrders);
     } catch (error) {
-      console.error('Error fetching done orders:', error);
       showError('Failed to fetch completed orders');
     } finally {
       setLoading(false);
@@ -240,8 +298,156 @@ const EndDonePage = () => {
     return statusObj || { label: status, color: '#666' };
   };
 
+  // Calculate invoice total (same as CustomerInvoicesPage)
+  const calculateInvoiceTotal = (invoice) => {
+    // Use the saved total from invoice calculations if available
+    if (invoice.calculations?.total !== undefined) {
+      return invoice.calculations.total;
+    }
+
+    // Fallback: calculate manually if saved total is not available
+    const subtotal = invoice.items?.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const price = parseFloat(item.price) || 0;
+      return sum + (quantity * price);
+    }, 0) || 0;
+
+    const taxRate = parseFloat(invoice.headerSettings?.taxPercentage) || 0;
+    const taxAmount = (subtotal * taxRate) / 100;
+
+    const ccFeeEnabled = invoice.headerSettings?.creditCardFeeEnabled || false;
+    const ccFeeRate = parseFloat(invoice.headerSettings?.creditCardFeePercentage) || 0;
+    const ccFeeAmount = ccFeeEnabled ? (subtotal * ccFeeRate) / 100 : 0;
+
+    return subtotal + taxAmount + ccFeeAmount;
+  };
+
   // Calculate order totals
   const calculateOrderTotals = (order) => {
+    // Check if this is a corporate invoice
+    if (order.orderType === 'corporate') {
+      // Calculate revenue from furnitureGroups (corporate invoice structure)
+      const furnitureGroups = order.furnitureGroups || [];
+      let subtotal = 0;
+
+      // Calculate subtotal from furniture groups
+      furnitureGroups.forEach(group => {
+        if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+          subtotal += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
+        }
+        if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+          subtotal += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
+        }
+        if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+          subtotal += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+        }
+        if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+          subtotal += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 0);
+        }
+      });
+
+      // Calculate delivery cost
+      const paymentDetails = order.paymentDetails || {};
+      let delivery = 0;
+      if (paymentDetails.pickupDeliveryEnabled) {
+        const pickupCost = parseFloat(paymentDetails.pickupDeliveryCost) || 0;
+        const serviceType = paymentDetails.pickupDeliveryServiceType;
+        if (serviceType === 'both') {
+          delivery = pickupCost * 2;
+        } else {
+          delivery = pickupCost;
+        }
+      }
+
+      // Calculate tax (13% on subtotal + delivery)
+      const taxAmount = (subtotal + delivery) * 0.13;
+      const creditCardFeeEnabled = paymentDetails.creditCardFeeEnabled || false;
+      const creditCardFeeRate = parseFloat(paymentDetails.creditCardFeePercentage) || 0;
+      const creditCardFeeAmount = creditCardFeeEnabled ? (subtotal + delivery + taxAmount) * (creditCardFeeRate / 100) : 0;
+      const revenue = subtotal + delivery + taxAmount + creditCardFeeAmount;
+
+      // Calculate cost
+      let cost = 0;
+      try {
+        const profitData = calculateOrderProfit(order, materialTaxRates);
+        cost = profitData.cost;
+      } catch (e) {
+        // If calculation fails, cost remains 0
+      }
+
+      const profit = revenue - cost;
+
+      return {
+        revenue,
+        cost,
+        profit
+      };
+    }
+
+    // Check if this is a T-invoice (customer invoice)
+    // PRIMARY CHECK: source === 'customer-invoices' (this is the most reliable)
+    const isTInvoice = order.source === 'customer-invoices';
+    
+    // SECONDARY CHECK: Check invoice number format (backup)
+    const invoiceNum = order.invoiceNumber || order.orderDetails?.billInvoice || '';
+    const hasTFormat = invoiceNum && String(invoiceNum).trim().toUpperCase().startsWith('T-');
+    const isTInvoiceByFormat = hasTFormat && !isTInvoice; // Only use if source check failed
+    
+    const finalIsTInvoice = isTInvoice || isTInvoiceByFormat;
+    
+    if (finalIsTInvoice) {
+      // For T-invoices, use the same calculation method as CustomerInvoicesPage
+      const revenue = calculateInvoiceTotal(order);
+      
+      // Try to get cost from original order
+      let cost = 0;
+      
+      // If T-invoice has allocation data with original cost, use that
+      if (order.allocation && order.allocation.originalCost !== undefined) {
+        cost = parseFloat(order.allocation.originalCost) || 0;
+      } 
+      // If T-invoice has originalOrderId, try to fetch cost from original order
+      else if (order.originalOrderId) {
+        // Try to find the original order in the already-fetched orders
+        const originalOrder = allOrdersData.find(o => o.id === order.originalOrderId);
+        if (originalOrder) {
+          // Calculate cost from original order
+          try {
+            const profitData = calculateOrderProfit(originalOrder, materialTaxRates);
+            cost = profitData.cost;
+          } catch (e) {
+          }
+        }
+      }
+      
+      // If still no cost, try to calculate from T-invoice items (if they have cost data)
+      if (cost === 0 && order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          if (item.cost !== undefined && item.cost !== null) {
+            cost += parseFloat(item.cost) || 0;
+          }
+        });
+      }
+      
+      // Final fallback: try to calculate cost using standard function on T-invoice
+      if (cost === 0) {
+        try {
+          const profitData = calculateOrderProfit(order, materialTaxRates);
+          cost = profitData.cost;
+        } catch (e) {
+        }
+      }
+      
+      const profit = revenue - cost;
+      
+      return {
+        revenue,
+        cost,
+        profit
+      };
+    }
+    
+    // For regular orders, use standard calculation
     const profitData = calculateOrderProfit(order, materialTaxRates);
     return {
       revenue: profitData.revenue,
@@ -344,34 +550,164 @@ const EndDonePage = () => {
     };
   };
 
+  // Transform corporate invoice data to match CustomerInvoicePreviewContent format
+  const transformCorporateInvoiceData = (order) => {
+    if (!order || order.orderType !== 'corporate') return order;
+
+    // Calculate corporate invoice totals
+    const furnitureGroups = order.furnitureGroups || [];
+    let subtotal = 0;
+
+    // Calculate subtotal from furniture groups
+    furnitureGroups.forEach(group => {
+      if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+        subtotal += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
+      }
+      if (group.labourPrice && group.labourQnty && parseFloat(group.labourPrice) > 0) {
+        subtotal += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
+      }
+      if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+        subtotal += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+      }
+      if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+        subtotal += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 0);
+      }
+    });
+
+    // Calculate delivery cost
+    const paymentDetails = order.paymentDetails || {};
+    let delivery = 0;
+    if (paymentDetails.pickupDeliveryEnabled) {
+      const pickupCost = parseFloat(paymentDetails.pickupDeliveryCost) || 0;
+      const serviceType = paymentDetails.pickupDeliveryServiceType;
+      if (serviceType === 'both') {
+        delivery = pickupCost * 2;
+      } else {
+        delivery = pickupCost;
+      }
+    }
+
+    // Calculate tax (13% on subtotal + delivery)
+    const taxAmount = (subtotal + delivery) * 0.13;
+    const creditCardFeeEnabled = paymentDetails.creditCardFeeEnabled || false;
+    const creditCardFeeRate = parseFloat(paymentDetails.creditCardFeePercentage) || 0;
+    const creditCardFeeAmount = creditCardFeeEnabled ? (subtotal + delivery + taxAmount) * (creditCardFeeRate / 100) : 0;
+    const total = subtotal + delivery + taxAmount + creditCardFeeAmount;
+
+    // Convert furniture groups to items format
+    const items = [];
+    furnitureGroups.forEach((group, groupIndex) => {
+      const groupName = group.furnitureType || group.name || `Furniture Group ${groupIndex + 1}`;
+      
+      // Material item
+      if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+        const materialName = group.materialCode 
+          ? `${group.materialCompany || 'Material'} - ${group.materialCode}`
+          : (group.materialCompany || 'Material');
+        items.push({
+          id: `item-${groupIndex}-material`,
+          name: materialName,
+          price: parseFloat(group.materialPrice) || 0,
+          quantity: parseFloat(group.materialQnty) || 0
+        });
+      }
+      
+      // Labour item
+      if (group.labourPrice && parseFloat(group.labourPrice) > 0) {
+        const labourName = group.labourNote ? `Labour Work - ${group.labourNote}` : 'Labour Work';
+        items.push({
+          id: `item-${groupIndex}-labour`,
+          name: labourName,
+          price: parseFloat(group.labourPrice) || 0,
+          quantity: parseFloat(group.labourQnty) || 1
+        });
+      }
+      
+      // Foam item
+      if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+        const foamName = group.foamNote ? `Foam - ${group.foamNote}` : 'Foam';
+        items.push({
+          id: `item-${groupIndex}-foam`,
+          name: foamName,
+          price: parseFloat(group.foamPrice) || 0,
+          quantity: parseFloat(group.foamQnty) || 0
+        });
+      }
+      
+      // Painting item
+      if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+        const paintingName = group.paintingNote ? `Painting - ${group.paintingNote}` : 'Painting';
+        items.push({
+          id: `item-${groupIndex}-painting`,
+          name: paintingName,
+          price: parseFloat(group.paintingLabour) || 0,
+          quantity: parseFloat(group.paintingQnty) || 0
+        });
+      }
+    });
+
+    // Add pickup/delivery as an item if enabled
+    if (paymentDetails.pickupDeliveryEnabled && delivery > 0) {
+      items.push({
+        id: 'item-delivery',
+        name: 'Pickup & Delivery',
+        price: parseFloat(delivery.toFixed(2)),
+        quantity: 1
+      });
+    }
+
+    // Transform furniture groups to have name property for preview component
+    const transformedGroups = furnitureGroups.map((group, index) => ({
+      ...group,
+      name: group.furnitureType || group.name || `Furniture Group ${index + 1}`
+    }));
+
+    return {
+      ...order,
+      customerInfo: {
+        customerName: order.corporateCustomer?.corporateName || 'N/A',
+        phone: order.contactPerson?.phone || '',
+        email: order.contactPerson?.email || order.corporateCustomer?.email || '',
+        address: order.corporateCustomer?.address || ''
+      },
+      items: items,
+      furnitureGroups: transformedGroups,
+      calculations: {
+        subtotal: parseFloat((subtotal + delivery).toFixed(2)), // Include delivery in subtotal for display
+        taxAmount: parseFloat(taxAmount.toFixed(2)),
+        creditCardFeeAmount: parseFloat(creditCardFeeAmount.toFixed(2)),
+        total: parseFloat(total.toFixed(2))
+      },
+      headerSettings: {
+        taxPercentage: 13,
+        creditCardFeeEnabled: creditCardFeeEnabled,
+        creditCardFeePercentage: creditCardFeeRate
+      },
+      paidAmount: parseFloat(paymentDetails.amountPaid || 0),
+      invoiceNumber: order.orderDetails?.billInvoice || order.invoiceNumber || order.id,
+      createdAt: order.createdAt || order.closedAt || order.completedAt || order.statusUpdatedAt || order.updatedAt || new Date()
+    };
+  };
+
   // Handle view invoice dialog
   const handleViewInvoice = (order) => {
     try {
-      // Force console logs
-      console.log('=== VIEW INVOICE CLICKED ===');
-      console.log('Viewing invoice - Full object:', order);
-      console.log('Viewing invoice - Summary:', {
-        id: order.id,
-        invoiceNumber: order.invoiceNumber || order.orderDetails?.billInvoice,
-        orderType: order.orderType,
-        source: order.source,
-        hasItems: !!order.items,
-        itemsLength: order.items?.length,
-        itemsSample: order.items?.slice(0, 2),
-        hasFurnitureGroups: !!order.furnitureGroups,
-        furnitureGroupsLength: order.furnitureGroups?.length,
-        furnitureGroupsSample: order.furnitureGroups?.slice(0, 1),
-        hasFurnitureData: !!order.furnitureData,
-        furnitureDataGroupsLength: order.furnitureData?.groups?.length,
-        furnitureDataGroupsSample: order.furnitureData?.groups?.slice(0, 1),
-        allKeys: Object.keys(order)
-      });
-      alert(`Opening invoice dialog for: ${order.invoiceNumber || order.orderDetails?.billInvoice || order.id}\nCheck console for details.`);
-      setSelectedInvoice(order);
-      setViewDialogOpen(true);
+      // For customer invoices (T-invoices) and corporate invoices, show in popup dialog
+      if (order.source === 'customer-invoices' || order.orderType === 'corporate') {
+        // Transform corporate invoice data if needed
+        const invoiceData = order.orderType === 'corporate' 
+          ? transformCorporateInvoiceData(order)
+          : order;
+        setCustomerInvoiceData(invoiceData);
+        setCustomerInvoiceDialogOpen(true);
+        return;
+      }
+      
+      // For regular orders, use InvoicePreviewDialog (same as /admin/invoices)
+      setPreviewOrder(order);
+      setInvoicePreviewDialogOpen(true);
     } catch (error) {
-      console.error('Error in handleViewInvoice:', error);
-      alert('Error opening invoice: ' + error.message);
+      showError('Error opening invoice: ' + error.message);
     }
   };
 
@@ -493,8 +829,7 @@ const EndDonePage = () => {
         state: { invoiceData }
       });
     } catch (error) {
-      console.error('Error preparing invoice preview:', error);
-      showError('Failed to open invoice preview');
+      showError('Failed to open invoice preview: ' + error.message);
     }
   };
 
@@ -517,21 +852,6 @@ const EndDonePage = () => {
         <Typography variant="body1" sx={{ color: '#ffffff' }}>
           All orders that have been successfully completed and allocated
         </Typography>
-        {/* DEBUG: Test button */}
-        <Button 
-          onClick={() => {
-            console.log('TEST BUTTON CLICKED');
-            alert('Test button works!');
-            if (filteredOrders.length > 0) {
-              console.log('First order:', filteredOrders[0]);
-              handleViewInvoice(filteredOrders[0]);
-            }
-          }}
-          variant="contained"
-          sx={{ mt: 2, backgroundColor: '#b98f33' }}
-        >
-          TEST: Click to Test View Invoice
-        </Button>
       </Box>
 
       {/* Search Bar */}
@@ -602,7 +922,14 @@ const EndDonePage = () => {
                   <React.Fragment key={order.id}>
                     <TableRow hover>
                       <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                        #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
+                        <Box>
+                          #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
+                          {order.source === 'customer-invoices' && (order.originalOrderNumber || order.originalOrderId) && (
+                            <Typography variant="caption" sx={{ display: 'block', color: '#b98f33', fontStyle: 'italic', mt: 0.5 }}>
+                              Original: #{order.originalOrderNumber || order.orderDetails?.billInvoice || 'N/A'}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Box>
@@ -610,6 +937,8 @@ const EndDonePage = () => {
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                               {order.orderType === 'corporate' 
                                 ? order.corporateCustomer?.corporateName || 'Unknown Corporate'
+                                : order.source === 'customer-invoices'
+                                ? order.personalInfo?.customerName || order.customerName || 'Unknown Customer'
                                 : order.personalInfo?.customerName || 'Unknown Customer'
                               }
                             </Typography>
@@ -635,21 +964,28 @@ const EndDonePage = () => {
                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
-                          {formatCurrency(calculateOrderTotals(order).revenue)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
-                          {formatCurrency(calculateOrderTotals(order).cost)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
-                          {formatCurrency(calculateOrderTotals(order).profit)}
-                        </Typography>
-                      </TableCell>
+                      {(() => {
+                        const totals = calculateOrderTotals(order);
+                        return (
+                          <>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                                {formatCurrency(totals.revenue)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                                {formatCurrency(totals.cost)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                                {formatCurrency(totals.profit)}
+                              </Typography>
+                            </TableCell>
+                          </>
+                        );
+                      })()}
                       <TableCell>
                         <Chip
                           label={getStatusInfo(order.invoiceStatus).label}
@@ -668,57 +1004,22 @@ const EndDonePage = () => {
                        </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', justifyContent: 'center' }}>
-                          {(() => {
-                            const invoiceNumber = order.orderDetails?.billInvoice || order.invoiceNumber;
-                            const isTInvoice = invoiceNumber && isTFormatInvoice(invoiceNumber);
-                            const isCorporate = order.orderType === 'corporate';
-                            const isCustomerInvoice = order.source === 'customer-invoices';
-                            
-                            // DEBUG: Always show view button for testing
-                            const shouldShowView = isCorporate || isTInvoice || isCustomerInvoice;
-                            
-                            console.log('Button render check:', {
-                              invoiceNumber,
-                              isTInvoice,
-                              isCorporate,
-                              isCustomerInvoice,
-                              shouldShowView,
-                              source: order.source,
-                              orderType: order.orderType,
-                              orderId: order.id
-                            });
-                            
-                            // Show view dialog for corporate invoices, T-invoices, and customer-invoices
-                            return (
-                              <Tooltip title={shouldShowView ? "View Invoice" : "Review Invoice"}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => {
-                                    window.testClick = true;
-                                    console.log('=== BUTTON CLICKED ===');
-                                    console.log('Invoice number:', invoiceNumber);
-                                    console.log('Order:', order);
-                                    alert('Button clicked! Invoice: ' + invoiceNumber);
-                                    if (shouldShowView) {
-                                      handleViewInvoice(order);
-                                    } else {
-                                      handleReviewInvoice(order);
-                                    }
-                                  }}
-                                  sx={{ 
-                                    color: '#b98f33',
-                                    backgroundColor: shouldShowView ? 'rgba(185, 143, 51, 0.2)' : 'transparent',
-                                    '&:hover': {
-                                      backgroundColor: 'rgba(185, 143, 51, 0.3)',
-                                      color: '#d4af5a'
-                                    }
-                                  }}
-                                >
-                                  <VisibilityIcon />
-                                </IconButton>
-                              </Tooltip>
-                            );
-                          })()}
+                          <Tooltip title="View Invoice">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleViewInvoice(order)}
+                              sx={{ 
+                                color: '#b98f33',
+                                backgroundColor: 'rgba(185, 143, 51, 0.2)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.3)',
+                                  color: '#d4af5a'
+                                }
+                              }}
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
                           <MuiIconButton
                             size="small"
                             onClick={() => handleRowToggle(order.id)}
@@ -1026,39 +1327,13 @@ const EndDonePage = () => {
         </DialogTitle>
         <DialogContent>
           {selectedInvoice && (() => {
-            console.log('=== DIALOG RENDERING ===');
-            console.log('selectedInvoice:', selectedInvoice);
-            
             const isTInvoice = selectedInvoice.source === 'customer-invoices' || 
                               (selectedInvoice.invoiceNumber && isTFormatInvoice(selectedInvoice.invoiceNumber)) ||
                               (selectedInvoice.orderDetails?.billInvoice && isTFormatInvoice(selectedInvoice.orderDetails.billInvoice));
             
-            console.log('isTInvoice:', isTInvoice);
-            
             // Get items based on invoice type - check all possible locations
             let invoiceItems = [];
             let furnitureGroups = [];
-            
-            console.log('Dialog - Processing invoice data:', {
-              isTInvoice,
-              hasItems: !!selectedInvoice.items,
-              itemsLength: selectedInvoice.items?.length,
-              hasFurnitureGroups: !!selectedInvoice.furnitureGroups,
-              furnitureGroupsLength: selectedInvoice.furnitureGroups?.length,
-              hasFurnitureData: !!selectedInvoice.furnitureData,
-              furnitureDataGroupsLength: selectedInvoice.furnitureData?.groups?.length,
-              orderType: selectedInvoice.orderType,
-              source: selectedInvoice.source,
-              invoiceNumber: selectedInvoice.invoiceNumber || selectedInvoice.orderDetails?.billInvoice
-            });
-            
-            // Log sample furniture group to see structure
-            if (selectedInvoice.furnitureGroups && selectedInvoice.furnitureGroups.length > 0) {
-              console.log('Sample furniture group:', selectedInvoice.furnitureGroups[0]);
-            }
-            if (selectedInvoice.furnitureData?.groups && selectedInvoice.furnitureData.groups.length > 0) {
-              console.log('Sample furnitureData group:', selectedInvoice.furnitureData.groups[0]);
-            }
             
             // Check all possible locations for items/furniture data
             // For T-invoices: use items array with furnitureGroups for grouping
@@ -1067,7 +1342,6 @@ const EndDonePage = () => {
             if (isTInvoice && selectedInvoice.items && Array.isArray(selectedInvoice.items) && selectedInvoice.items.length > 0) {
               // T-invoice: use items array
               invoiceItems = selectedInvoice.items.filter(item => item && !item.isGroup && (item.name || item.description));
-              console.log('T-invoice - Using items array:', invoiceItems);
             } else {
               // Corporate invoice or regular order: use furnitureGroups
               if (selectedInvoice.furnitureGroups && Array.isArray(selectedInvoice.furnitureGroups) && selectedInvoice.furnitureGroups.length > 0) {
@@ -1079,7 +1353,6 @@ const EndDonePage = () => {
                   group.paintingLabour ||
                   group.materialCode
                 ));
-                console.log('Using furnitureGroups:', furnitureGroups);
               } else if (selectedInvoice.furnitureData?.groups && Array.isArray(selectedInvoice.furnitureData.groups) && selectedInvoice.furnitureData.groups.length > 0) {
                 furnitureGroups = selectedInvoice.furnitureData.groups.filter(group => group && (
                   group.furnitureType || 
@@ -1089,23 +1362,8 @@ const EndDonePage = () => {
                   group.foamPrice || 
                   group.paintingLabour
                 ));
-                console.log('Using furnitureData.groups:', furnitureGroups);
               }
             }
-            
-            // Debug: log what we found
-            console.log('Final data for display:', {
-              isTInvoice,
-              invoiceItemsLength: invoiceItems.length,
-              furnitureGroupsLength: furnitureGroups.length,
-              firstItem: invoiceItems[0],
-              firstGroup: furnitureGroups[0]
-            });
-            
-            console.log('Final data for display:', {
-              invoiceItemsLength: invoiceItems.length,
-              furnitureGroupsLength: furnitureGroups.length
-            });
             
             return (
               <Box>
@@ -1328,13 +1586,6 @@ const EndDonePage = () => {
                                 </TableRow>
                               );
                             } else {
-                              // Debug: Show what data we have
-                              console.log('No items found - showing debug info');
-                              console.log('selectedInvoice keys:', Object.keys(selectedInvoice));
-                              console.log('selectedInvoice.items:', selectedInvoice.items);
-                              console.log('selectedInvoice.furnitureGroups:', selectedInvoice.furnitureGroups);
-                              console.log('selectedInvoice.furnitureData:', selectedInvoice.furnitureData);
-                              
                               return (
                                 <TableRow>
                                   <TableCell colSpan={4} align="center" sx={{ fontStyle: 'italic', color: '#666', py: 3 }}>
@@ -1354,6 +1605,7 @@ const EndDonePage = () => {
                                 </TableRow>
                               );
                             }
+                          })()}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -1375,6 +1627,592 @@ const EndDonePage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Customer Invoice Preview Dialog */}
+      <Dialog
+        open={customerInvoiceDialogOpen}
+        onClose={() => setCustomerInvoiceDialogOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            maxHeight: '90vh',
+            backgroundColor: '#f5f5f5'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          backgroundColor: '#1a1a1a',
+          color: '#b98f33'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            Invoice Preview - {customerInvoiceData ? formatCorporateInvoiceForInvoice(customerInvoiceData.invoiceNumber) : 'N/A'}
+          </Typography>
+          <IconButton onClick={() => setCustomerInvoiceDialogOpen(false)} sx={{ color: '#b98f33' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, backgroundColor: '#f5f5f5' }}>
+          {customerInvoiceData && (
+            <CustomerInvoicePreviewContent 
+              invoiceData={customerInvoiceData}
+              onClose={() => setCustomerInvoiceDialogOpen(false)}
+              showSuccess={showSuccess}
+              showError={showError}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Invoice Preview Dialog for Regular Orders (same as /admin/invoices) */}
+      <InvoicePreviewDialog
+        open={invoicePreviewDialogOpen}
+        onClose={() => {
+          setInvoicePreviewDialogOpen(false);
+          setPreviewOrder(null);
+        }}
+        order={previewOrder}
+        materialTaxRates={materialTaxRates}
+      />
+    </Box>
+  );
+};
+
+// Customer Invoice Preview Component (same as PrintInvoicePage)
+const CustomerInvoicePreviewContent = ({ invoiceData, onClose, showSuccess, showError }) => {
+  const invoiceRef = React.useRef(null);
+
+  // Calculate paid amount
+  const getPaidAmount = (invoice) => {
+    return invoice.paidAmount || invoice.calculations?.paidAmount || 0;
+  };
+
+  // Calculate balance
+  const calculateBalance = (invoice) => {
+    const total = invoice.calculations?.total || 0;
+    const paid = getPaidAmount(invoice);
+    return total - paid;
+  };
+
+  // Company information
+  const companyInfo = {
+    name: 'JL Operations',
+    logo: 'JL',
+    tagline: 'Upholstery',
+    fullName: 'JLUPHOLSTERY',
+    address: '322 Etheridge ave, Milton, ON CANADA L9E 1H7',
+    phone: '(555) 123-4567',
+    email: 'JL@JLupholstery.com',
+    website: 'JLUPHOLSTERY.COM',
+    taxNumber: '798633319-RT0001'
+  };
+
+  // Handle print
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      showError('Unable to open print window. Pop-up might be blocked.');
+      return;
+    }
+
+    // Get the invoice content HTML
+    const invoiceContent = invoiceRef.current.innerHTML;
+    const printStyles = `
+      <style>
+        @page { margin: 0.5in; size: letter; }
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background-color: #f5f5f5; padding: 8px; border: 1px solid #ddd; }
+        td { padding: 8px; border: 1px solid #ddd; }
+      </style>
+    `;
+    
+    printWindow.document.write(printStyles + invoiceContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
+  // Handle save as PDF
+  const handleSaveAsPDF = async () => {
+    if (!invoiceRef.current) {
+      showError('Invoice content not found');
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(invoiceRef.current, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const pdf = new jsPDF('p', 'mm', 'letter');
+      const pageWidth = 215.9;
+      const pageHeight = 279.4;
+      const margin = 12.7;
+      const contentWidth = pageWidth - (margin * 2);
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - margin * 2);
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - margin * 2);
+      }
+
+      const fileName = `Invoice ${formatCorporateInvoiceForInvoice(invoiceData.invoiceNumber) || 'N/A'}.pdf`;
+      pdf.save(fileName);
+      showSuccess('PDF saved successfully!');
+    } catch (error) {
+      showError('Failed to generate PDF. Please try again.');
+    }
+  };
+
+  return (
+    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', p: 2 }}>
+      {/* Action Buttons */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'flex-end', 
+        gap: 2,
+        mb: 2,
+        px: 2
+      }}>
+        <Button
+          variant="contained"
+          startIcon={<PrintIcon />}
+          onClick={handlePrint}
+          sx={{ backgroundColor: '#b98f33', '&:hover': { backgroundColor: '#a67d2a' } }}
+        >
+          Print Invoice
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<PdfIcon />}
+          onClick={handleSaveAsPDF}
+          sx={{ 
+            backgroundColor: '#dc3545', 
+            '&:hover': { backgroundColor: '#c82333' } 
+          }}
+        >
+          Save as PDF
+        </Button>
+      </Box>
+
+      {/* Invoice Content */}
+      <Box sx={{ overflow: 'auto', flex: 1 }}>
+        <Paper 
+          ref={invoiceRef}
+          elevation={3} 
+          sx={{ 
+            p: 4, 
+            width: '100%',
+            mx: 'auto',
+            backgroundColor: 'white',
+            maxWidth: '8.5in'
+          }}
+        >
+          {/* Invoice Header Image */}
+          <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img 
+              src="/assets/images/invoice-headers/Invoice Header.png" 
+              alt="Invoice Header" 
+              style={{ 
+                width: '100%',
+                height: 'auto',
+                maxWidth: '100%',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
+          </Box>
+
+          {/* Invoice Information Row */}
+          <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {/* Left Side - Customer Information */}
+            <Box sx={{ flex: 1, mr: 4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'black', mb: 2 }}>
+                Invoice to:
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2, color: 'black' }}>
+                {invoiceData.customerInfo?.customerName || 'N/A'}
+              </Typography>
+              {invoiceData.customerInfo?.phone && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <PhoneIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                  <Typography variant="body1" sx={{ color: 'black' }}>
+                    {invoiceData.customerInfo.phone}
+                  </Typography>
+                </Box>
+              )}
+              {invoiceData.customerInfo?.email && (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                  <EmailIcon sx={{ mr: 1, fontSize: '16px', color: '#666666' }} />
+                  <Typography variant="body1" sx={{ color: 'black' }}>
+                    {invoiceData.customerInfo.email}
+                  </Typography>
+                </Box>
+              )}
+              {invoiceData.customerInfo?.address && (
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 0.5 }}>
+                  <LocationIcon sx={{ mr: 1, fontSize: '16px', color: '#666666', mt: 0.2 }} />
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-line', color: 'black' }}>
+                    {invoiceData.customerInfo.address}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+
+            {/* Right Side - Invoice Details */}
+            <Box sx={{ minWidth: '250px', flexShrink: 0 }}>
+              <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                <strong>Date:</strong> {formatDateOnly(invoiceData.createdAt)}
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                <strong>Invoice #</strong> {formatCorporateInvoiceForInvoice(invoiceData.invoiceNumber)}
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'black', mb: 1 }}>
+                <strong>Tax #</strong> {companyInfo.taxNumber}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Items Table */}
+          <Box sx={{ mb: 4 }}>
+            <Box sx={{ border: '2px solid #333333', borderRadius: 0, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', tableLayout: 'fixed' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f5f5f5' }}>
+                    <th style={{ width: '66.67%', padding: '8px 16px', textAlign: 'left', fontWeight: 'bold', color: '#333333', backgroundColor: '#f5f5f5', border: 'none', borderBottom: '2px solid #333333', borderRight: '1px solid #ddd', fontSize: '14px', textTransform: 'uppercase' }}>Description</th>
+                    <th style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', fontWeight: 'bold', color: '#333333', backgroundColor: '#f5f5f5', border: 'none', borderBottom: '2px solid #333333', borderRight: '1px solid #ddd', fontSize: '14px', textTransform: 'uppercase' }}>Price</th>
+                    <th style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', fontWeight: 'bold', color: '#333333', backgroundColor: '#f5f5f5', border: 'none', borderBottom: '2px solid #333333', borderRight: '1px solid #ddd', fontSize: '14px', textTransform: 'uppercase' }}>Unit</th>
+                    <th style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', backgroundColor: '#f5f5f5', border: 'none', borderBottom: '2px solid #333333', fontSize: '14px', textTransform: 'uppercase' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const furnitureGroups = invoiceData.furnitureGroups || [];
+                    const items = invoiceData.items || [];
+                    const rows = [];
+                    
+                    if (furnitureGroups.length === 0 && items.length === 0) {
+                      rows.push(
+                        <tr key="no-items">
+                          <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: '#666666', fontStyle: 'italic', border: 'none' }}>
+                            No items found
+                          </td>
+                        </tr>
+                      );
+                    } else {
+                      const itemsByGroup = {};
+                      items.forEach(item => {
+                        const match = item.id?.match(/item-(\d+)-/);
+                        const groupIndex = match ? parseInt(match[1]) : -1;
+                        if (groupIndex >= 0) {
+                          if (!itemsByGroup[groupIndex]) {
+                            itemsByGroup[groupIndex] = [];
+                          }
+                          itemsByGroup[groupIndex].push(item);
+                        } else {
+                          // Ungrouped items go to index -1
+                          if (!itemsByGroup[-1]) {
+                            itemsByGroup[-1] = [];
+                          }
+                          itemsByGroup[-1].push(item);
+                        }
+                      });
+                      
+                      // If we have furnitureGroups, display them with their items
+                      if (furnitureGroups.length > 0) {
+                        furnitureGroups.forEach((group, groupIndex) => {
+                          const groupName = group.name || group.furnitureType || `Furniture Group ${groupIndex + 1}`;
+                          rows.push(
+                            <tr key={`group-${groupIndex}`} style={{ backgroundColor: '#f8f9fa' }}>
+                              <td colSpan="4" style={{ padding: '10px 16px', fontWeight: 'bold', color: '#274290', border: 'none', borderBottom: '1px solid #ddd', fontSize: '14px', textTransform: 'uppercase' }}>
+                                {groupName}
+                              </td>
+                            </tr>
+                          );
+                          
+                          const groupItems = itemsByGroup[groupIndex] || [];
+                          
+                          // If no items found for this group, try to display from furnitureGroup directly (for corporate invoices)
+                          if (groupItems.length === 0 && (group.materialPrice || group.labourPrice || group.foamPrice || group.paintingLabour)) {
+                            // Material
+                            if (group.materialPrice && group.materialQnty && parseFloat(group.materialPrice) > 0) {
+                              const materialName = group.materialCode 
+                                ? `${group.materialCompany || 'Material'} - ${group.materialCode}`
+                                : (group.materialCompany || 'Material');
+                              rows.push(
+                                <tr key={`material-${groupIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                                  <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                    {materialName}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    ${parseFloat(group.materialPrice || 0).toFixed(2)}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    {group.materialQnty || group.materialQuantity || 1}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                    ${((parseFloat(group.materialPrice || 0) * parseFloat(group.materialQnty || group.materialQuantity || 1))).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            
+                            // Labour
+                            if (group.labourPrice && parseFloat(group.labourPrice) > 0) {
+                              const labourName = group.labourNote ? `Labour Work - ${group.labourNote}` : 'Labour Work';
+                              rows.push(
+                                <tr key={`labour-${groupIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                                  <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                    {labourName}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    ${parseFloat(group.labourPrice || 0).toFixed(2)}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    {group.labourQnty || group.labourQuantity || 1}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                    ${((parseFloat(group.labourPrice || 0) * parseFloat(group.labourQnty || group.labourQuantity || 1))).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            
+                            // Foam
+                            if (group.foamEnabled && group.foamPrice && group.foamQnty && parseFloat(group.foamPrice) > 0) {
+                              const foamName = group.foamNote ? `Foam - ${group.foamNote}` : 'Foam';
+                              rows.push(
+                                <tr key={`foam-${groupIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                                  <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                    {foamName}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    ${parseFloat(group.foamPrice || 0).toFixed(2)}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    {group.foamQnty || group.foamQuantity || 1}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                    ${((parseFloat(group.foamPrice || 0) * parseFloat(group.foamQnty || group.foamQuantity || 1))).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            
+                            // Painting
+                            if (group.paintingEnabled && group.paintingLabour && group.paintingQnty && parseFloat(group.paintingLabour) > 0) {
+                              const paintingName = group.paintingNote ? `Painting - ${group.paintingNote}` : 'Painting';
+                              rows.push(
+                                <tr key={`painting-${groupIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                                  <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                    {paintingName}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    ${parseFloat(group.paintingLabour || 0).toFixed(2)}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    {group.paintingQnty || group.paintingQuantity || 1}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                    ${((parseFloat(group.paintingLabour || 0) * parseFloat(group.paintingQnty || group.paintingQuantity || 1))).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            }
+                          } else {
+                            // Display items from items array
+                            groupItems.forEach((item, itemIndex) => {
+                              rows.push(
+                                <tr key={item.id || `item-${groupIndex}-${itemIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                                  <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                    {item.name}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    ${parseFloat(item.price || 0).toFixed(2)}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                    {item.quantity || 0}
+                                  </td>
+                                  <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                    ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          }
+                        });
+                      }
+                      
+                      // Display ungrouped items (items with groupIndex -1 or no match)
+                      if (itemsByGroup[-1] && itemsByGroup[-1].length > 0) {
+                        itemsByGroup[-1].forEach((item, itemIndex) => {
+                          rows.push(
+                            <tr key={item.id || `ungrouped-${itemIndex}`} style={{ borderBottom: '1px solid #ddd' }}>
+                              <td style={{ width: '66.67%', padding: '8px 16px', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px' }}>
+                                {item.name}
+                              </td>
+                              <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                ${parseFloat(item.price || 0).toFixed(2)}
+                              </td>
+                              <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'center', color: '#333333', border: 'none', borderRight: '1px solid #eee', fontSize: '14px', fontWeight: '500' }}>
+                                {item.quantity || 0}
+                              </td>
+                              <td style={{ width: '11.11%', padding: '8px 16px', textAlign: 'right', fontWeight: 'bold', color: '#333333', border: 'none', fontSize: '14px' }}>
+                                ${((parseFloat(item.quantity || 0) * parseFloat(item.price || 0))).toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      }
+                    }
+                    return rows;
+                  })()}
+                </tbody>
+              </table>
+            </Box>
+            
+            {/* Terms and Totals Section */}
+            <Box sx={{ mt: 1, display: 'flex', width: '100%', gap: 4 }}>
+              {/* Left Side - Terms */}
+              <Box sx={{ flex: '0 0 50%', maxWidth: '50%' }}>
+                <Box sx={{ backgroundColor: '#cc820d', color: 'white', p: 1, mb: 2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'white', textAlign: 'center', textTransform: 'uppercase' }}>
+                    Terms and Conditions
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by Cheque: <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#666' }}>(for corporates only)</span>
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Mail to: {companyInfo.address}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by direct deposit:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Transit Number: 07232
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Institution Number: 010
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      Account Number: 1090712
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black', mb: 1 }}>
+                      Payment by e-transfer:
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      {companyInfo.email}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Right Side - Totals */}
+              <Box sx={{ flex: '1', display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+                <Box sx={{ minWidth: '300px', maxWidth: '400px' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Subtotal:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      ${invoiceData.calculations?.subtotal?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Tax Rate:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      {(invoiceData.headerSettings?.taxPercentage || 0)}%
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" sx={{ color: 'black' }}>Tax Due:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                      ${invoiceData.calculations?.taxAmount?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                  {invoiceData.headerSettings?.creditCardFeeEnabled && (
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="body1" sx={{ color: 'black' }}>Credit Card Fee:</Typography>
+                      <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
+                        ${invoiceData.calculations?.creditCardFeeAmount?.toFixed(2) || '0.00'}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, backgroundColor: '#4CAF50', color: 'white', p: 1, borderRadius: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>Paid:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${getPaidAmount(invoiceData).toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, backgroundColor: calculateBalance(invoiceData) >= 0 ? '#cc820d' : '#4CAF50', color: 'white', p: 1, borderRadius: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>Balance:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${calculateBalance(invoiceData).toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#2c2c2c', color: 'white', p: 1, borderRadius: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>Total:</Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'white' }}>
+                      ${invoiceData.calculations?.total?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Signature Section */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', mt: 4, mb: 4 }}>
+            <Box sx={{ textAlign: 'center', minWidth: 300, mr: 8 }}>
+              <Typography variant="body2" sx={{ color: 'black', mb: 2 }}>
+                Signature
+              </Typography>
+              <Box sx={{ width: 250, height: 1, backgroundColor: 'black', mb: 1, margin: '0 auto' }} />
+              <Typography variant="h6" sx={{ color: 'black', fontFamily: '"Brush Script MT", "Lucida Handwriting", "Kalam", cursive', fontSize: '1.5rem', fontWeight: 'normal', textAlign: 'center' }}>
+                Ahmed Albaghdadi
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Invoice Footer Image */}
+          <Box sx={{ mt: 6, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <img 
+              src="/assets/images/invoice-headers/invoice Footer.png" 
+              alt="Invoice Footer" 
+              style={{ 
+                width: '100%',
+                height: 'auto',
+                maxWidth: '100%',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
+          </Box>
+        </Paper>
+      </Box>
     </Box>
   );
 };

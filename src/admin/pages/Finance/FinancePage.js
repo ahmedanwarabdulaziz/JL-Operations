@@ -41,6 +41,8 @@ import {
   Assignment as AssignmentIcon,
   Edit as EditIcon,
   Link as LinkIcon,
+  Note as NoteIcon,
+  NoteAdd as NoteAddIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
@@ -59,6 +61,7 @@ const FinancePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [selectedStatus, setSelectedStatus] = useState(null); // Filter by status
   const [expenses, setExpenses] = useState({
     general: [],
     business: [],
@@ -69,6 +72,11 @@ const FinancePage = () => {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
   const [selectedOrderForStatus, setSelectedOrderForStatus] = useState(null);
+  
+  // Note dialog state
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [selectedOrderForNote, setSelectedOrderForNote] = useState(null);
+  const [editingNote, setEditingNote] = useState('');
   
   // Allocation dialog state
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
@@ -354,6 +362,7 @@ const FinancePage = () => {
     fetchInvoiceStatuses();
     fetchOrders();
   }, []);
+
 
   // Get status label and color
   const getStatusInfo = (statusValue) => {
@@ -1018,8 +1027,50 @@ const FinancePage = () => {
       });
     }
     
+    // Apply status filter
+    if (selectedStatus) {
+      filtered = filtered.filter(order => {
+        return order.invoiceStatus === selectedStatus;
+      });
+    }
+    
+    // Sort orders: Done orders first, then others
+    // Always sort, but prioritize done orders if statuses are loaded
+    if (filtered.length > 0) {
+      // Get Done status values (only if invoiceStatuses are loaded)
+      let doneStatuses = [];
+      if (invoiceStatuses && invoiceStatuses.length > 0) {
+        doneStatuses = invoiceStatuses
+          .filter(status => status.isEndState && status.endStateType === 'done')
+          .map(status => status.value);
+      }
+      
+      filtered.sort((a, b) => {
+        // If we have done statuses, prioritize them
+        if (doneStatuses.length > 0) {
+          const aInvoiceStatus = a.invoiceStatus || '';
+          const bInvoiceStatus = b.invoiceStatus || '';
+          
+          const aIsDone = doneStatuses.includes(aInvoiceStatus);
+          const bIsDone = doneStatuses.includes(bInvoiceStatus);
+          
+          // Done orders come first
+          if (aIsDone && !bIsDone) return -1;
+          if (!aIsDone && bIsDone) return 1;
+        }
+        
+        // If both are done or both are not done (or no done statuses found), sort by date (newest first)
+        const aDate = a.orderDetails?.startDate || a.createdAt;
+        const bDate = b.orderDetails?.startDate || b.createdAt;
+        const aTime = aDate?.toDate ? aDate.toDate().getTime() : (aDate ? new Date(aDate).getTime() : 0);
+        const bTime = bDate?.toDate ? bDate.toDate().getTime() : (bDate ? new Date(bDate).getTime() : 0);
+        
+        return bTime - aTime; // Newest first
+      });
+    }
+    
     setFilteredOrders(filtered);
-  }, [searchTerm, orders, selectedYear, selectedMonth]);
+  }, [searchTerm, orders, selectedYear, selectedMonth, selectedStatus, invoiceStatuses]);
 
   // Calculate totals for filtered orders
   const calculateTotals = () => {
@@ -1855,35 +1906,115 @@ const FinancePage = () => {
         </Grid>
       </Grid>
 
-      {/* Search */}
+      {/* Search and Status Filter */}
       <Paper sx={{ p: 2, mb: 3, backgroundColor: '#2a2a2a', border: '1px solid #333333' }}>
-        <TextField
-          fullWidth
-          placeholder="Search by invoice number or customer name..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ color: '#b98f33' }} />
-              </InputAdornment>
-            ),
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              color: '#ffffff',
-              '& fieldset': {
-                borderColor: '#555555',
-              },
-              '&:hover fieldset': {
-                borderColor: '#b98f33',
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: '#b98f33',
-              },
-            },
-          }}
-        />
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={8}>
+            <TextField
+              fullWidth
+              placeholder="Search by invoice number or customer name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: '#b98f33' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  color: '#ffffff',
+                  '& fieldset': {
+                    borderColor: '#555555',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#b98f33',
+                  },
+                },
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <FormControl fullWidth>
+              <InputLabel 
+                id="status-filter-label" 
+                sx={{ 
+                  color: '#b98f33',
+                  '&.Mui-focused': {
+                    color: '#b98f33',
+                  },
+                }}
+              >
+                Filter by Status
+              </InputLabel>
+              <Select
+                labelId="status-filter-label"
+                value={selectedStatus || ''}
+                onChange={(e) => setSelectedStatus(e.target.value || null)}
+                label="Filter by Status"
+                sx={{
+                  color: '#ffffff',
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#555555',
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#b98f33',
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#b98f33',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: '#b98f33',
+                  },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      backgroundColor: '#2a2a2a',
+                      border: '1px solid #333333',
+                      '& .MuiMenuItem-root': {
+                        color: '#ffffff',
+                        '&:hover': {
+                          backgroundColor: '#3a3a3a',
+                        },
+                        '&.Mui-selected': {
+                          backgroundColor: '#b98f33',
+                          color: '#000000',
+                          '&:hover': {
+                            backgroundColor: '#d4af5a',
+                          },
+                        },
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="">
+                  <em>All Statuses</em>
+                </MenuItem>
+                {invoiceStatuses.map((status) => (
+                  <MenuItem key={status.id} value={status.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          backgroundColor: status.color || '#757575',
+                        }}
+                      />
+                      {status.label}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
       </Paper>
 
       {/* Orders Table */}
@@ -1894,12 +2025,12 @@ const FinancePage = () => {
               <TableRow sx={{ backgroundColor: '#1a1a1a' }}>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Invoice #</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Date</TableCell>
-                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Status</TableCell>
-                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Revenue</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Cost</TableCell>
+                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Revenue</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Profit</TableCell>
-                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Paid</TableCell>
-                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Balance</TableCell>
+                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Deadline</TableCell>
+                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Note</TableCell>
+                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Status</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Allocation</TableCell>
               </TableRow>
             </TableHead>
@@ -1926,11 +2057,26 @@ const FinancePage = () => {
                   const profitData = calculateOrderProfit(normalizedOrder);
                   const partialAmounts = calculatePartialAmounts(order, profitData, normalizedPayment);
                   const startDate = order.orderDetails?.startDate || order.createdAt;
+                  const deadline = order.orderDetails?.deadline;
                   const hasAllocation = order.allocation && order.allocation.allocations && order.allocation.allocations.length > 0;
                   const statusInfo = getStatusInfo(order.invoiceStatus);
+                  // Get note from appropriate location based on order type
+                  // Get note from appropriate location based on order type
+                  let note = '';
+                  if (order.orderType === 'corporate') {
+                    note = order.paymentDetails?.notes || '';
+                  } else if (order.source === 'customer-invoices' || order.source === 'taxedInvoices') {
+                    note = order.notes || order.paymentData?.notes || '';
+                  } else {
+                    note = order.paymentData?.notes || '';
+                  }
+                  const hasNote = note && note.trim().length > 0;
+                  
+                  // Create unique key combining id, source, and orderType to avoid duplicates
+                  const uniqueKey = `${order.id}-${order.source || 'orders'}-${order.orderType || 'regular'}`;
                   
                   return (
-                    <TableRow key={order.id} sx={{ '&:hover': { backgroundColor: '#333333' } }}>
+                    <TableRow key={uniqueKey} sx={{ '&:hover': { backgroundColor: '#333333' } }}>
                       <TableCell sx={{ color: '#ffffff' }}>
                         <Tooltip
                           title={formatCustomerDetails(order)}
@@ -1955,10 +2101,44 @@ const FinancePage = () => {
                             }
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Box sx={{ cursor: 'help', fontWeight: 'bold' }}>
                               {order.invoiceNumber || order.orderDetails?.billInvoice || 'N/A'}
                             </Box>
+                            {/* Order Type Tag */}
+                            {(() => {
+                              let tagLabel = '';
+                              let tagColor = '#666666';
+                              
+                              if (order.orderType === 'corporate') {
+                                tagLabel = 'Corporate';
+                                tagColor = '#f27921'; // Orange (same as completed orders)
+                              } else if (order.source === 'customer-invoices') {
+                                tagLabel = 'Customer Invoice';
+                                tagColor = '#9c27b0'; // Purple
+                              } else {
+                                tagLabel = 'Order';
+                                tagColor = '#4caf50'; // Green
+                              }
+                              
+                              return (
+                                <Chip
+                                  label={tagLabel}
+                                  size="small"
+                                  sx={{
+                                    height: '20px',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 'bold',
+                                    backgroundColor: tagColor,
+                                    color: '#ffffff',
+                                    '& .MuiChip-label': {
+                                      px: 0.75,
+                                      py: 0,
+                                    },
+                                  }}
+                                />
+                              );
+                            })()}
                             {order.isTInvoice && order.originalOrderId && (
                               <Tooltip title={`View original order: ${order.originalOrderNumber || order.originalOrderId}`} arrow>
                                 <IconButton
@@ -1985,6 +2165,70 @@ const FinancePage = () => {
                       <TableCell sx={{ color: '#ffffff' }}>
                         {startDate ? formatDateOnly(startDate) : 'N/A'}
                       </TableCell>
+                      <TableCell sx={{ color: '#ffffff' }}>
+                        {formatCurrency(partialAmounts.cost)}
+                      </TableCell>
+                      <TableCell sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                        {formatCurrency(partialAmounts.revenue)}
+                      </TableCell>
+                      <TableCell sx={{ 
+                        color: partialAmounts.profit >= 0 ? '#4caf50' : '#f44336', 
+                        fontWeight: 'bold' 
+                      }}>
+                        {formatCurrency(partialAmounts.profit)}
+                      </TableCell>
+                      <TableCell sx={{ color: '#ffffff' }}>
+                        {deadline ? formatDateOnly(deadline) : 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          <Tooltip
+                            title={hasNote ? note : 'Click to add note'}
+                            arrow
+                            placement="right"
+                            componentsProps={{
+                              tooltip: {
+                                sx: {
+                                  backgroundColor: '#2a2a2a',
+                                  border: '1px solid #b98f33',
+                                  color: '#ffffff',
+                                  fontSize: '0.875rem',
+                                  whiteSpace: 'pre-wrap',
+                                  maxWidth: '400px',
+                                  '& .MuiTooltip-arrow': {
+                                    color: '#2a2a2a',
+                                    '&::before': {
+                                      border: '1px solid #b98f33'
+                                    }
+                                  }
+                                }
+                              }
+                            }}
+                          >
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setSelectedOrderForNote(order);
+                                setEditingNote(note);
+                                setNoteDialogOpen(true);
+                              }}
+                              sx={{
+                                color: hasNote ? '#b98f33' : '#666666',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(185, 143, 51, 0.1)',
+                                  color: '#d4af5a',
+                                },
+                              }}
+                            >
+                              {hasNote ? (
+                                <NoteIcon fontSize="small" />
+                              ) : (
+                                <NoteAddIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         <Chip
                           label={statusInfo.label}
@@ -2010,27 +2254,6 @@ const FinancePage = () => {
                             },
                           }}
                         />
-                      </TableCell>
-                      <TableCell sx={{ color: '#ffffff', fontWeight: 'bold' }}>
-                        {formatCurrency(partialAmounts.revenue)}
-                      </TableCell>
-                      <TableCell sx={{ color: '#ffffff' }}>
-                        {formatCurrency(partialAmounts.cost)}
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: partialAmounts.profit >= 0 ? '#4caf50' : '#f44336', 
-                        fontWeight: 'bold' 
-                      }}>
-                        {formatCurrency(partialAmounts.profit)}
-                      </TableCell>
-                      <TableCell sx={{ color: '#ffffff' }}>
-                        {formatCurrency(partialAmounts.paidAmount)}
-                      </TableCell>
-                      <TableCell sx={{ 
-                        color: partialAmounts.balance > 0 ? '#f44336' : '#4caf50', 
-                        fontWeight: 'bold' 
-                      }}>
-                        {formatCurrency(partialAmounts.balance)}
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
@@ -2098,14 +2321,14 @@ const FinancePage = () => {
                       borderTop: '2px solid #b98f33',
                     }
                   }}>
-                    <TableCell colSpan={3} sx={{ color: '#b98f33', fontWeight: 'bold', fontSize: '1rem' }}>
+                    <TableCell colSpan={2} sx={{ color: '#b98f33', fontWeight: 'bold', fontSize: '1rem' }}>
                       TOTALS
                     </TableCell>
                     <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
-                      {formatCurrency(totals.revenue)}
+                      {formatCurrency(totals.cost)}
                     </TableCell>
                     <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
-                      {formatCurrency(totals.cost)}
+                      {formatCurrency(totals.revenue)}
                     </TableCell>
                     <TableCell sx={{ 
                       color: totals.profit >= 0 ? '#4caf50' : '#f44336', 
@@ -2114,16 +2337,7 @@ const FinancePage = () => {
                     }}>
                       {formatCurrency(totals.profit)}
                     </TableCell>
-                    <TableCell sx={{ color: '#ffffff', fontWeight: 'bold', fontSize: '1rem' }}>
-                      {formatCurrency(totals.paid)}
-                    </TableCell>
-                    <TableCell sx={{ 
-                      color: totals.balance > 0 ? '#f44336' : '#4caf50', 
-                      fontWeight: 'bold',
-                      fontSize: '1rem'
-                    }}>
-                      {formatCurrency(totals.balance)}
-                    </TableCell>
+                    <TableCell colSpan={3}></TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 );
@@ -2293,6 +2507,180 @@ const FinancePage = () => {
             }}
           >
             {updatingStatus === selectedOrderForStatus?.id ? 'Updating...' : 'Update Status'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Note Dialog */}
+      <Dialog 
+        open={noteDialogOpen} 
+        onClose={() => {
+          setNoteDialogOpen(false);
+          setEditingNote('');
+          setSelectedOrderForNote(null);
+        }} 
+        maxWidth="sm" 
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            zIndex: 1000
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          fontWeight: 'bold'
+        }}>
+          {editingNote && editingNote.trim().length > 0 ? <NoteIcon /> : <NoteAddIcon />}
+          {editingNote && editingNote.trim().length > 0 ? 'Edit Note' : 'Add Note'}
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 3, backgroundColor: '#3a3a3a' }}>
+          {selectedOrderForNote && (
+            <Box sx={{ mb: 2, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="subtitle2" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+                Invoice: {selectedOrderForNote.invoiceNumber || selectedOrderForNote.orderDetails?.billInvoice || 'N/A'}
+              </Typography>
+            </Box>
+          )}
+          
+          <TextField
+            fullWidth
+            multiline
+            rows={6}
+            value={editingNote}
+            onChange={(e) => setEditingNote(e.target.value)}
+            placeholder="Enter note..."
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                color: '#ffffff',
+                backgroundColor: '#2a2a2a',
+                '& fieldset': {
+                  borderColor: '#555555',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#b98f33',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#b98f33',
+                },
+              },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
+          <Button 
+            onClick={() => {
+              setNoteDialogOpen(false);
+              setEditingNote('');
+              setSelectedOrderForNote(null);
+            }}
+            variant="outlined"
+            size="small"
+            sx={buttonStyles.cancelButton}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={async () => {
+              if (selectedOrderForNote) {
+                try {
+                  setUpdatingStatus(selectedOrderForNote.id);
+                  const collectionName = selectedOrderForNote.orderType === 'corporate' ? 'corporate-orders' : 
+                    selectedOrderForNote.source === 'customer-invoices' ? 'customer-invoices' :
+                    selectedOrderForNote.source === 'taxedInvoices' ? 'taxedInvoices' : 'orders';
+                  const orderRef = doc(db, collectionName, selectedOrderForNote.id);
+                  
+                  // Update based on order type
+                  if (selectedOrderForNote.orderType === 'corporate') {
+                    await updateDoc(orderRef, {
+                      'paymentDetails.notes': editingNote
+                    });
+                  } else if (selectedOrderForNote.source === 'customer-invoices' || selectedOrderForNote.source === 'taxedInvoices') {
+                    // For invoices, try paymentData first, fallback to root level notes
+                    try {
+                      await updateDoc(orderRef, {
+                        'paymentData.notes': editingNote
+                      });
+                    } catch {
+                      await updateDoc(orderRef, {
+                        notes: editingNote
+                      });
+                    }
+                  } else {
+                    await updateDoc(orderRef, {
+                      'paymentData.notes': editingNote
+                    });
+                  }
+                  
+                  // Update local state
+                  setOrders(prevOrders => 
+                    prevOrders.map(o => {
+                      if (o.id === selectedOrderForNote.id) {
+                        if (o.orderType === 'corporate') {
+                          return { ...o, paymentDetails: { ...(o.paymentDetails || {}), notes: editingNote } };
+                        } else if (o.source === 'customer-invoices' || o.source === 'taxedInvoices') {
+                          return { ...o, paymentData: { ...(o.paymentData || {}), notes: editingNote }, notes: editingNote };
+                        } else {
+                          return { ...o, paymentData: { ...(o.paymentData || {}), notes: editingNote } };
+                        }
+                      }
+                      return o;
+                    })
+                  );
+                  setFilteredOrders(prevOrders => 
+                    prevOrders.map(o => {
+                      if (o.id === selectedOrderForNote.id) {
+                        if (o.orderType === 'corporate') {
+                          return { ...o, paymentDetails: { ...(o.paymentDetails || {}), notes: editingNote } };
+                        } else if (o.source === 'customer-invoices' || o.source === 'taxedInvoices') {
+                          return { ...o, paymentData: { ...(o.paymentData || {}), notes: editingNote }, notes: editingNote };
+                        } else {
+                          return { ...o, paymentData: { ...(o.paymentData || {}), notes: editingNote } };
+                        }
+                      }
+                      return o;
+                    })
+                  );
+                  showSuccess('Note updated successfully');
+                  setNoteDialogOpen(false);
+                  setEditingNote('');
+                  setSelectedOrderForNote(null);
+                } catch (error) {
+                  console.error('Error updating note:', error);
+                  showError('Failed to update note');
+                } finally {
+                  setUpdatingStatus(null);
+                }
+              }
+            }}
+            variant="contained"
+            disabled={updatingStatus === selectedOrderForNote?.id}
+            size="small"
+            sx={{
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999',
+                border: '2px solid #444444',
+              },
+            }}
+          >
+            {updatingStatus === selectedOrderForNote?.id ? 'Saving...' : 'Save Note'}
           </Button>
         </DialogActions>
       </Dialog>

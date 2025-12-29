@@ -90,6 +90,7 @@ const underConstructionItems = [
   { text: 'Email Settings', path: '/admin/email-settings', icon: <EmailIcon /> },
   { text: 'Email Test', path: '/admin/test', icon: <EmailIcon /> },
   { text: 'Data Management', path: '/admin/data-management', icon: <SettingsIcon /> },
+  { text: 'Migration Utility', path: '/admin/migration', icon: <StorageIcon /> },
   { text: 'P&L Statement', path: '/admin/pl', icon: <TrendingUpIcon /> },
   { text: 'TEST', path: '/admin/test-page', icon: <BuildIcon /> },
 ];

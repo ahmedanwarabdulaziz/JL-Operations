@@ -455,12 +455,12 @@ const CorporateOrderPage = () => {
         orderDetails: {
           billInvoice: finalInvoiceNumber,
           orderType: 'corporate',
-          status: 'pending',
           note: {
             caption: orderNoteCaption || 'Note',
             value: orderNote || ''
           }
         },
+        // invoiceStatus will be set by status management system (no status field needed)
         // Order data (furniture, materials, payment, etc.)
         furnitureGroups: orderData.furnitureGroups,
         paymentDetails: orderData.paymentDetails,

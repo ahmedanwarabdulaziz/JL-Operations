@@ -35,7 +35,7 @@ import PLPage from './pages/Finance/PLPage';
 import StatusManagementPage from './pages/StatusManagement/StatusManagementPage';
 import DataManagementPage from './pages/DataManagement/DataManagementPage';
 import EmailSettingsPage from './pages/EmailSettings/EmailSettingsPage';
-import EndDonePage from './pages/EndDone/EndDonePage';
+import EndDonePage from './admin/pages/EndDone/EndDonePage';
 import EndCancelledPage from './pages/EndCancelled/EndCancelledPage';
 import PendingOrdersPage from './pages/PendingOrders/PendingOrdersPage';
 import LeadFormPage from './pages/LeadFormPage/LeadFormPage';
@@ -46,6 +46,7 @@ import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
 import ControlPage from './admin/pages/Control/ControlPage';
+import MigrationUtilityPage from './admin/pages/Migration/MigrationUtilityPage';
 
         // Website Management imports
         import AdminWebsiteLayout from './admin/layouts/WebsiteLayout';
@@ -230,6 +231,7 @@ const AppContent = () => {
           <Route path="/data-management" element={<Navigate to="/admin/data-management" replace />} />
           <Route path="/admin/data-management" element={<DataManagementPage />} />
           <Route path="/admin/control" element={<ControlPage />} />
+          <Route path="/admin/migration" element={<MigrationUtilityPage />} />
           <Route path="/email-settings" element={<Navigate to="/admin/email-settings" replace />} />
           <Route path="/admin/email-settings" element={<EmailSettingsPage />} />
           <Route path="/end-done" element={<Navigate to="/admin/end-done" replace />} />

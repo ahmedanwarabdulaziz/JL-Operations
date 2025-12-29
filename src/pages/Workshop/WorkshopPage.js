@@ -1030,16 +1030,28 @@ const WorkshopPage = () => {
           originalInvoiceId: sanitizedOrderData.id
         };
 
-        const closedOrderData = {
-          ...sanitizedOrderData,
+        // Update invoiceStatus in corporate-orders collection (instead of moving to closed-corporate-orders)
+        // Find the "done" end state status
+        const doneStatuses = invoiceStatuses.filter(status => 
+          status.isEndState && status.endStateType === 'done'
+        );
+        const doneStatus = doneStatuses.length > 0 ? doneStatuses[0].value : null;
+        
+        const updateStatusData = {
           closedAt: closedAtDate,
-          status: 'closed'
+          updatedAt: new Date(),
+          ...updateData
         };
+        
+        // Set invoiceStatus to done status if available
+        if (doneStatus) {
+          updateStatusData.invoiceStatus = doneStatus;
+        }
+        
+        await updateDoc(orderRef, updateStatusData);
 
         await addDoc(collection(db, 'done-orders'), doneOrderData);
         await addDoc(collection(db, 'taxedInvoices'), taxedInvoiceData);
-        await addDoc(collection(db, 'closed-corporate-orders'), closedOrderData);
-        await deleteDoc(orderRef);
 
         const remainingOrders = orders.filter(order => order.id !== selectedOrderForAllocation.id);
         const remainingFilteredOrders = filteredOrders.filter(order => order.id !== selectedOrderForAllocation.id);
@@ -1436,9 +1448,18 @@ const WorkshopPage = () => {
       );
       const endStateValues = endStateStatuses.map(status => status.value);
 
-      const activeOrders = allOrdersData.filter(order => 
-        !endStateValues.includes(order.invoiceStatus)
-      );
+      const activeOrders = allOrdersData.filter(order => {
+        // For corporate orders, use invoiceStatus to filter out closed ones
+        if (order.orderType === 'corporate') {
+          if (order.invoiceStatus) {
+            return !endStateValues.includes(order.invoiceStatus);
+          }
+          // If no invoiceStatus, consider it active
+          return true;
+        }
+        // For regular orders, filter out end state statuses
+        return !endStateValues.includes(order.invoiceStatus);
+      });
       
       // Sort by bill number (highest to lowest)
       const sortedOrders = activeOrders.sort((a, b) => {

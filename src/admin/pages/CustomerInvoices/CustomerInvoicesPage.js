@@ -342,8 +342,7 @@ const CustomerInvoicesPage = () => {
     const collectionsToCheck = [
       { name: 'orders', id: originalOrderId },
       { name: 'corporate-orders', id: originalOrderId },
-      { name: 'done-orders', id: originalOrderId },
-      { name: 'closed-corporate-orders', id: originalOrderId }
+      { name: 'done-orders', id: originalOrderId }
     ];
 
     let referencesCleared = 0;

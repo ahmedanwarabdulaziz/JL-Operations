@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -32,6 +32,12 @@ import {
   Switch,
   FormControlLabel,
   Checkbox,
+  Tabs,
+  Tab,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   FileDownload as DownloadIcon,
@@ -47,7 +53,7 @@ import {
   LocationOn as LocationIcon,
   Archive as ArchiveIcon,
 } from '@mui/icons-material';
-import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, deleteDoc, where } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
@@ -63,6 +69,7 @@ jsPDF.API.autoTable = autoTable;
 
 const CorporateInvoicesPage = () => {
   const [corporateOrders, setCorporateOrders] = useState([]);
+  const [allCorporateOrders, setAllCorporateOrders] = useState([]); // Store all orders (active + closed)
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -73,29 +80,106 @@ const CorporateInvoicesPage = () => {
   const [notification, setNotification] = useState({ open: false, message: '', type: 'info' });
   const [materialTaxRates, setMaterialTaxRates] = useState({});
   const [groupByNote, setGroupByNote] = useState(false);
+  const [activeTab, setActiveTab] = useState(0); // 0 = Active, 1 = Closed
+  const [invoiceStatuses, setInvoiceStatuses] = useState([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
 
-  useEffect(() => {
-    fetchCorporateOrders();
-    fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
-  }, []);
+  const filterOrdersByTab = useCallback((orders, tabIndex) => {
+    let filtered;
+    if (tabIndex === 0) {
+      // Active orders - exclude closed/done ones (check invoiceStatus end states)
+      const doneStatuses = invoiceStatuses.filter(status => 
+        status.isEndState && status.endStateType === 'done'
+      );
+      const doneStatusValues = doneStatuses.map(status => status.value);
+      
+      filtered = orders.filter(order => {
+        // For corporate orders, use invoiceStatus to determine if closed
+        if (order.invoiceStatus) {
+          return !doneStatusValues.includes(order.invoiceStatus);
+        }
+        // If no invoiceStatus, consider it active
+        return true;
+      });
+    } else {
+      // Closed orders - only show closed/done ones
+      const doneStatuses = invoiceStatuses.filter(status => 
+        status.isEndState && status.endStateType === 'done'
+      );
+      const doneStatusValues = doneStatuses.map(status => status.value);
+      
+      filtered = orders.filter(order => {
+        // For corporate orders, use invoiceStatus to determine if closed
+        if (order.invoiceStatus) {
+          return doneStatusValues.includes(order.invoiceStatus);
+        }
+        return false;
+      });
+    }
+    
+    setCorporateOrders(filtered);
+    
+    // Apply search filter if there's a search term
+    if (searchTerm && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      const searchFiltered = filtered.filter(order => {
+        // Search in bill number
+        const invoiceNumber = formatCorporateInvoiceForInvoice(order.orderDetails?.billInvoice) || '';
+        if (invoiceNumber.toLowerCase().includes(searchLower)) {
+          return true;
+        }
+        
+        // Search in corporate customer info
+        const corporateCustomer = order.corporateCustomer || {};
+        const contactPerson = order.contactPerson || {};
+        if (
+          corporateCustomer.corporateName?.toLowerCase().includes(searchLower) ||
+          corporateCustomer.email?.toLowerCase().includes(searchLower) ||
+          corporateCustomer.phone?.toLowerCase().includes(searchLower) ||
+          contactPerson.name?.toLowerCase().includes(searchLower) ||
+          contactPerson.email?.toLowerCase().includes(searchLower) ||
+          contactPerson.phone?.toLowerCase().includes(searchLower)
+        ) {
+          return true;
+        }
+        
+        // Search in furniture data
+        const furnitureGroups = order.furnitureGroups || [];
+        const hasMatchingFurniture = furnitureGroups.some(group => 
+          group.furniture?.some(furniture => 
+            furniture.name?.toLowerCase().includes(searchLower) ||
+            furniture.material?.toLowerCase().includes(searchLower) ||
+            furniture.color?.toLowerCase().includes(searchLower)
+          )
+        );
+        
+        return hasMatchingFurniture;
+      });
+      setFilteredOrders(searchFiltered);
+    } else {
+      setFilteredOrders(filtered);
+    }
+  }, [searchTerm, invoiceStatuses]);
 
   const fetchCorporateOrders = async () => {
     try {
       setLoading(true);
       
-      // Fetch corporate orders
+      // Fetch all corporate orders (both active and closed)
       const corporateOrdersRef = collection(db, 'corporate-orders');
       const q = query(corporateOrdersRef, orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
-      const ordersData = querySnapshot.docs.map(doc => ({
+      const allOrdersData = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
-      setCorporateOrders(ordersData);
-      setFilteredOrders(ordersData);
+      setAllCorporateOrders(allOrdersData);
+      
+      // Filter based on active tab
+      filterOrdersByTab(allOrdersData, activeTab);
       
     } catch (error) {
       console.error('Error fetching corporate orders:', error);
@@ -105,49 +189,42 @@ const CorporateInvoicesPage = () => {
     }
   };
 
+  const fetchInvoiceStatuses = async () => {
+    try {
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const statusesSnapshot = await getDocs(statusesRef);
+      const statusesData = statusesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setInvoiceStatuses(statusesData);
+    } catch (error) {
+      console.error('Error fetching invoice statuses:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCorporateOrders();
+    fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
+    fetchInvoiceStatuses();
+  }, []);
+
+  useEffect(() => {
+    // Re-filter when tab or search term changes
+    if (allCorporateOrders.length > 0) {
+      filterOrdersByTab(allCorporateOrders, activeTab);
+    }
+  }, [activeTab, allCorporateOrders, filterOrdersByTab]);
+
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    filterOrdersByTab(allCorporateOrders, newValue);
+  };
+
   const handleSearch = (searchValue) => {
     setSearchTerm(searchValue);
-    
-    if (!searchValue.trim()) {
-      setFilteredOrders(corporateOrders);
-      return;
-    }
-
-    const searchLower = searchValue.toLowerCase();
-    const filtered = corporateOrders.filter(order => {
-      // Search in bill number
-      if (order.orderDetails?.billInvoice?.toLowerCase().includes(searchLower)) {
-        return true;
-      }
-
-      // Search in corporate customer info
-      const corporateCustomer = order.corporateCustomer || {};
-      const contactPerson = order.contactPerson || {};
-      if (
-        corporateCustomer.corporateName?.toLowerCase().includes(searchLower) ||
-        corporateCustomer.email?.toLowerCase().includes(searchLower) ||
-        corporateCustomer.phone?.toLowerCase().includes(searchLower) ||
-        contactPerson.name?.toLowerCase().includes(searchLower) ||
-        contactPerson.email?.toLowerCase().includes(searchLower) ||
-        contactPerson.phone?.toLowerCase().includes(searchLower)
-      ) {
-        return true;
-      }
-
-      // Search in furniture data
-      const furnitureGroups = order.furnitureGroups || [];
-      const hasMatchingFurniture = furnitureGroups.some(group => 
-        group.furniture?.some(furniture => 
-          furniture.name?.toLowerCase().includes(searchLower) ||
-          furniture.material?.toLowerCase().includes(searchLower) ||
-          furniture.color?.toLowerCase().includes(searchLower)
-        )
-      );
-
-      return hasMatchingFurniture;
-    });
-
-    setFilteredOrders(filtered);
+    // Filter based on current tab and search term
+    filterOrdersByTab(allCorporateOrders, activeTab);
   };
 
   const handleOrderSelect = (order) => {
@@ -185,6 +262,51 @@ const CorporateInvoicesPage = () => {
     }
   };
 
+  const handleStatusChange = async (newStatusValue) => {
+    if (!selectedOrder) return;
+
+    try {
+      setUpdatingStatus(true);
+      const orderRef = doc(db, 'corporate-orders', selectedOrder.id);
+      await updateDoc(orderRef, {
+        invoiceStatus: newStatusValue,
+        statusUpdatedAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      // Update local state
+      setSelectedOrder(prev => ({
+        ...prev,
+        invoiceStatus: newStatusValue
+      }));
+
+      // Update in orders list
+      setCorporateOrders(prev => prev.map(order => 
+        order.id === selectedOrder.id 
+          ? { ...order, invoiceStatus: newStatusValue }
+          : order
+      ));
+      setFilteredOrders(prev => prev.map(order => 
+        order.id === selectedOrder.id 
+          ? { ...order, invoiceStatus: newStatusValue }
+          : order
+      ));
+      setAllCorporateOrders(prev => prev.map(order => 
+        order.id === selectedOrder.id 
+          ? { ...order, invoiceStatus: newStatusValue }
+          : order
+      ));
+
+      const statusLabel = invoiceStatuses.find(s => s.value === newStatusValue)?.label || newStatusValue;
+      showSuccess(`Status updated to "${statusLabel}"`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      showError('Failed to update status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handleCloseCorporateInvoice = () => {
     setCloseDialogOpen(true);
   };
@@ -215,18 +337,27 @@ const CorporateInvoicesPage = () => {
       };
       await addDoc(collection(db, 'taxedInvoices'), taxedInvoiceData);
 
-      // 3. Move to closed-corporate-orders collection for preservation
-      const closedOrderData = {
-        ...selectedOrder,
+      // 3. Update invoiceStatus in corporate-orders collection (instead of moving to closed-corporate-orders)
+      // Find the "done" end state status
+      const doneStatuses = invoiceStatuses.filter(status => 
+        status.isEndState && status.endStateType === 'done'
+      );
+      const doneStatus = doneStatuses.length > 0 ? doneStatuses[0].value : null;
+      
+      const orderRef = doc(db, 'corporate-orders', selectedOrder.id);
+      const updateData = {
         closedAt: closedAt,
-        status: 'closed'
+        updatedAt: new Date()
       };
-      await addDoc(collection(db, 'closed-corporate-orders'), closedOrderData);
+      
+      // Set invoiceStatus to done status if available
+      if (doneStatus) {
+        updateData.invoiceStatus = doneStatus;
+      }
+      
+      await updateDoc(orderRef, updateData);
 
-      // 4. Delete from corporate-orders collection
-      await deleteDoc(doc(db, 'corporate-orders', selectedOrder.id));
-
-      // 5. Update local state
+      // 4. Update local state
       setSelectedOrder(null);
       await fetchCorporateOrders();
       
@@ -880,6 +1011,20 @@ const CorporateInvoicesPage = () => {
   };
 
   const getStatusColor = (status) => {
+    // Find status color from invoiceStatuses
+    const statusObj = invoiceStatuses.find(s => s.value === status || s.label === status);
+    if (statusObj && statusObj.color) {
+      // Map color hex to Material-UI color name if possible
+      const colorMap = {
+        '#ff9800': 'warning',
+        '#2196f3': 'info',
+        '#4caf50': 'success',
+        '#f44336': 'error',
+        '#9e9e9e': 'secondary'
+      };
+      return colorMap[statusObj.color.toLowerCase()] || 'default';
+    }
+    // Fallback to old mapping
     const statusColors = {
       'pending': 'warning',
       'in-progress': 'info',
@@ -891,7 +1036,12 @@ const CorporateInvoicesPage = () => {
   };
 
   const getStatusText = (order) => {
-    return order.orderDetails?.status || 'Unknown';
+    // Use invoiceStatus for corporate orders
+    if (order.invoiceStatus) {
+      const status = invoiceStatuses.find(s => s.value === order.invoiceStatus);
+      return status ? status.label : order.invoiceStatus;
+    }
+    return 'Unknown';
   };
 
   const getMaterialSummary = (order) => {
@@ -971,6 +1121,33 @@ const CorporateInvoicesPage = () => {
               <BusinessIcon sx={{ color: '#f27921' }} />
               Corporate Orders
             </Typography>
+          
+          {/* Tabs */}
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange}
+            sx={{ 
+              mb: 2,
+              '& .MuiTab-root': {
+                minWidth: 'auto',
+                padding: '8px 16px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                textTransform: 'none',
+                color: '#666',
+                '&.Mui-selected': {
+                  color: '#f27921',
+                  fontWeight: 600
+                }
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#f27921'
+              }
+            }}
+          >
+            <Tab label="Active" />
+            <Tab label="Closed" />
+          </Tabs>
           
           {/* Search */}
           <TextField
@@ -1102,6 +1279,60 @@ const CorporateInvoicesPage = () => {
                     label="Credit Card Fee (2.5%)"
                     sx={{ ml: 0, color: '#b98f33' }}
                   />
+                  {/* Status Selector */}
+                  <FormControl 
+                    size="small" 
+                    sx={{ 
+                      minWidth: 180,
+                      '& .MuiOutlinedInput-root': {
+                        backgroundColor: '#1a1a1a',
+                        color: '#ffffff',
+                        '& fieldset': {
+                          borderColor: '#555555',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#b98f33',
+                        },
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: '#b98f33',
+                      },
+                      '& .MuiSvgIcon-root': {
+                        color: '#ffffff',
+                      }
+                    }}
+                  >
+                    <InputLabel>Status</InputLabel>
+                    <Select
+                      value={selectedOrder?.invoiceStatus || ''}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                      label="Status"
+                      disabled={updatingStatus}
+                    >
+                      {invoiceStatuses
+                        .sort((a, b) => (a.sortOrder || 1) - (b.sortOrder || 1))
+                        .map((status) => (
+                          <MenuItem key={status.value} value={status.value}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box
+                                sx={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: '50%',
+                                  backgroundColor: status.color || '#757575'
+                                }}
+                              />
+                              <Typography sx={{ color: '#ffffff' }}>
+                                {status.label}
+                              </Typography>
+                            </Box>
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
                   <Button
                     variant="contained"
                     startIcon={<PrintIcon />}

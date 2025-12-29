@@ -103,11 +103,11 @@ const EndDonePage = () => {
       }));
       setInvoiceStatuses(statusesData);
 
-      // Get all orders from regular orders, done-orders, closed-corporate-orders, and customer-invoices (T-invoices) collections
-      const [ordersRef, doneOrdersRef, closedCorporateOrdersRef, customerInvoicesRef] = await Promise.all([
+      // Get all orders from regular orders, done-orders, corporate-orders (with status closed), and customer-invoices (T-invoices) collections
+      const [ordersRef, doneOrdersRef, corporateOrdersRef, customerInvoicesRef] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
         getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
-        getDocs(query(collection(db, 'closed-corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'corporate-orders'), orderBy('orderDetails.billInvoice', 'desc'))),
         getDocs(query(collection(db, 'customer-invoices'), orderBy('invoiceNumber', 'desc')))
       ]);
 
@@ -122,12 +122,25 @@ const EndDonePage = () => {
         ...doc.data()
       }));
 
-      const closedCorporateOrdersData = closedCorporateOrdersRef.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: 'corporate',
-        source: 'closed-corporate-orders'
-      }));
+      // Filter corporate orders to only include closed ones (check invoiceStatus end states)
+      const doneStatuses = statusesData.filter(status => 
+        status.isEndState && status.endStateType === 'done'
+      );
+      const doneStatusValues = doneStatuses.map(status => status.value);
+      
+      const corporateOrdersData = corporateOrdersRef.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderType: 'corporate'
+        }))
+        .filter(order => {
+          // Use invoiceStatus to determine if closed
+          if (order.invoiceStatus) {
+            return doneStatusValues.includes(order.invoiceStatus);
+          }
+          return false;
+        });
 
       // Process customer invoices (T-invoices) - include all as they're already completed invoices
       const customerInvoicesData = customerInvoicesRef.docs.map(doc => ({
@@ -138,14 +151,39 @@ const EndDonePage = () => {
         status: 'closed' // T-invoices are considered closed/completed
       }));
 
-      // Combine all collections
-      const allOrders = [...ordersData, ...doneOrdersData, ...closedCorporateOrdersData, ...customerInvoicesData];
+      // Create sets to track orders that have corresponding T-invoices
+      const ordersWithTInvoices = new Set(); // Order IDs
+      const billInvoicesWithTInvoices = new Set(); // Bill invoice numbers
+      
+      customerInvoicesData.forEach(tInvoice => {
+        // Track by originalOrderId
+        if (tInvoice.originalOrderId) {
+          ordersWithTInvoices.add(tInvoice.originalOrderId);
+        }
+        // Track by originalOrderNumber (billInvoice from original order)
+        if (tInvoice.originalOrderNumber) {
+          billInvoicesWithTInvoices.add(tInvoice.originalOrderNumber);
+        }
+        // Also check by billInvoice in orderDetails (fallback)
+        if (tInvoice.orderDetails?.billInvoice && !tInvoice.originalOrderNumber) {
+          billInvoicesWithTInvoices.add(tInvoice.orderDetails.billInvoice);
+        }
+      });
 
-      // Filter for orders with "done" end state status
-      const doneStatuses = statusesData.filter(status => 
-        status.isEndState && status.endStateType === 'done'
+      // Filter out orders that have corresponding T-invoices (by ID or billInvoice)
+      const filteredOrdersData = ordersData.filter(order => 
+        !ordersWithTInvoices.has(order.id) && 
+        !(order.orderDetails?.billInvoice && billInvoicesWithTInvoices.has(order.orderDetails.billInvoice))
       );
-      const doneStatusValues = doneStatuses.map(status => status.value);
+      const filteredDoneOrdersData = doneOrdersData.filter(order => 
+        !ordersWithTInvoices.has(order.id) && 
+        !(order.orderDetails?.billInvoice && billInvoicesWithTInvoices.has(order.orderDetails.billInvoice))
+      );
+
+      // Combine all collections (excluding orders that have T-invoices)
+      const allOrders = [...filteredOrdersData, ...filteredDoneOrdersData, ...corporateOrdersData, ...customerInvoicesData];
+
+      // Reuse doneStatusValues already calculated above
 
       const doneOrders = allOrders.filter(order => {
         // T-invoices from customer-invoices collection are always included (they're completed invoices)
@@ -156,12 +194,16 @@ const EndDonePage = () => {
         if (order.invoiceStatus) {
           return doneStatusValues.includes(order.invoiceStatus);
         }
-        // For corporate orders from closed-corporate-orders collection
-        if (order.source === 'closed-corporate-orders' || order.status === 'closed') {
-          return true;
+        // For corporate orders, ONLY check invoiceStatus (not status field)
+        if (order.orderType === 'corporate') {
+          if (order.invoiceStatus) {
+            return doneStatusValues.includes(order.invoiceStatus);
+          }
+          // Corporate orders without invoiceStatus should not be shown
+          return false;
         }
-        // For corporate orders moved to done-orders, check status field
-        if (order.status === 'done' || (order.orderType === 'corporate' && !order.invoiceStatus)) {
+        // For orders moved to done-orders collection (not corporate orders), check status field
+        if (order.status === 'done') {
           return true;
         }
         return false;
@@ -1187,7 +1229,14 @@ const EndDonePage = () => {
                   <React.Fragment key={`${order.source || 'orders'}-${order.id}-${index}`}>
                     <TableRow hover>
                       <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                        #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
+                        <Box>
+                          #{order.invoiceNumber || order.orderDetails?.billInvoice || order.id}
+                          {order.source === 'customer-invoices' && (order.originalOrderNumber || order.originalOrderId) && (
+                            <Typography variant="caption" sx={{ display: 'block', color: '#b98f33', fontStyle: 'italic', mt: 0.5 }}>
+                              Original: #{order.originalOrderNumber || order.orderDetails?.billInvoice || 'N/A'}
+                            </Typography>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Box>
@@ -1195,6 +1244,8 @@ const EndDonePage = () => {
                             <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
                               {order.orderType === 'corporate' 
                                 ? order.corporateCustomer?.corporateName || 'Unknown Corporate'
+                                : order.source === 'customer-invoices'
+                                ? order.personalInfo?.customerName || order.customerInfo?.customerName || order.customerName || 'Unknown Customer'
                                 : order.personalInfo?.customerName || 'Unknown Customer'
                               }
                             </Typography>

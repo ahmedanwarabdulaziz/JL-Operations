@@ -152,9 +152,18 @@ const OrdersPage = () => {
       );
       const endStateValues = endStateStatuses.map(status => status.value);
 
-      const activeOrders = allOrdersData.filter(order => 
-        !endStateValues.includes(order.invoiceStatus)
-      );
+      const activeOrders = allOrdersData.filter(order => {
+        // For corporate orders, use invoiceStatus to filter out closed ones
+        if (order.orderType === 'corporate') {
+          if (order.invoiceStatus) {
+            return !endStateValues.includes(order.invoiceStatus);
+          }
+          // If no invoiceStatus, consider it active
+          return true;
+        }
+        // For regular orders, filter out end state statuses
+        return !endStateValues.includes(order.invoiceStatus);
+      });
       
       console.log('Filtered active orders:', activeOrders);
       
