@@ -231,6 +231,24 @@ const FinancePage = () => {
     try {
       setLoading(true);
       
+      // Fetch invoice statuses to identify pending and cancelled orders
+      const statusesRef = collection(db, 'invoiceStatuses');
+      const statusesSnapshot = await getDocs(statusesRef);
+      const statusesData = statusesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Identify pending and cancelled status values
+      const pendingStatuses = statusesData.filter(status => 
+        status.isEndState && status.endStateType === 'pending'
+      );
+      const cancelledStatuses = statusesData.filter(status => 
+        status.isEndState && status.endStateType === 'cancelled'
+      );
+      const pendingStatusValues = pendingStatuses.map(status => status.value);
+      const cancelledStatusValues = cancelledStatuses.map(status => status.value);
+      
       // Fetch from collections and expenses
       const [ordersSnapshot, corporateOrdersSnapshot, taxedInvoicesSnapshot, customerInvoicesSnapshot, generalExpensesSnapshot, businessExpensesSnapshot] = await Promise.all([
         getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'))),
@@ -318,8 +336,22 @@ const FinancePage = () => {
       // Combine all orders (excluding orders with hasTInvoice, but including T-invoices)
       const allOrders = [...regularOrders, ...corporateOrders, ...taxedInvoices, ...tInvoicesWithCosts];
       
+      // Filter out pending and cancelled orders
+      const filteredOrders = allOrders.filter(order => {
+        const invoiceStatus = order.invoiceStatus || '';
+        // Exclude pending orders
+        if (pendingStatusValues.includes(invoiceStatus)) {
+          return false;
+        }
+        // Exclude cancelled orders
+        if (cancelledStatusValues.includes(invoiceStatus)) {
+          return false;
+        }
+        return true;
+      });
+      
       // Sort by createdAt descending
-      allOrders.sort((a, b) => {
+      filteredOrders.sort((a, b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
         return dateB - dateA;
@@ -343,8 +375,8 @@ const FinancePage = () => {
         }
       });
       
-      setOrders(allOrders);
-      setFilteredOrders(allOrders);
+      setOrders(filteredOrders);
+      setFilteredOrders(filteredOrders);
       setExpenses({
         general: generalExpenses,
         business: businessExpenses,

@@ -170,9 +170,22 @@ const MaterialRequestPage = () => {
             const currentQnty = materialQntyJL;
             
             // Handle old format where status is just "Ordered" without quantity
-            // In this case, treat current quantity as ordered quantity
+            // FIX: For old format materials, use materialQnty (if available) as a proxy for ordered quantity.
+            // This is because materialQnty typically represents the original customer-ordered quantity,
+            // while materialJLQnty can be updated later in the workshop. This allows additional
+            // quantities to show correctly when JL qty increases.
             if (materialStatus === 'Ordered' && orderedQnty === null) {
-              orderedQnty = currentQnty;
+              const materialQnty = parseFloat(group.materialQnty) || 0;
+              if (materialQnty > 0 && materialQnty <= currentQnty) {
+                // Use materialQnty as the ordered quantity - this is the original customer order
+                orderedQnty = materialQnty;
+                console.log(`[OLD FORMAT] Using materialQnty (${materialQnty}) as ordered quantity for ${group.materialCode}, currentQnty: ${currentQnty}`);
+              } else {
+                // Fallback: if materialQnty is not available or invalid, use currentQnty
+                // This maintains backward compatibility but may not show additional qty correctly
+                orderedQnty = currentQnty;
+                console.log(`[OLD FORMAT] Using currentQnty (${currentQnty}) as ordered quantity for ${group.materialCode} (materialQnty not available or invalid)`);
+              }
             }
             
             // Create unique ID: include groupIndex if there are duplicates
@@ -659,9 +672,19 @@ const MaterialRequestPage = () => {
           newOrderedQuantity = Math.min(newOrderedQuantity, currentTotalQty);
         } else {
           // Ordering a base material (not additional)
-          // CRITICAL: Use ONLY the targetGroup's total quantity - this is the ONLY source of truth
-          // Do NOT use material.materialQntyJL as it might be from a different order with same materialCode
-          newOrderedQuantity = currentTotalQty;
+          // IMPORTANT: If material was already ordered, preserve the existing ordered quantity
+          // Only set to currentTotalQty if it wasn't ordered before (existingOrderedQty === 0)
+          // This prevents overwriting the ordered quantity when JL qty is updated in workshop
+          if (existingOrderedQty > 0) {
+            // Material was already ordered - preserve the existing ordered quantity
+            // The additional quantity will show in required materials automatically
+            newOrderedQuantity = existingOrderedQty;
+            console.log(`[ORDER PRESERVE] Material ${material.materialCode} already ordered with ${existingOrderedQty}, preserving this quantity. Current total: ${currentTotalQty}`);
+          } else {
+            // Material was not ordered before - set to current total quantity
+            newOrderedQuantity = currentTotalQty;
+            console.log(`[ORDER NEW] Material ${material.materialCode} not ordered before, setting to current total: ${currentTotalQty}`);
+          }
           
           // Verify the material's quantity matches (for debugging)
           if (Math.abs((material.quantity || 0) - currentTotalQty) > 0.01 && 

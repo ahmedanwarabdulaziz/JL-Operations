@@ -88,17 +88,21 @@ const CustomerInvoicesPage = () => {
     });
   };
 
-  // Fetch orders from Firebase for invoice creation (ONLY Done orders)
+  // Fetch orders from Firebase for invoice creation (ALL orders without T-invoicing)
   const fetchOrders = useCallback(async () => {
     try {
-      const ordersCollection = collection(db, 'orders');
-      const ordersQuery = query(ordersCollection, orderBy('orderDetails.billInvoice', 'desc'));
-      const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Fetch from both orders and done-orders collections
+      const [ordersSnapshot, doneOrdersSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc'))),
+        getDocs(query(collection(db, 'done-orders'), orderBy('orderDetails.billInvoice', 'desc')))
+      ]);
       
-      // Filter to only include Done orders (invoiceStatus === 'done')
-      const doneOrders = ordersData.filter(order => order.invoiceStatus === 'done');
-      setOrders(doneOrders);
+      const ordersData = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const doneOrdersData = doneOrdersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Combine all orders (all statuses, not just done)
+      const allOrders = [...ordersData, ...doneOrdersData];
+      setOrders(allOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showError('Failed to fetch orders');
@@ -472,12 +476,6 @@ const CustomerInvoicesPage = () => {
       // Corporate orders should not use customer invoices - they have their own system
       if (order.orderType === 'corporate') {
         showError('Corporate orders use a separate invoice system. Please use Corporate Invoices page.');
-        return;
-      }
-
-      // Check if order is Done status
-      if (order.invoiceStatus !== 'done') {
-        showError('Only Done orders can be converted to T-invoices. Please mark the order as Done first.');
         return;
       }
 
@@ -897,7 +895,7 @@ const CustomerInvoicesPage = () => {
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              Select an order to create an invoice from (includes all orders - active, workshop, and completed):
+              Select an order to create an invoice from (shows all orders without T-invoicing, regardless of status):
             </Typography>
             
             {/* Search Box */}

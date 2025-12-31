@@ -37,6 +37,8 @@ import {
   ArrowRight as ArrowRightIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  Note as NoteIcon,
+  PictureAsPdf as PdfIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
@@ -45,6 +47,8 @@ import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
 import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
 import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../../shared/utils/materialTaxRates';
 import { Switch, FormControlLabel, Checkbox } from '@mui/material';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const CorporateCustomerInvoicesPage = () => {
   const { customerId } = useParams();
@@ -225,6 +229,82 @@ const CorporateCustomerInvoicesPage = () => {
     setInvoiceDialogOpen(true);
   };
 
+  const handleDownloadPDF = async (invoice) => {
+    if (!invoice) return;
+
+    try {
+      // Check if the invoice dialog is already open with this invoice
+      const isDialogOpen = invoiceDialogOpen && selectedInvoice?.id === invoice.id;
+      const shouldCloseDialog = !isDialogOpen;
+
+      // If dialog is not open, open it temporarily
+      if (shouldCloseDialog) {
+        setSelectedInvoice(invoice);
+        setCreditCardFeeEnabled(invoice.creditCardFeeEnabled || false);
+        setInvoiceDialogOpen(true);
+        // Wait for dialog to render
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+
+      // Find the invoice content element
+      const invoiceElement = document.querySelector('[data-invoice-content]');
+      if (!invoiceElement) {
+        if (shouldCloseDialog) {
+          setInvoiceDialogOpen(false);
+        }
+        alert('Invoice content not found. Please try again.');
+        return;
+      }
+
+      // Capture the invoice content
+      const canvas = await html2canvas(invoiceElement, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: invoiceElement.scrollWidth,
+        windowHeight: invoiceElement.scrollHeight
+      });
+
+      // Generate PDF
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const pdf = new jsPDF('p', 'mm', 'letter');
+      const pageWidth = 215.9;
+      const pageHeight = 279.4;
+      const margin = 12.7;
+      const contentWidth = pageWidth - (margin * 2);
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - margin * 2);
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (pageHeight - margin * 2);
+      }
+
+      const fileName = `Corporate_Invoice_${formatCorporateInvoiceForInvoice(invoice.orderDetails?.billInvoice) || 'N/A'}.pdf`;
+      pdf.save(fileName);
+
+      // Close dialog if we opened it temporarily
+      if (shouldCloseDialog) {
+        setInvoiceDialogOpen(false);
+      }
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+      if (!invoiceDialogOpen) {
+        setInvoiceDialogOpen(false);
+      }
+    }
+  };
+
   const handleCloseInvoiceDialog = () => {
     setInvoiceDialogOpen(false);
     setSelectedInvoice(null);
@@ -358,10 +438,36 @@ const CorporateCustomerInvoicesPage = () => {
             )}
 
             {corporateCustomer.address && (
-              <Box sx={{ ml: 4, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+              <Box sx={{ ml: 4, display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
                 <LocationIcon sx={{ fontSize: 16, color: '#d4af5a', mt: 0.5 }} />
                 <Typography variant="body2" color="text.secondary">
                   {corporateCustomer.address}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Notes (if exists) */}
+            {corporateCustomer.notes && (
+              <Box sx={{ 
+                ml: 4,
+                mb: 2,
+                p: 1.5,
+                border: '1px solid #e0e0e0',
+                borderRadius: 1,
+                backgroundColor: 'rgba(212, 175, 90, 0.05)'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <NoteIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
+                    Notes
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ 
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  ml: 3
+                }}>
+                  {corporateCustomer.notes}
                 </Typography>
               </Box>
             )}
@@ -601,24 +707,45 @@ const CorporateCustomerInvoicesPage = () => {
                       {formatCurrency(taxBreakdown.afterTax)}
                     </TableCell>
                     <TableCell align="center">
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => handleViewInvoice(invoice)}
-                        sx={{
-                          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                          color: '#000000',
-                          border: '2px solid #4CAF50',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.2)',
-                          '&:hover': {
-                            background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                            border: '2px solid #45a049',
-                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.3)'
-                          }
-                        }}
-                      >
-                        View
-                      </Button>
+                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => handleViewInvoice(invoice)}
+                          sx={{
+                            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                            color: '#000000',
+                            border: '2px solid #4CAF50',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.2)',
+                            '&:hover': {
+                              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                              border: '2px solid #45a049',
+                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.3)'
+                            }
+                          }}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<PdfIcon />}
+                          onClick={() => handleDownloadPDF(invoice)}
+                          sx={{
+                            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                            color: '#000000',
+                            border: '2px solid #4CAF50',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.2)',
+                            '&:hover': {
+                              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                              border: '2px solid #45a049',
+                              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.3)'
+                            }
+                          }}
+                        >
+                          PDF
+                        </Button>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 );
@@ -984,6 +1111,7 @@ const CorporateCustomerInvoicesPage = () => {
                 const totals = calculateCorporateInvoiceTotals(selectedInvoice);
                 return (
                   <Paper 
+                    data-invoice-content
                     elevation={3} 
                     sx={{ 
                       p: 4, 
