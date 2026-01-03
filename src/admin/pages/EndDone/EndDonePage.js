@@ -52,12 +52,13 @@ import {
   PictureAsPdf as PdfIcon,
   Close as CloseIcon,
   LocationOn as LocationIcon,
-  Send as SendIcon
+  Send as SendIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
-import { collection, getDocs, query, orderBy, where, getDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, getDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../../shared/utils/materialTaxRates';
@@ -93,6 +94,9 @@ const EndDonePage = () => {
   });
   const [selectedOrderForEmail, setSelectedOrderForEmail] = useState(null);
   const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -738,6 +742,140 @@ const EndDonePage = () => {
     setSelectedOrderForEmail(null);
   };
 
+  // Parse invoice number to extract numeric value
+  const parseInvoiceNumberValue = (value) => {
+    if (value === null || value === undefined) return null;
+    const match = String(value).match(/\d+/);
+    if (!match) return null;
+    const parsed = parseInt(match[0], 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  // Clear invoice number references from related orders
+  const clearInvoiceNumberReferences = async (invoice) => {
+    const invoiceNumber = invoice?.invoiceNumber || invoice?.orderDetails?.billInvoice;
+    const parsedNumber = parseInvoiceNumberValue(invoiceNumber);
+    const originalOrderId = invoice?.originalOrderId;
+
+    if (!parsedNumber && !invoiceNumber) {
+      return;
+    }
+
+    const collectionsToCheck = [
+      { name: 'orders', id: originalOrderId },
+      { name: 'corporate-orders', id: originalOrderId },
+      { name: 'done-orders', id: originalOrderId }
+    ];
+
+    for (const { name, id } of collectionsToCheck) {
+      if (!id) continue;
+
+      try {
+        const referenceDocRef = doc(db, name, id);
+        const referenceSnapshot = await getDoc(referenceDocRef);
+
+        if (referenceSnapshot.exists()) {
+          const data = referenceSnapshot.data();
+          const existingNumber = data?.orderDetails?.billInvoice;
+          const existingParsed = parseInvoiceNumberValue(existingNumber);
+
+          // Check if the invoice number matches (either exact match or parsed match)
+          if (existingNumber === invoiceNumber || existingParsed === parsedNumber) {
+            await updateDoc(referenceDocRef, {
+              'orderDetails.billInvoice': null,
+              'orderDetails.lastUpdated': new Date()
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Error clearing invoice number from ${name}/${id}:`, error);
+      }
+    }
+  };
+
+  // Handle delete invoice
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+
+    try {
+      setDeleting(true);
+      
+      // Determine which collections might contain this invoice
+      const collectionsToCheck = [];
+      
+      if (invoiceToDelete.source === 'customer-invoices') {
+        collectionsToCheck.push('customer-invoices');
+      } else if (invoiceToDelete.orderType === 'corporate') {
+        collectionsToCheck.push('corporate-orders');
+      } else {
+        // For individual orders, check both orders and done-orders
+        collectionsToCheck.push('orders', 'done-orders');
+      }
+
+      // Check if this is a T-invoice (starts with T-)
+      const invoiceNumber = invoiceToDelete.invoiceNumber || invoiceToDelete.orderDetails?.billInvoice;
+      const isTInvoice = invoiceNumber && String(invoiceNumber).startsWith('T-');
+      const originalOrderId = invoiceToDelete.originalOrderId || invoiceToDelete.id;
+
+      // Delete from all possible collections (to ensure complete deletion)
+      const deletePromises = collectionsToCheck.map(async (collectionName) => {
+        try {
+          const docRef = doc(db, collectionName, invoiceToDelete.id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            await deleteDoc(docRef);
+            console.log(`Deleted from ${collectionName}`);
+          }
+        } catch (error) {
+          // Ignore if not found in this collection
+          console.log(`Order not found in ${collectionName}, continuing...`);
+        }
+      });
+
+      await Promise.all(deletePromises);
+
+      // If it's a T-invoice, restore the original order by removing hasTInvoice flag
+      if (isTInvoice && originalOrderId) {
+        try {
+          const orderRef = doc(db, 'orders', originalOrderId);
+          const orderDoc = await getDoc(orderRef);
+          
+          if (orderDoc.exists()) {
+            await updateDoc(orderRef, {
+              hasTInvoice: false,
+              tInvoiceId: null
+            });
+          }
+        } catch (orderError) {
+          console.error('Error restoring original order:', orderError);
+          // Don't fail the deletion if order update fails
+        }
+      }
+
+      // Clear invoice number references from related orders
+      await clearInvoiceNumberReferences(invoiceToDelete);
+
+      // Update local state
+      setOrders(prev => prev.filter(order => order.id !== invoiceToDelete.id));
+      setFilteredOrders(prev => prev.filter(order => order.id !== invoiceToDelete.id));
+
+      showSuccess('Invoice deleted successfully');
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      showError('Failed to delete invoice: ' + error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Handle delete button click
+  const handleDeleteClick = (order) => {
+    setInvoiceToDelete(order);
+    setDeleteDialogOpen(true);
+  };
+
   // Handle completion email confirm
   const handleCompletionEmailConfirm = async () => {
     if (!selectedOrderForEmail) return;
@@ -1126,6 +1264,22 @@ const EndDonePage = () => {
                               }}
                             >
                               <SendIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Invoice">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteClick(order)}
+                              sx={{ 
+                                color: '#ff4444',
+                                backgroundColor: 'rgba(255, 68, 68, 0.2)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(255, 68, 68, 0.3)',
+                                  color: '#ff6666'
+                                }
+                              }}
+                            >
+                              <DeleteIcon />
                             </IconButton>
                           </Tooltip>
                           <MuiIconButton
@@ -1943,6 +2097,109 @@ const EndDonePage = () => {
             }}
           >
             {sendingCompletionEmail ? 'Sending...' : 'Send Email'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Invoice Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #ff4444',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#2a2a2a', 
+          color: '#ffffff',
+          borderBottom: '2px solid #ff4444',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <DeleteIcon sx={{ color: '#ff4444' }} />
+          Delete Invoice
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mb: 2, backgroundColor: '#2a2a2a', color: '#ff4444', border: '1px solid #ff4444' }}>
+            <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+              ⚠️ Warning: This action cannot be undone!
+            </Typography>
+            <Typography variant="body2">
+              You are about to permanently delete this invoice. This will remove the invoice from the system completely.
+            </Typography>
+          </Alert>
+          
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #ff4444',
+            mb: 2
+          }}>
+            <Typography variant="body2" sx={{ color: '#cccccc', mb: 1 }}>
+              <strong>Invoice Number:</strong> {invoiceToDelete?.invoiceNumber || invoiceToDelete?.orderDetails?.billInvoice || invoiceToDelete?.id || 'N/A'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#cccccc', mb: 1 }}>
+              <strong>Customer:</strong> {invoiceToDelete?.orderType === 'corporate' 
+                ? (invoiceToDelete?.corporateCustomer?.corporateName || invoiceToDelete?.contactPerson?.name || 'N/A')
+                : (invoiceToDelete?.personalInfo?.customerName || invoiceToDelete?.customerInfo?.customerName || 'N/A')}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#cccccc' }}>
+              <strong>Type:</strong> {invoiceToDelete?.source === 'customer-invoices' ? 'Customer Invoice (T-Invoice)' 
+                : invoiceToDelete?.orderType === 'corporate' ? 'Corporate Order' 
+                : 'Individual Order'}
+            </Typography>
+          </Box>
+          
+          <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+            Are you sure you want to delete this invoice permanently?
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleting}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteInvoice}
+            disabled={deleting}
+            variant="contained"
+            startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            sx={{
+              backgroundColor: '#ff4444',
+              color: '#ffffff',
+              fontWeight: 'bold',
+              '&:hover': {
+                backgroundColor: '#ff6666',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999'
+              }
+            }}
+          >
+            {deleting ? 'Deleting...' : 'Delete Permanently'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -43,8 +43,9 @@ import {
   Link as LinkIcon,
   Note as NoteIcon,
   NoteAdd as NoteAddIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { collection, getDocs, query, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
 import { calculateOrderTotal, calculateJLCostAnalysisBeforeTax, calculateOrderProfit, normalizePaymentData } from '../../../shared/utils/orderCalculations';
@@ -88,6 +89,11 @@ const FinancePage = () => {
   const [totalCost, setTotalCost] = useState(0);
   const [showAllocationTable, setShowAllocationTable] = useState(false);
   
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  
   // Year/Month filter state - initialize from URL params
   const [selectedYear, setSelectedYear] = useState(() => {
     const yearParam = searchParams.get('year');
@@ -121,7 +127,17 @@ const FinancePage = () => {
       const address = order.corporateCustomer?.address || 'No address';
       
       return `Corporate Customer:\n${corporateName}\n\nEmail: ${email}\nPhone: ${phone}\nAddress: ${address}`;
+    } else if (order.source === 'customer-invoices' || order.source === 'taxedInvoices') {
+      // Handle customer invoices (T-invoices) - get customer data from original order's personalInfo
+      // We always fetch personalInfo from the original order when loading T-invoices
+      const customerName = order.personalInfo?.customerName || 'N/A';
+      const email = order.personalInfo?.email || 'No email';
+      const phone = order.personalInfo?.phone || 'No phone';
+      const address = order.personalInfo?.address || 'No address';
+      
+      return `Customer:\n${customerName}\n\nEmail: ${email}\nPhone: ${phone}\nAddress: ${address}`;
     } else {
+      // Regular orders
       const customerName = order.personalInfo?.customerName || 'N/A';
       const email = order.personalInfo?.email || 'No email';
       const phone = order.personalInfo?.phone || 'No phone';
@@ -307,7 +323,7 @@ const FinancePage = () => {
         })
         .filter(invoice => invoice !== null);
       
-      // Fetch original orders for T-invoices to get cost data
+      // Fetch original orders for T-invoices to get cost data and customer info
       const tInvoicesWithCosts = await Promise.all(
         tInvoices.map(async (tInvoice) => {
           if (tInvoice.originalOrderId) {
@@ -315,13 +331,15 @@ const FinancePage = () => {
               const orderDoc = await getDoc(doc(db, 'orders', tInvoice.originalOrderId));
               if (orderDoc.exists()) {
                 const orderData = orderDoc.data();
-                // Attach cost data from original order to T-invoice
+                // Attach cost data and customer info from original order to T-invoice
                 return {
                   ...tInvoice,
                   // Cost data from original order
                   furnitureData: orderData.furnitureData,
                   furnitureGroups: orderData.furnitureGroups,
                   extraExpenses: orderData.extraExpenses,
+                  // Customer info from original order (always use this for customer invoices)
+                  personalInfo: orderData.personalInfo,
                   // Keep revenue data from T-invoice (items, calculations, etc.)
                 };
               }
@@ -709,6 +727,142 @@ const FinancePage = () => {
       console.error('Error applying allocation:', error);
       showError('Failed to apply allocation');
     }
+  };
+
+  // Parse invoice number to extract numeric value
+  const parseInvoiceNumberValue = (value) => {
+    if (value === null || value === undefined) return null;
+    const match = String(value).match(/\d+/);
+    if (!match) return null;
+    const parsed = parseInt(match[0], 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  // Clear invoice number references from related orders
+  const clearInvoiceNumberReferences = async (invoice) => {
+    const invoiceNumber = invoice?.invoiceNumber || invoice?.orderDetails?.billInvoice;
+    const parsedNumber = parseInvoiceNumberValue(invoiceNumber);
+    const originalOrderId = invoice?.originalOrderId;
+
+    if (!parsedNumber && !invoiceNumber) {
+      return;
+    }
+
+    const collectionsToCheck = [
+      { name: 'orders', id: originalOrderId },
+      { name: 'corporate-orders', id: originalOrderId },
+      { name: 'done-orders', id: originalOrderId }
+    ];
+
+    for (const { name, id } of collectionsToCheck) {
+      if (!id) continue;
+
+      try {
+        const referenceDocRef = doc(db, name, id);
+        const referenceSnapshot = await getDoc(referenceDocRef);
+
+        if (referenceSnapshot.exists()) {
+          const data = referenceSnapshot.data();
+          const existingNumber = data?.orderDetails?.billInvoice;
+          const existingParsed = parseInvoiceNumberValue(existingNumber);
+
+          // Check if the invoice number matches (either exact match or parsed match)
+          if (existingNumber === invoiceNumber || existingParsed === parsedNumber) {
+            await updateDoc(referenceDocRef, {
+              'orderDetails.billInvoice': null,
+              'orderDetails.lastUpdated': new Date()
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Error clearing invoice number from ${name}/${id}:`, error);
+      }
+    }
+  };
+
+  // Handle delete invoice
+  const handleDeleteInvoice = async () => {
+    if (!invoiceToDelete) return;
+
+    try {
+      setDeleting(true);
+      
+      // Determine which collections might contain this invoice
+      const collectionsToCheck = [];
+      
+      if (invoiceToDelete.source === 'customer-invoices') {
+        collectionsToCheck.push('customer-invoices');
+      } else if (invoiceToDelete.source === 'taxedInvoices') {
+        collectionsToCheck.push('taxedInvoices');
+      } else if (invoiceToDelete.orderType === 'corporate') {
+        collectionsToCheck.push('corporate-orders');
+      } else {
+        // For individual orders, check both orders and done-orders
+        collectionsToCheck.push('orders', 'done-orders');
+      }
+
+      // Check if this is a T-invoice (starts with T-)
+      const invoiceNumber = invoiceToDelete.invoiceNumber || invoiceToDelete.orderDetails?.billInvoice;
+      const isTInvoice = invoiceNumber && String(invoiceNumber).startsWith('T-');
+      const originalOrderId = invoiceToDelete.originalOrderId || invoiceToDelete.id;
+
+      // Delete from all possible collections (to ensure complete deletion)
+      const deletePromises = collectionsToCheck.map(async (collectionName) => {
+        try {
+          const docRef = doc(db, collectionName, invoiceToDelete.id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            await deleteDoc(docRef);
+            console.log(`Deleted from ${collectionName}`);
+          }
+        } catch (error) {
+          // Ignore if not found in this collection
+          console.log(`Order not found in ${collectionName}, continuing...`);
+        }
+      });
+
+      await Promise.all(deletePromises);
+
+      // If it's a T-invoice, restore the original order by removing hasTInvoice flag
+      if (isTInvoice && originalOrderId) {
+        try {
+          const orderRef = doc(db, 'orders', originalOrderId);
+          const orderDoc = await getDoc(orderRef);
+          
+          if (orderDoc.exists()) {
+            await updateDoc(orderRef, {
+              hasTInvoice: false,
+              tInvoiceId: null
+            });
+          }
+        } catch (orderError) {
+          console.error('Error restoring original order:', orderError);
+          // Don't fail the deletion if order update fails
+        }
+      }
+
+      // Clear invoice number references from related orders
+      await clearInvoiceNumberReferences(invoiceToDelete);
+
+      // Update local state
+      setOrders(prev => prev.filter(order => order.id !== invoiceToDelete.id));
+      setFilteredOrders(prev => prev.filter(order => order.id !== invoiceToDelete.id));
+
+      showSuccess('Invoice deleted successfully');
+      setDeleteDialogOpen(false);
+      setInvoiceToDelete(null);
+    } catch (error) {
+      console.error('Error deleting invoice:', error);
+      showError('Failed to delete invoice: ' + error.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Handle delete button click
+  const handleDeleteClick = (order) => {
+    setInvoiceToDelete(order);
+    setDeleteDialogOpen(true);
   };
 
   // Update invoice status (adapted from Workshop page)
@@ -2064,12 +2218,13 @@ const FinancePage = () => {
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Note</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Status</TableCell>
                 <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Allocation</TableCell>
+                <TableCell sx={{ color: '#b98f33', fontWeight: 'bold' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ color: '#ffffff', py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ color: '#ffffff', py: 4 }}>
                     <ReceiptIcon sx={{ fontSize: 48, color: '#555555', mb: 2 }} />
                     <Typography variant="body1">No orders found</Typography>
                   </TableCell>
@@ -2337,6 +2492,26 @@ const FinancePage = () => {
                           </Tooltip>
                         </Box>
                       </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Tooltip title="Delete Invoice" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteClick(order)}
+                              sx={{
+                                color: '#ff4444',
+                                backgroundColor: 'rgba(255, 68, 68, 0.2)',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(255, 68, 68, 0.3)',
+                                  color: '#ff6666'
+                                },
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   );
                 })
@@ -2364,12 +2539,12 @@ const FinancePage = () => {
                     </TableCell>
                     <TableCell sx={{ 
                       color: totals.profit >= 0 ? '#4caf50' : '#f44336', 
-                      fontWeight: 'bold',
-                      fontSize: '1rem'
+                      fontWeight: 'bold', 
+                      fontSize: '1rem' 
                     }}>
                       {formatCurrency(totals.profit)}
                     </TableCell>
-                    <TableCell colSpan={3}></TableCell>
+                    <TableCell colSpan={4}></TableCell>
                     <TableCell></TableCell>
                   </TableRow>
                 );
@@ -3010,6 +3185,110 @@ const FinancePage = () => {
             }}
           >
             Apply Allocation
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Invoice Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #ff4444',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          backgroundColor: '#2a2a2a', 
+          color: '#ffffff',
+          borderBottom: '2px solid #ff4444',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <DeleteIcon sx={{ color: '#ff4444' }} />
+          Delete Invoice
+        </DialogTitle>
+        
+        <DialogContent sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mb: 2, backgroundColor: '#2a2a2a', color: '#ff4444', border: '1px solid #ff4444' }}>
+            <Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>
+              ⚠️ Warning: This action cannot be undone!
+            </Typography>
+            <Typography variant="body2">
+              You are about to permanently delete this invoice. This will remove the invoice from the system completely.
+            </Typography>
+          </Alert>
+          
+          <Box sx={{ 
+            p: 2, 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: 1, 
+            borderLeft: '4px solid #ff4444',
+            mb: 2
+          }}>
+            <Typography variant="body2" sx={{ color: '#cccccc', mb: 1 }}>
+              <strong>Invoice Number:</strong> {invoiceToDelete?.invoiceNumber || invoiceToDelete?.orderDetails?.billInvoice || invoiceToDelete?.id || 'N/A'}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#cccccc', mb: 1 }}>
+              <strong>Customer:</strong> {invoiceToDelete?.orderType === 'corporate' 
+                ? (invoiceToDelete?.corporateCustomer?.corporateName || invoiceToDelete?.contactPerson?.name || 'N/A')
+                : (invoiceToDelete?.personalInfo?.customerName || invoiceToDelete?.customerInfo?.customerName || 'N/A')}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#cccccc' }}>
+              <strong>Type:</strong> {invoiceToDelete?.source === 'customer-invoices' ? 'Customer Invoice (T-Invoice)' 
+                : invoiceToDelete?.source === 'taxedInvoices' ? 'Taxed Invoice'
+                : invoiceToDelete?.orderType === 'corporate' ? 'Corporate Order' 
+                : 'Individual Order'}
+            </Typography>
+          </Box>
+          
+          <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+            Are you sure you want to delete this invoice permanently?
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleting}
+            variant="outlined"
+            sx={{
+              borderColor: '#b98f33',
+              color: '#b98f33',
+              '&:hover': {
+                borderColor: '#d4af5a',
+                backgroundColor: 'rgba(185, 143, 51, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteInvoice}
+            disabled={deleting}
+            variant="contained"
+            startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            sx={{
+              backgroundColor: '#ff4444',
+              color: '#ffffff',
+              fontWeight: 'bold',
+              '&:hover': {
+                backgroundColor: '#ff6666',
+              },
+              '&:disabled': {
+                backgroundColor: '#666666',
+                color: '#999999'
+              }
+            }}
+          >
+            {deleting ? 'Deleting...' : 'Delete Permanently'}
           </Button>
         </DialogActions>
       </Dialog>
