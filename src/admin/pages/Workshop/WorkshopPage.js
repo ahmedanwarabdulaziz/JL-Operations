@@ -74,7 +74,7 @@ import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWit
 import useMaterialCompanies from '../shared/hooks/useMaterialCompanies';
 import { usePlatforms } from '../shared/hooks/usePlatforms';
 import { useTreatments } from '../shared/hooks/useTreatments';
-import { collection, getDocs, updateDoc, doc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, query, orderBy, where, getDoc } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../shared/utils/materialTaxRates';
@@ -115,6 +115,7 @@ const WorkshopPage = () => {
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState(null);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState(null);
   
   // Enhanced validation dialog state (from Finance page)
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -290,6 +291,52 @@ const WorkshopPage = () => {
   const getStatusInfo = (status) => {
     return invoiceStatuses.find(s => s.value === status) || 
            { value: status, label: status, color: '#757575' };
+  };
+
+  // Helper function to detect if an order is corporate (enhanced for reliability)
+  // Priority order: furnitureGroups > orderType > corporateCustomer > paymentDetails
+  const isCorporateOrder = (order) => {
+    if (!order) return false;
+    
+    // PRIORITY 1: Check for furnitureGroups FIRST (most reliable indicator)
+    // Corporate orders have furnitureGroups array at root level
+    // Regular orders have furnitureData.groups (nested)
+    if (order.furnitureGroups !== undefined && order.furnitureGroups !== null) {
+      if (Array.isArray(order.furnitureGroups)) {
+        console.log('🔍 isCorporateOrder: Detected via furnitureGroups array');
+        return true;
+      }
+    }
+    
+    // PRIORITY 2: Check orderType field
+    if (order.orderType === 'corporate') {
+      console.log('🔍 isCorporateOrder: Detected via orderType === "corporate"');
+      return true;
+    }
+    
+    // PRIORITY 3: Check for corporateCustomer field
+    if (order.corporateCustomer && typeof order.corporateCustomer === 'object') {
+      console.log('🔍 isCorporateOrder: Detected via corporateCustomer field');
+      return true;
+    }
+    
+    // PRIORITY 4: Check for paymentDetails without paymentData (corporate orders use paymentDetails)
+    const hasPaymentDetails = order.paymentDetails && typeof order.paymentDetails === 'object' && Object.keys(order.paymentDetails).length > 0;
+    const hasPaymentData = order.paymentData && typeof order.paymentData === 'object' && Object.keys(order.paymentData).length > 0;
+    if (hasPaymentDetails && !hasPaymentData) {
+      console.log('🔍 isCorporateOrder: Detected via paymentDetails (no paymentData)');
+      return true;
+    }
+    
+    console.log('🔍 isCorporateOrder: Not corporate', {
+      orderId: order.id,
+      orderType: order.orderType,
+      hasFurnitureGroups: !!order.furnitureGroups,
+      hasCorporateCustomer: !!order.corporateCustomer,
+      hasPaymentDetails,
+      hasPaymentData
+    });
+    return false;
   };
 
   // Enhanced validation and allocation functions (from Finance page)
@@ -762,7 +809,7 @@ const WorkshopPage = () => {
       if (!validationError.order) return;
       
       const order = validationError.order;
-      const isCorporate = order.orderType === 'corporate';
+      const isCorporate = isCorporateOrder(order);
       const orderRef = isCorporate 
         ? doc(db, 'corporate-orders', order.id)
         : doc(db, 'orders', order.id);
@@ -820,7 +867,7 @@ const WorkshopPage = () => {
       if (!validationError.order) return;
       
       const order = validationError.order;
-      const isCorporate = order.orderType === 'corporate';
+      const isCorporate = isCorporateOrder(order);
       const orderRef = isCorporate 
         ? doc(db, 'corporate-orders', order.id)
         : doc(db, 'orders', order.id);
@@ -874,10 +921,10 @@ const WorkshopPage = () => {
 
 
 
-  // Update invoice status with validation (enhanced from Finance page)
+  // Update invoice status with validation (EXACTLY matching Finance page logic)
   const updateInvoiceStatus = async (orderId, newStatus) => {
     try {
-      // Find the order and new status
+      // Find the order and new status (EXACTLY like finance page)
       const order = orders.find(o => o.id === orderId);
       const newStatusObj = invoiceStatuses.find(s => s.value === newStatus);
       
@@ -886,10 +933,25 @@ const WorkshopPage = () => {
         return;
       }
 
+      // Determine which collection to update based on order type (EXACTLY like finance page)
+      let collectionName;
+      if (order.orderType === 'corporate') {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+      
+      console.log('🔍 updateInvoiceStatus (Finance page logic):', {
+        orderId,
+        orderType: order.orderType,
+        collectionName,
+        newStatus
+      });
+
       // Payment validation for end states
       if (newStatusObj.isEndState) {
         const totalAmount = calculateOrderProfit(order).revenue;
-        // Handle both corporate and regular orders
+        // Handle both corporate and regular orders (EXACTLY like finance page)
         const isCorporate = order.orderType === 'corporate';
         const paymentData = isCorporate ? order.paymentDetails : order.paymentData;
         const normalizedPayment = normalizePaymentData(paymentData);
@@ -934,29 +996,41 @@ const WorkshopPage = () => {
         }
       }
 
-      // Handle both corporate and regular orders
-      const isCorporate = order.orderType === 'corporate';
-      const orderRef = isCorporate 
-        ? doc(db, 'corporate-orders', orderId)
-        : doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { invoiceStatus: newStatus });
+      // Update in Firebase (EXACTLY like finance page)
+      const orderRef = doc(db, collectionName, orderId);
+      await updateDoc(orderRef, {
+        invoiceStatus: newStatus,
+        statusUpdatedAt: new Date()
+      });
       
-      // Update local state
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, invoiceStatus: newStatus } : order
+      // Update local state (EXACTLY like finance page)
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+            : order
+        )
       );
-      setOrders(updatedOrders);
+      
+      // Update filtered orders as well (EXACTLY like finance page)
+      setFilteredOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+            : order
+        )
+      );
       
       // Update selected order if it's the one being updated
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus });
+        setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus, statusUpdatedAt: new Date() });
       }
       
       showSuccess('Invoice status updated successfully');
       setStatusDialogOpen(false);
       setValidationDialogOpen(false);
       setEditingStatus(null);
-      fetchOrders();
+      setSelectedOrderForStatus(null);
     } catch (error) {
       console.error('Error updating invoice status:', error);
       showError('Failed to update invoice status');
@@ -973,13 +1047,35 @@ const WorkshopPage = () => {
     try {
       setLoading(true);
       
+      // Fetch regular orders
       const ordersRef = collection(db, 'orders');
       const ordersQuery = query(ordersRef, orderBy('orderDetails.billInvoice', 'desc'));
       const ordersSnapshot = await getDocs(ordersQuery);
       const ordersData = ordersSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        orderType: 'regular'
       }));
+      
+      // Fetch corporate orders
+      const corporateOrdersRef = collection(db, 'corporate-orders');
+      const corporateOrdersQuery = query(corporateOrdersRef, orderBy('orderDetails.billInvoice', 'desc'));
+      const corporateOrdersSnapshot = await getDocs(corporateOrdersQuery);
+      const corporateOrdersData = corporateOrdersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          orderType: 'corporate', // Explicitly set orderType
+          // Ensure furnitureGroups is preserved (critical for detection)
+          furnitureGroups: data.furnitureGroups || [],
+          // Ensure paymentDetails is preserved
+          paymentDetails: data.paymentDetails || {}
+        };
+      });
+      
+      // Combine all orders
+      const allOrdersData = [...ordersData, ...corporateOrdersData];
       
       // Get invoice statuses to identify end states
       const statusesRef = collection(db, 'invoiceStatuses');
@@ -995,7 +1091,7 @@ const WorkshopPage = () => {
       );
       const endStateValues = endStateStatuses.map(status => status.value);
 
-      const activeOrders = ordersData.filter(order => 
+      const activeOrders = allOrdersData.filter(order => 
         !endStateValues.includes(order.invoiceStatus)
       );
       
@@ -1076,12 +1172,15 @@ const WorkshopPage = () => {
 
   // Use consistent calculation functions from orderCalculations
   const calculateInvoiceTotals = (order) => {
+    // Handle both corporate and regular orders
+    const paymentData = isCorporateOrder(order) ? order.paymentDetails : order.paymentData;
+    
     // Calculate individual components properly
     const taxAmount = calculateOrderTax(order);
-    const pickupDeliveryCost = order.paymentData?.pickupDeliveryEnabled ? 
+    const pickupDeliveryCost = paymentData?.pickupDeliveryEnabled ? 
       calculatePickupDeliveryCost(
-        parseFloat(order.paymentData.pickupDeliveryCost) || 0,
-        order.paymentData.pickupDeliveryServiceType || 'both'
+        parseFloat(paymentData.pickupDeliveryCost) || 0,
+        paymentData.pickupDeliveryServiceType || 'both'
       ) : 0;
     
     // Use the existing breakdown function to get accurate totals
@@ -1094,7 +1193,7 @@ const WorkshopPage = () => {
     // Calculate grand total
     const grandTotal = itemsSubtotal + taxAmount + pickupDeliveryCost;
     
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
     const balanceDue = grandTotal - amountPaid;
     const cost = calculateOrderCost(order, materialTaxRates); // Includes tax with dynamic tax rates
 
@@ -1113,11 +1212,14 @@ const WorkshopPage = () => {
 
   // Get status color
   const getStatusColor = (order) => {
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    // Handle both corporate and regular orders
+    const paymentData = isCorporateOrder(order) ? order.paymentDetails : order.paymentData;
+    
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
     
     // If deposit is received or amount paid >= required deposit, show green
-    if (order.paymentData?.depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
+    if (paymentData?.depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
       return 'success';
     }
     // If some payment made but not enough, show orange
@@ -1130,9 +1232,12 @@ const WorkshopPage = () => {
 
   // Get status text
   const getStatusText = (order) => {
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const depositReceived = order.paymentData?.depositReceived;
+    // Handle both corporate and regular orders
+    const paymentData = isCorporateOrder(order) ? order.paymentDetails : order.paymentData;
+    
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+    const depositReceived = paymentData?.depositReceived;
     
     // Match the same logic as getStatusColor
     if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
@@ -1176,8 +1281,11 @@ const WorkshopPage = () => {
   const getDepositStatus = (order) => {
     if (!order) return { isReceived: false, status: 'No deposit set' };
     
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    // Handle both corporate and regular orders
+    const paymentData = isCorporateOrder(order) ? order.paymentDetails : order.paymentData;
+    
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
     
     if (requiredDeposit <= 0) {
       return { isReceived: false, status: 'No deposit required' };
@@ -1218,13 +1326,15 @@ const WorkshopPage = () => {
 
   // Handle edit payment data
   const handleEditPayment = () => {
+    // Handle both corporate and regular orders
+    const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
     setEditPaymentData({
-      deposit: selectedOrder.paymentData?.deposit || '',
-      amountPaid: selectedOrder.paymentData?.amountPaid || '',
-      pickupDeliveryEnabled: selectedOrder.paymentData?.pickupDeliveryEnabled || false,
-      pickupDeliveryCost: selectedOrder.paymentData?.pickupDeliveryCost || '',
-      pickupDeliveryServiceType: selectedOrder.paymentData?.pickupDeliveryServiceType || 'both',
-      notes: selectedOrder.paymentData?.notes || ''
+      deposit: paymentData?.deposit || '',
+      amountPaid: paymentData?.amountPaid || '',
+      pickupDeliveryEnabled: paymentData?.pickupDeliveryEnabled || false,
+      pickupDeliveryCost: paymentData?.pickupDeliveryCost || '',
+      pickupDeliveryServiceType: paymentData?.pickupDeliveryServiceType || 'both',
+      notes: paymentData?.notes || ''
     });
     setEditPaymentDialog(true);
   };
@@ -1303,8 +1413,17 @@ const WorkshopPage = () => {
         personalInfo: editPersonalData
       };
       
-      // Update the order in Firebase
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      // Update the order in Firebase (handle both corporate and regular orders)
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, collectionName, selectedOrder.id);
+      
+      // Corporate orders don't have personalInfo, they have corporateCustomer and contactPerson
+      if (isCorporate) {
+        showError('Corporate orders use different customer fields. Please edit corporate customer information separately.');
+        return;
+      }
+      
       await updateDoc(orderRef, { personalInfo: editPersonalData });
       
       // Update local state
@@ -1342,7 +1461,11 @@ const WorkshopPage = () => {
         }
       };
       
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      // Handle both corporate and regular orders
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, collectionName, selectedOrder.id);
+      
       await updateDoc(orderRef, { 
         orderDetails: {
           ...selectedOrder.orderDetails,
@@ -1370,6 +1493,12 @@ const WorkshopPage = () => {
   // Save payment data
   const handleSavePayment = async () => {
     try {
+      // Handle both corporate and regular orders (same strategy as finance page)
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = isCorporate ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+      
       const deposit = parseFloat(editPaymentData.deposit) || 0;
       const amountPaid = parseFloat(editPaymentData.amountPaid) || 0;
       let financialStatus = 'Deposit Not Paid';
@@ -1393,7 +1522,7 @@ const WorkshopPage = () => {
           pickupDeliveryCostValue = String(pickupDeliveryCostValue);
         }
       } else {
-        pickupDeliveryCostValue = selectedOrder.paymentData?.pickupDeliveryCost || '';
+        pickupDeliveryCostValue = currentPaymentData?.pickupDeliveryCost || '';
       }
       
       // Auto-enable pickup/delivery if cost is greater than 0
@@ -1404,21 +1533,21 @@ const WorkshopPage = () => {
         pickupDeliveryEnabledValue = true;
       } else if (pickupDeliveryEnabledValue === undefined) {
         // If not explicitly set and cost is 0, use existing value or false
-        pickupDeliveryEnabledValue = selectedOrder.paymentData?.pickupDeliveryEnabled || false;
+        pickupDeliveryEnabledValue = currentPaymentData?.pickupDeliveryEnabled || false;
       } else {
         // Use the value from the form
         pickupDeliveryEnabledValue = Boolean(pickupDeliveryEnabledValue);
       }
       
       const updatedPaymentData = {
-        ...selectedOrder.paymentData, // Preserve existing fields like paymentHistory, payments, etc.
+        ...currentPaymentData, // Preserve existing fields like paymentHistory, payments, etc.
         // Update with form values - ensure all edited fields are included
-        deposit: editPaymentData.deposit !== undefined ? String(editPaymentData.deposit) : (selectedOrder.paymentData?.deposit || ''),
-        amountPaid: editPaymentData.amountPaid !== undefined ? String(editPaymentData.amountPaid) : (selectedOrder.paymentData?.amountPaid || ''),
+        deposit: editPaymentData.deposit !== undefined ? String(editPaymentData.deposit) : (currentPaymentData?.deposit || ''),
+        amountPaid: editPaymentData.amountPaid !== undefined ? String(editPaymentData.amountPaid) : (currentPaymentData?.amountPaid || ''),
         pickupDeliveryEnabled: pickupDeliveryEnabledValue,
         pickupDeliveryCost: pickupDeliveryCostValue,
-        pickupDeliveryServiceType: editPaymentData.pickupDeliveryServiceType || (selectedOrder.paymentData?.pickupDeliveryServiceType || 'both'),
-        notes: editPaymentData.notes !== undefined ? String(editPaymentData.notes) : (selectedOrder.paymentData?.notes || ''),
+        pickupDeliveryServiceType: editPaymentData.pickupDeliveryServiceType || (currentPaymentData?.pickupDeliveryServiceType || 'both'),
+        notes: editPaymentData.notes !== undefined ? String(editPaymentData.notes) : (currentPaymentData?.notes || ''),
       };
       
       // Update orderDetails with financialStatus - preserve all existing orderDetails fields
@@ -1427,7 +1556,11 @@ const WorkshopPage = () => {
         financialStatus,
       };
       
-      const updatedOrder = {
+      const updatedOrder = isCorporate ? {
+        ...selectedOrder,
+        paymentDetails: updatedPaymentData,
+        orderDetails: updatedOrderDetails,
+      } : {
         ...selectedOrder,
         paymentData: updatedPaymentData,
         orderDetails: updatedOrderDetails,
@@ -1435,11 +1568,13 @@ const WorkshopPage = () => {
       
       // Update in Firebase - use the same pattern as NewOrderPage
       // Update the full objects to ensure all fields are preserved
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = doc(db, collectionName, selectedOrder.id);
       
       // Debug: Log what we're saving
       console.log('Saving payment data:', {
         orderId: selectedOrder.id,
+        isCorporate,
+        paymentField,
         paymentData: updatedPaymentData,
         pickupDeliveryEnabled: updatedPaymentData.pickupDeliveryEnabled,
         pickupDeliveryCost: updatedPaymentData.pickupDeliveryCost,
@@ -1447,7 +1582,7 @@ const WorkshopPage = () => {
       });
       
       await updateDoc(orderRef, {
-        paymentData: updatedPaymentData,
+        [paymentField]: updatedPaymentData,
         orderDetails: updatedOrderDetails,
         updatedAt: new Date()
       });
@@ -1467,14 +1602,33 @@ const WorkshopPage = () => {
   // Save furniture data for a specific group
   const handleSaveFurnitureGroup = async (groupIndex) => {
     try {
-      // Use the editing data if available, otherwise use the current selectedOrder data
-      const furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData;
+      // Handle both corporate and regular orders
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
       
-      const orderRef = doc(db, 'orders', selectedOrder.id);
-      await updateDoc(orderRef, { furnitureData: furnitureDataToSave });
+      // Use the editing data if available, otherwise use the current selectedOrder data
+      // Corporate orders use furnitureGroups, regular orders use furnitureData
+      let furnitureDataToSave;
+      if (isCorporate) {
+        furnitureDataToSave = editingFurnitureData || { groups: selectedOrder.furnitureGroups || [] };
+      } else {
+        furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData;
+      }
+      
+      const orderRef = doc(db, collectionName, selectedOrder.id);
+      
+      // Corporate orders use furnitureGroups field, regular orders use furnitureData
+      if (isCorporate) {
+        await updateDoc(orderRef, { furnitureGroups: furnitureDataToSave.groups || [] });
+      } else {
+        await updateDoc(orderRef, { furnitureData: furnitureDataToSave });
+      }
       
       // Update local state with the saved data
-      const updatedOrder = {
+      const updatedOrder = isCorporate ? {
+        ...selectedOrder,
+        furnitureGroups: furnitureDataToSave.groups || []
+      } : {
         ...selectedOrder,
         furnitureData: furnitureDataToSave
       };
@@ -1639,10 +1793,19 @@ const WorkshopPage = () => {
       return;
     }
 
-    // Check if customer has a valid email for sending
-    const hasValidEmail = isValidEmailForSending(selectedOrder.personalInfo?.email);
+    // Handle both corporate and regular orders (same strategy as finance page)
+    const isCorporate = isCorporateOrder(selectedOrder);
+    const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+    const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+    const currentPaymentData = isCorporate ? selectedOrder.paymentDetails : selectedOrder.paymentData;
 
-    const requiredDeposit = parseFloat(selectedOrder.paymentData?.deposit) || 0;
+    // Check if customer has a valid email for sending
+    const customerEmail = isCorporate 
+      ? (selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email)
+      : selectedOrder.personalInfo?.email;
+    const hasValidEmail = isValidEmailForSending(customerEmail);
+
+    const requiredDeposit = parseFloat(currentPaymentData?.deposit) || 0;
     if (requiredDeposit <= 0) {
       showError('No deposit amount set for this order');
       return;
@@ -1655,16 +1818,16 @@ const WorkshopPage = () => {
       await ensureGmailAuthorized();
 
       // Update the order with deposit received
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = doc(db, collectionName, selectedOrder.id);
       const updatedPaymentData = {
-        ...selectedOrder.paymentData,
+        ...currentPaymentData,
         amountPaid: requiredDeposit,
         depositReceived: true,
         depositReceivedDate: new Date().toISOString()
       };
 
       await updateDoc(orderRef, {
-        paymentData: updatedPaymentData,
+        [paymentField]: updatedPaymentData,
         orderDetails: {
           ...selectedOrder.orderDetails,
           financialStatus: 'Deposit Paid',
@@ -1672,7 +1835,12 @@ const WorkshopPage = () => {
       });
 
       // Prepare order data for email
-      const orderDataForEmail = {
+      const orderDataForEmail = isCorporate ? {
+        corporateCustomer: selectedOrder.corporateCustomer,
+        contactPerson: selectedOrder.contactPerson,
+        orderDetails: selectedOrder.orderDetails,
+        paymentDetails: updatedPaymentData
+      } : {
         personalInfo: selectedOrder.personalInfo,
         orderDetails: selectedOrder.orderDetails,
         paymentData: updatedPaymentData
@@ -1684,9 +1852,9 @@ const WorkshopPage = () => {
       };
 
       // Try to send deposit confirmation email only if valid email exists
-      if (hasValidEmail) {
+      if (hasValidEmail && customerEmail) {
         try {
-          const emailResult = await sendDepositEmailWithConfig(orderDataForEmail, selectedOrder.personalInfo.email, onDepositEmailProgress);
+          const emailResult = await sendDepositEmailWithConfig(orderDataForEmail, customerEmail, onDepositEmailProgress);
           
           if (emailResult.success) {
             showSuccess('✅ Deposit received and confirmation email sent successfully!');
@@ -1703,7 +1871,14 @@ const WorkshopPage = () => {
       }
 
       // Immediately update the selectedOrder state with the new data
-      const updatedSelectedOrder = {
+      const updatedSelectedOrder = isCorporate ? {
+        ...selectedOrder,
+        paymentDetails: updatedPaymentData,
+        orderDetails: {
+          ...selectedOrder.orderDetails,
+          financialStatus: 'Deposit Paid',
+        }
+      } : {
         ...selectedOrder,
         paymentData: updatedPaymentData,
         orderDetails: {
@@ -1717,10 +1892,15 @@ const WorkshopPage = () => {
       await fetchOrders();
       
       // Update the selected order again with the fresh data from the database
-      const refreshedOrders = await getDocs(query(collection(db, 'orders'), orderBy('orderDetails.billInvoice', 'desc')));
+      const refreshedOrdersQuery = query(
+        collection(db, collectionName), 
+        orderBy('orderDetails.billInvoice', 'desc')
+      );
+      const refreshedOrders = await getDocs(refreshedOrdersQuery);
       const refreshedOrdersData = refreshedOrders.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        orderType: isCorporate ? 'corporate' : 'regular'
       }));
       
       const finalUpdatedOrder = refreshedOrdersData.find(order => order.id === selectedOrder.id);
@@ -1790,14 +1970,20 @@ const WorkshopPage = () => {
     }
 
     try {
-      const currentAmountPaid = parseFloat(selectedOrder.paymentData?.amountPaid || 0);
+      // Handle both corporate and regular orders (same strategy as finance page)
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+      const paymentField = isCorporate ? 'paymentDetails' : 'paymentData';
+      const currentPaymentData = isCorporate ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+      
+      const currentAmountPaid = parseFloat(currentPaymentData?.amountPaid || 0);
       const newTotalAmountPaid = currentAmountPaid + paymentAmount;
 
-      const orderRef = doc(db, 'orders', selectedOrder.id);
+      const orderRef = doc(db, collectionName, selectedOrder.id);
       await updateDoc(orderRef, {
-        'paymentData.amountPaid': newTotalAmountPaid,
-        'paymentData.payments': [
-          ...(selectedOrder.paymentData?.payments || []),
+        [`${paymentField}.amountPaid`]: newTotalAmountPaid,
+        [`${paymentField}.payments`]: [
+          ...(currentPaymentData?.payments || []),
           {
             amount: paymentAmount,
             date: paymentForm.paymentDate,
@@ -1807,31 +1993,111 @@ const WorkshopPage = () => {
         ]
       });
 
-      // Update local state
-      setSelectedOrder(prev => ({
-        ...prev,
-        paymentData: {
-          ...prev.paymentData,
-          amountPaid: newTotalAmountPaid,
-          payments: [
-            ...(prev.paymentData?.payments || []),
-            {
-              amount: paymentAmount,
-              date: paymentForm.paymentDate,
-              notes: paymentForm.paymentNotes,
-              timestamp: new Date().toISOString()
+      // Update local state - handle both corporate and regular orders
+      setSelectedOrder(prev => {
+        if (isCorporate) {
+          return {
+            ...prev,
+            paymentDetails: {
+              ...prev.paymentDetails,
+              amountPaid: newTotalAmountPaid,
+              payments: [
+                ...(prev.paymentDetails?.payments || []),
+                {
+                  amount: paymentAmount,
+                  date: paymentForm.paymentDate,
+                  notes: paymentForm.paymentNotes,
+                  timestamp: new Date().toISOString()
+                }
+              ]
             }
-          ]
+          };
+        } else {
+          return {
+            ...prev,
+            paymentData: {
+              ...prev.paymentData,
+              amountPaid: newTotalAmountPaid,
+              payments: [
+                ...(prev.paymentData?.payments || []),
+                {
+                  amount: paymentAmount,
+                  date: paymentForm.paymentDate,
+                  notes: paymentForm.paymentNotes,
+                  timestamp: new Date().toISOString()
+                }
+              ]
+            }
+          };
         }
+      });
+
+      // Update orders list - handle both corporate and regular orders
+      setOrders(prev => prev.map(order => {
+        if (order.id === selectedOrder.id) {
+          if (isCorporate) {
+            return {
+              ...order,
+              paymentDetails: {
+                ...order.paymentDetails,
+                amountPaid: newTotalAmountPaid,
+                payments: [
+                  ...(order.paymentDetails?.payments || []),
+                  {
+                    amount: paymentAmount,
+                    date: paymentForm.paymentDate,
+                    notes: paymentForm.paymentNotes,
+                    timestamp: new Date().toISOString()
+                  }
+                ]
+              }
+            };
+          } else {
+            return {
+              ...order,
+              paymentData: {
+                ...order.paymentData,
+                amountPaid: newTotalAmountPaid,
+                payments: [
+                  ...(order.paymentData?.payments || []),
+                  {
+                    amount: paymentAmount,
+                    date: paymentForm.paymentDate,
+                    notes: paymentForm.paymentNotes,
+                    timestamp: new Date().toISOString()
+                  }
+                ]
+              }
+            };
+          }
+        }
+        return order;
       }));
 
-      // Update orders list
-      setOrders(prev => prev.map(order => 
-        order.id === selectedOrder.id 
-          ? { 
-              ...order, 
-              paymentData: { 
-                ...order.paymentData, 
+      setFilteredOrders(prev => prev.map(order => {
+        if (order.id === selectedOrder.id) {
+          if (isCorporate) {
+            return {
+              ...order,
+              paymentDetails: {
+                ...order.paymentDetails,
+                amountPaid: newTotalAmountPaid,
+                payments: [
+                  ...(order.paymentDetails?.payments || []),
+                  {
+                    amount: paymentAmount,
+                    date: paymentForm.paymentDate,
+                    notes: paymentForm.paymentNotes,
+                    timestamp: new Date().toISOString()
+                  }
+                ]
+              }
+            };
+          } else {
+            return {
+              ...order,
+              paymentData: {
+                ...order.paymentData,
                 amountPaid: newTotalAmountPaid,
                 payments: [
                   ...(order.paymentData?.payments || []),
@@ -1842,31 +2108,12 @@ const WorkshopPage = () => {
                     timestamp: new Date().toISOString()
                   }
                 ]
-              } 
-            }
-          : order
-      ));
-
-      setFilteredOrders(prev => prev.map(order => 
-        order.id === selectedOrder.id 
-          ? { 
-              ...order, 
-              paymentData: { 
-                ...order.paymentData, 
-                amountPaid: newTotalAmountPaid,
-                payments: [
-                  ...(order.paymentData?.payments || []),
-                  {
-                    amount: paymentAmount,
-                    date: paymentForm.paymentDate,
-                    notes: paymentForm.paymentNotes,
-                    timestamp: new Date().toISOString()
-                  }
-                ]
-              } 
-            }
-          : order
-      ));
+              }
+            };
+          }
+        }
+        return order;
+      }));
 
       showSuccess(`Payment of $${paymentAmount.toFixed(2)} saved successfully!`);
       
@@ -2123,12 +2370,16 @@ const WorkshopPage = () => {
                   {sendingEmail ? 'Sending Email...' : 'Send Order Email'}
                 </Button>
                 
-                {/* Status Button */}
+                {/* Status Button - Hide for corporate orders */}
+                {selectedOrder.orderType !== 'corporate' && (
                 <Button
                   variant="outlined"
                   size="medium"
                   startIcon={<AssignmentIcon />}
                   onClick={() => {
+                    // Find order from orders array to ensure orderType is set
+                    const orderFromArray = orders.find(o => o.id === selectedOrder.id);
+                    setSelectedOrderForStatus(orderFromArray || selectedOrder);
                     setEditingStatus(selectedOrder.invoiceStatus);
                     setStatusDialogOpen(true);
                   }}
@@ -2156,6 +2407,46 @@ const WorkshopPage = () => {
                 >
                   {getStatusInfo(selectedOrder.invoiceStatus).label}
                 </Button>
+                )}
+                
+                {/* Corporate Status Button - Show only for corporate orders */}
+                {selectedOrder.orderType === 'corporate' && (
+                <Button
+                  variant="outlined"
+                  size="medium"
+                  startIcon={<AssignmentIcon />}
+                  onClick={() => {
+                    // Find order from orders array to ensure orderType is set
+                    const orderFromArray = orders.find(o => o.id === selectedOrder.id);
+                    setSelectedOrderForStatus(orderFromArray || selectedOrder);
+                    setEditingStatus(selectedOrder.invoiceStatus);
+                    setStatusDialogOpen(true);
+                  }}
+                  sx={{
+                    px: 3,
+                    py: 1.5,
+                    fontSize: '1rem',
+                    fontWeight: 'bold',
+                    borderRadius: 2,
+                    borderWidth: 2,
+                    '&:hover': {
+                      borderWidth: 2,
+                      transform: 'translateY(-1px)'
+                    },
+                    transition: 'all 0.3s ease',
+                    backgroundColor: getStatusInfo(selectedOrder.invoiceStatus).color,
+                    color: 'white',
+                    borderColor: getStatusInfo(selectedOrder.invoiceStatus).color,
+                    '&:hover': {
+                      backgroundColor: getStatusInfo(selectedOrder.invoiceStatus).color,
+                      borderColor: getStatusInfo(selectedOrder.invoiceStatus).color,
+                      opacity: 0.8
+                    }
+                  }}
+                >
+                  {getStatusInfo(selectedOrder.invoiceStatus).label}
+                </Button>
+                )}
 
                 {/* Send Completion Email Button */}
                 <Button
@@ -2528,7 +2819,10 @@ const WorkshopPage = () => {
                     >
                       Add Payment
                     </Button>
-                    {selectedOrder.paymentData?.deposit && parseFloat(selectedOrder.paymentData.deposit) > 0 && !getDepositStatus(selectedOrder).isReceived && (
+                    {(() => {
+                      const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                      return paymentData?.deposit && parseFloat(paymentData.deposit) > 0 && !getDepositStatus(selectedOrder).isReceived;
+                    })() && (
                       <Button
                         variant="contained"
                         size="small"
@@ -2599,7 +2893,10 @@ const WorkshopPage = () => {
                                   💰 Deposit
                                 </Typography>
                                 <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                                  ${selectedOrder.paymentData?.deposit || '0.00'}
+                                  ${(() => {
+                                    const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                    return paymentData?.deposit || '0.00';
+                                  })()}
                                 </Typography>
                               </Box>
                               
@@ -2638,26 +2935,35 @@ const WorkshopPage = () => {
                         </Grid>
 
                         {/* Pickup & Delivery - Only Show When Enabled */}
-                        {selectedOrder.paymentData?.pickupDeliveryEnabled && (
+                        {(() => {
+                          const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                          return paymentData?.pickupDeliveryEnabled;
+                        })() && (
                           <Grid item xs={6}>
                             <Card variant="outlined" sx={{ border: '2px solid #e3f2fd', height: '100%' }}>
                               <CardContent sx={{ p: 2 }}>
                                 {/* Top Row: Service Type and Amount */}
                                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#d4af5a', mr: 1 }}>
-                                    🚚 {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'Pickup' : 
-                                         selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'Delivery' : 
-                                         'Pickup & Delivery'}
+                                    🚚 {(() => {
+                                      const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                      const serviceType = paymentData?.pickupDeliveryServiceType;
+                                      return serviceType === 'pickup' ? 'Pickup' : 
+                                             serviceType === 'delivery' ? 'Delivery' : 
+                                             'Pickup & Delivery';
+                                    })()}
                                   </Typography>
-                                                                                                   <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                                   ${(() => {
-                                     const cost = selectedOrder.paymentData.pickupDeliveryCost || 0;
-                                     const displayValue = selectedOrder.paymentData.pickupDeliveryServiceType === 'both' 
-                                       ? cost * 2 
-                                       : cost;
-                                     return displayValue % 1 === 0 ? displayValue.toString() : displayValue.toFixed(2);
-                                   })()}
-                                 </Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
+                                    ${(() => {
+                                      const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                      const cost = parseFloat(paymentData?.pickupDeliveryCost) || 0;
+                                      const serviceType = paymentData?.pickupDeliveryServiceType;
+                                      const displayValue = serviceType === 'both' 
+                                        ? cost * 2 
+                                        : cost;
+                                      return displayValue % 1 === 0 ? displayValue.toString() : displayValue.toFixed(2);
+                                    })()}
+                                  </Typography>
                                 </Box>
                                 
                                 {/* Bottom Row: Status Indicator and Text */}
@@ -2674,9 +2980,13 @@ const WorkshopPage = () => {
                                     color: '#4caf50',
                                     fontSize: '0.7rem'
                                   }}>
-                                                                          {selectedOrder.paymentData.pickupDeliveryServiceType === 'pickup' ? 'One Way' :
-                                       selectedOrder.paymentData.pickupDeliveryServiceType === 'delivery' ? 'One Way' :
-                                       'Both Services'}
+                                    {(() => {
+                                      const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                      const serviceType = paymentData?.pickupDeliveryServiceType;
+                                      return serviceType === 'pickup' ? 'One Way' :
+                                             serviceType === 'delivery' ? 'One Way' :
+                                             'Both Services';
+                                    })()}
                                   </Typography>
                                 </Box>
                               </CardContent>
@@ -2747,7 +3057,10 @@ const WorkshopPage = () => {
                                 Total Paid by Customer
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                ${selectedOrder.paymentData?.amountPaid || '0.00'}
+                                ${(() => {
+                                  const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                  return paymentData?.amountPaid || '0.00';
+                                })()}
                               </Typography>
                             </Box>
                           </CardContent>
@@ -2758,7 +3071,10 @@ const WorkshopPage = () => {
                           background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
                           color: '#000000',
                           width: '280px',
-                          border: selectedOrder && (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))) > 0
+                          border: selectedOrder && (() => {
+                            const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                            return (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(paymentData?.amountPaid || 0))) > 0;
+                          })()
                             ? '2px solid #f44336'
                             : '2px solid #4CAF50',
                           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
@@ -2781,7 +3097,10 @@ const WorkshopPage = () => {
                                 Outstanding Balance
                               </Typography>
                               <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
-                                ${selectedOrder ? (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2) : '0.00'}
+                                ${selectedOrder ? (() => {
+                                  const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                                  return (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(paymentData?.amountPaid || 0))).toFixed(2);
+                                })() : '0.00'}
                               </Typography>
                             </Box>
                           </CardContent>
@@ -2791,7 +3110,10 @@ const WorkshopPage = () => {
                   </Grid>
 
                   {/* Notes Section */}
-                  {selectedOrder.paymentData?.notes && (
+                  {(() => {
+                    const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                    return paymentData?.notes;
+                  })() && (
                     <Card variant="outlined" sx={{ border: '2px solid #fff3e0', backgroundColor: '#fafafa' }}>
                       <CardContent>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#f27921', mb: 2 }}>
@@ -2804,7 +3126,10 @@ const WorkshopPage = () => {
                           borderRadius: 1,
                           border: '1px solid #e0e0e0'
                         }}>
-                          {selectedOrder.paymentData.notes}
+                          {(() => {
+                            const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                            return paymentData?.notes;
+                          })()}
                         </Typography>
                       </CardContent>
                     </Card>
@@ -3960,13 +4285,19 @@ const WorkshopPage = () => {
                   <Box>
                     <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Amount Paid</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#4caf50' }}>
-                      ${selectedOrder.paymentData?.amountPaid || '0.00'}
+                      ${(() => {
+                        const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                        return paymentData?.amountPaid || '0.00';
+                      })()}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography variant="body2" sx={{ color: '#b98f33', fontWeight: 600, mb: 1 }}>Remaining Balance</Typography>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#ff9800' }}>
-                      ${(calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(selectedOrder.paymentData?.amountPaid || 0))).toFixed(2)}
+                      ${(() => {
+                        const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                        return (calculateInvoiceTotals(selectedOrder).grandTotal - (parseFloat(paymentData?.amountPaid || 0))).toFixed(2);
+                      })()}
                     </Typography>
                   </Box>
                 </Box>
@@ -4088,7 +4419,10 @@ const WorkshopPage = () => {
               </Box>
 
               {/* Payment History */}
-              {selectedOrder.paymentData?.payments && selectedOrder.paymentData.payments.length > 0 && (
+              {(() => {
+                const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                return paymentData?.payments && paymentData.payments.length > 0;
+              })() && (
                 <Box sx={{ 
                   backgroundColor: '#2a2a2a', 
                   p: 3, 
@@ -4100,7 +4434,10 @@ const WorkshopPage = () => {
                     Payment History
                   </Typography>
                   <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-                    {selectedOrder.paymentData.payments.map((payment, index) => (
+                    {(() => {
+                      const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+                      return paymentData?.payments || [];
+                    })().map((payment, index) => (
                       <Box key={index} sx={{ 
                         p: 2, 
                         mb: 1, 
@@ -4270,7 +4607,11 @@ const WorkshopPage = () => {
 
         <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a' }}>
           <Button 
-            onClick={() => setStatusDialogOpen(false)}
+            onClick={() => {
+              setStatusDialogOpen(false);
+              setEditingStatus(null);
+              setSelectedOrderForStatus(null);
+            }}
             variant="outlined"
             size="small"
             sx={{
@@ -4285,9 +4626,13 @@ const WorkshopPage = () => {
             Cancel
           </Button>
           <Button 
-            onClick={() => updateInvoiceStatus(selectedOrder.id, editingStatus)}
+            onClick={() => {
+              if (selectedOrderForStatus && editingStatus) {
+                updateInvoiceStatus(selectedOrderForStatus.id, editingStatus);
+              }
+            }}
             variant="contained"
-            disabled={!editingStatus}
+            disabled={!editingStatus || !selectedOrderForStatus}
             size="small"
             sx={{
               backgroundColor: '#b98f33',

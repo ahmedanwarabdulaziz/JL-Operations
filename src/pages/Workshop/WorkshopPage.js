@@ -1269,6 +1269,14 @@ const WorkshopPage = () => {
         return;
       }
 
+      // Determine which collection to update based on order type (EXACTLY like finance page)
+      let collectionName;
+      if (order.orderType === 'corporate') {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+
       // Payment validation for end states
       if (newStatusObj.isEndState) {
         const totalAmount = calculateOrderProfit(order).revenue;
@@ -1333,18 +1341,34 @@ const WorkshopPage = () => {
         }
       }
 
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { invoiceStatus: newStatus });
+      // Update in Firebase (EXACTLY like finance page)
+      const orderRef = doc(db, collectionName, orderId);
+      await updateDoc(orderRef, {
+        invoiceStatus: newStatus,
+        statusUpdatedAt: new Date()
+      });
       
-      // Update local state
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, invoiceStatus: newStatus } : order
+      // Update local state (EXACTLY like finance page)
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+            : order
+        )
       );
-      setOrders(updatedOrders);
+      
+      // Update filtered orders as well (EXACTLY like finance page)
+      setFilteredOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === orderId 
+            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+            : order
+        )
+      );
       
       // Update selected order if it's the one being updated
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus });
+        setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus, statusUpdatedAt: new Date() });
       }
       
       showSuccess('Invoice status updated successfully');
