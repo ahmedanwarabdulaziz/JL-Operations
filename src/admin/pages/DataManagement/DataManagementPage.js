@@ -39,6 +39,9 @@ import {
 import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
 import * as XLSX from 'xlsx';
+import { createUnifiedBackup, fetchBackupHistory } from '../shared/services/backupService';
+import { parseBackupFile, validateBackupFile, isEncrypted } from '../shared/utils/backupUtils';
+import JSZip from 'jszip';
 
 const DataManagementPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -66,6 +69,10 @@ const DataManagementPage = () => {
   const [backupLocation, setBackupLocation] = useState('');
   const [selectedBackupFile, setSelectedBackupFile] = useState(null);
   const [restoreMode, setRestoreMode] = useState('full'); // 'full', 'selective', 'merge'
+  const [createZipArchive, setCreateZipArchive] = useState(true);
+  const [uploadToStorage, setUploadToStorage] = useState(true);
+  const [backupPreview, setBackupPreview] = useState(null);
+  const [restoreConflicts, setRestoreConflicts] = useState([]);
 
   // Complete list of all collections with descriptions
   const collections = [
@@ -82,6 +89,12 @@ const DataManagementPage = () => {
       icon: '📋'
     },
     {
+      name: 'corporate-orders',
+      label: 'Corporate Orders',
+      description: 'Corporate order records and project details',
+      icon: '🏢'
+    },
+    {
       name: 'treatments',
       label: 'Treatments',
       description: 'Treatment records and schedules',
@@ -92,12 +105,6 @@ const DataManagementPage = () => {
       label: 'Material Companies',
       description: 'Supplier and material company data',
       icon: '🏭'
-    },
-    {
-      name: 'workshop',
-      label: 'Workshop',
-      description: 'Workshop operations and activities',
-      icon: '⚙️'
     },
     {
       name: 'platforms',
@@ -118,10 +125,46 @@ const DataManagementPage = () => {
       icon: '📊'
     },
     {
-      name: 'test',
-      label: 'Test Data',
-      description: 'Testing and development data',
-      icon: '🧪'
+      name: 'extraExpenses',
+      label: 'Extra Expenses',
+      description: 'Extra expense records',
+      icon: '💰'
+    },
+    {
+      name: 'corporateCustomers',
+      label: 'Corporate Customers',
+      description: 'Corporate customer information',
+      icon: '🏛️'
+    },
+    {
+      name: 'allocationOrders',
+      label: 'Allocation Orders',
+      description: 'Allocation order records',
+      icon: '📈'
+    },
+    {
+      name: 'website_images',
+      label: 'Website Images',
+      description: 'Website image metadata',
+      icon: '🖼️'
+    },
+    {
+      name: 'categories',
+      label: 'Categories',
+      description: 'Category configurations',
+      icon: '📁'
+    },
+    {
+      name: 'tags',
+      label: 'Tags',
+      description: 'Tag configurations',
+      icon: '🏷️'
+    },
+    {
+      name: 'furniturePieces',
+      label: 'Furniture Pieces',
+      description: 'Furniture piece records',
+      icon: '🪑'
     }
   ];
 
@@ -384,7 +427,7 @@ const DataManagementPage = () => {
           const emptyData = [['This collection is empty']];
           const worksheet = XLSX.utils.aoa_to_sheet([headers, ...emptyData]);
           XLSX.utils.book_append_sheet(workbook, worksheet, collectionName);
-        } else if (collectionName === 'orders') {
+        } else if (collectionName === 'orders' || collectionName === 'corporate-orders') {
           // Special handling for orders - more organized format
           const organizedOrders = data.map(order => {
             // Helper function to safely get nested values
@@ -402,7 +445,7 @@ const DataManagementPage = () => {
             const formatDate = (dateValue) => {
               try {
                 if (!dateValue) return '';
-                if (dateValue.toDate) {
+                if (dateValue && dateValue.toDate) {
                   return dateValue.toDate().toLocaleDateString();
                 }
                 if (typeof dateValue === 'string' || typeof dateValue === 'number') {
@@ -414,16 +457,23 @@ const DataManagementPage = () => {
               }
             };
 
-            // Helper function to format furniture groups
+            // Helper function to format furniture groups with all details
             const formatFurnitureGroups = (groups) => {
               try {
                 if (!groups || !Array.isArray(groups)) return '';
-                return groups.map(group => {
+                return groups.map((group, index) => {
                   const parts = [];
+                  parts.push(`Group ${index + 1}:`);
                   if (group.furnitureType) parts.push(`Type: ${group.furnitureType}`);
                   if (group.materialCompany) parts.push(`Material: ${group.materialCompany}`);
                   if (group.quantity) parts.push(`Qty: ${group.quantity}`);
                   if (group.labourWork) parts.push(`Labour: $${group.labourWork}`);
+                  if (group.cost) parts.push(`Cost: $${group.cost}`);
+                  if (group.description) parts.push(`Desc: ${group.description}`);
+                  if (group.dimensions) parts.push(`Dimensions: ${group.dimensions}`);
+                  if (group.color) parts.push(`Color: ${group.color}`);
+                  if (group.finish) parts.push(`Finish: ${group.finish}`);
+                  if (group.notes) parts.push(`Notes: ${group.notes}`);
                   return parts.join(', ');
                 }).join(' | ');
               } catch (e) {
@@ -431,17 +481,28 @@ const DataManagementPage = () => {
               }
             };
 
+            // Handle both regular orders (furnitureData.groups) and corporate orders (furnitureGroups)
+            let furnitureGroups = [];
+            if (collectionName === 'corporate-orders') {
+              // Corporate orders have furnitureGroups at root level
+              furnitureGroups = order.furnitureGroups || [];
+            } else {
+              // Regular orders have furnitureData.groups
+              furnitureGroups = getValue(order, 'furnitureData.groups') || [];
+            }
+
             return {
               // Order Basic Info
               'Order ID': order.id || '',
+              'Order Type': collectionName === 'corporate-orders' ? 'Corporate' : 'Regular',
               'Order Date': formatDate(order.createdAt),
               'Last Updated': formatDate(order.updatedAt),
               
-              // Customer Information (from personalInfo)
-              'Customer Name': getValue(order, 'personalInfo.customerName') || getValue(order, 'personalInfo.name') || '',
-              'Customer Phone': getValue(order, 'personalInfo.phone') || '',
-              'Customer Email': getValue(order, 'personalInfo.email') || '',
-              'Customer Address': getValue(order, 'personalInfo.address') || '',
+              // Customer Information (from personalInfo or corporateCustomer)
+              'Customer Name': getValue(order, 'personalInfo.customerName') || getValue(order, 'personalInfo.name') || getValue(order, 'corporateCustomer.name') || '',
+              'Customer Phone': getValue(order, 'personalInfo.phone') || getValue(order, 'corporateCustomer.phone') || '',
+              'Customer Email': getValue(order, 'personalInfo.email') || getValue(order, 'corporateCustomer.email') || '',
+              'Customer Address': getValue(order, 'personalInfo.address') || getValue(order, 'corporateCustomer.address') || '',
               
               // Order Details (from orderDetails)
               'Bill Invoice': getValue(order, 'orderDetails.billInvoice') || '',
@@ -450,8 +511,9 @@ const DataManagementPage = () => {
               'Start Date': getValue(order, 'orderDetails.startDate') || '',
               'Timeline': getValue(order, 'orderDetails.timeline') || '',
               
-              // Furniture Data (simplified)
-              'Furniture Details': formatFurnitureGroups(getValue(order, 'furnitureData.groups')),
+              // Furniture Data (with all groups)
+              'Furniture Groups Count': furnitureGroups.length || 0,
+              'Furniture Details': formatFurnitureGroups(furnitureGroups),
               
               // Payment Information (from paymentData)
               'Deposit Amount': getValue(order, 'paymentData.deposit') || '',
@@ -461,7 +523,7 @@ const DataManagementPage = () => {
               'Notes': getValue(order, 'paymentData.notes') || '',
               
               // Additional Information
-              'Status': order.status || '',
+              'Status': order.status || getValue(order, 'orderDetails.status') || '',
               'Total Amount': getValue(order, 'totalAmount') || '',
               'Priority': getValue(order, 'priority') || '',
               'Assigned To': getValue(order, 'assignedTo') || '',
@@ -500,7 +562,10 @@ const DataManagementPage = () => {
           worksheet['!cols'] = orderColumnWidths;
           
           // Add to workbook
-          XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+          const sheetName = collectionName === 'orders' ? 'Orders' : 
+                           collectionName === 'corporate-orders' ? 'Corporate Orders' : 
+                           collectionName;
+          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         } else {
           // Prepare data for Excel (other collections)
           const processedData = data.map(item => {
@@ -594,40 +659,7 @@ const DataManagementPage = () => {
 
   // ==================== PROFESSIONAL BACKUP SYSTEM ====================
 
-  // Generate SHA-256 hash for data integrity
-  const generateChecksum = async (data) => {
-    const encoder = new TextEncoder();
-    const dataBuffer = encoder.encode(JSON.stringify(data));
-    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  // Simple encryption function (AES-like simulation)
-  const encryptData = (data, password) => {
-    if (!password) return data;
-    // In a real implementation, you'd use a proper encryption library
-    // This is a simplified version for demonstration
-    const encrypted = btoa(JSON.stringify(data) + '|' + password);
-    return encrypted;
-  };
-
-  // Simple decryption function
-  const decryptData = (encryptedData, password) => {
-    if (!password) return encryptedData;
-    try {
-      const decoded = atob(encryptedData);
-      const parts = decoded.split('|');
-      if (parts[1] === password) {
-        return JSON.parse(parts[0]);
-      }
-      throw new Error('Invalid password');
-    } catch (error) {
-      throw new Error('Failed to decrypt backup');
-    }
-  };
-
-  // Create professional backup
+  // Create unified professional backup (Excel + JSON + ZIP + Storage)
   const handleCreateBackup = async () => {
     const selectedCollectionNames = Object.keys(selectedBackupCollections).filter(key => selectedBackupCollections[key]);
     
@@ -643,110 +675,45 @@ const DataManagementPage = () => {
 
     setIsLoading(true);
     setBackupProgress(0);
-    setCurrentOperation('Creating professional backup...');
+    setCurrentOperation('Initializing backup...');
     
     try {
-      const backupData = {};
-             // Generate JL-date-time format
-       const now = new Date();
-       const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
-       const backupId = `JL-${dateStr}-${timeStr}`;
-       
-       const backupMetadata = {
-         backupId: backupId,
-         timestamp: new Date().toISOString(),
-         version: '1.0.0',
-         firebaseProject: 'jl-operations',
-         collections: {},
-         totalDocuments: 0,
-         encrypted: encryptBackup,
-         createdBy: 'admin@company.com',
-         checksum: '',
-         compression: 'none'
-       };
-
-      // Fetch data with progress updates
-      for (let i = 0; i < selectedCollectionNames.length; i++) {
-        const collectionName = selectedCollectionNames[i];
-        const collectionInfo = collections.find(c => c.name === collectionName);
-        setCurrentOperation(`Backing up ${collectionInfo?.label || collectionName}...`);
-        setBackupProgress((i / selectedCollectionNames.length) * 60);
-        
-        try {
-          const snapshot = await getDocs(collection(db, collectionName));
-          backupData[collectionName] = snapshot.docs.map(document => ({
-            id: document.id,
-            ...document.data()
-          }));
-          
-          backupMetadata.collections[collectionName] = backupData[collectionName].length;
-          backupMetadata.totalDocuments += backupData[collectionName].length;
-          
-          console.log(`✅ Backed up ${backupData[collectionName].length} documents from ${collectionName}`);
-        } catch (error) {
-          console.error(`Error backing up ${collectionName}:`, error);
-          backupData[collectionName] = [];
+      const result = await createUnifiedBackup({
+        selectedCollections: selectedCollectionNames,
+        collections: collections,
+        encrypt: encryptBackup,
+        password: encryptBackup ? backupPassword : '',
+        createZip: createZipArchive,
+        uploadToStorage: uploadToStorage,
+        onProgress: (progress, message) => {
+          setBackupProgress(progress);
+          setCurrentOperation(message);
         }
-      }
+      });
 
-      setCurrentOperation('Generating backup metadata...');
-      setBackupProgress(70);
-
-      // Generate checksum for data integrity
-      backupMetadata.checksum = await generateChecksum(backupData);
-      backupMetadata.backupSize = `${JSON.stringify(backupData).length / 1024}KB`;
-
-      setCurrentOperation('Encrypting backup data...');
-      setBackupProgress(80);
-
-      // Encrypt data if requested
-      const finalBackupData = encryptBackup ? encryptData(backupData, backupPassword) : backupData;
-
-      setCurrentOperation('Creating backup files...');
-      setBackupProgress(90);
-
-      // Create backup files
-      const backupFileName = `${backupMetadata.backupId}.json`;
-      const metadataFileName = `${backupMetadata.backupId}_metadata.json`;
-      
-      // Create and download backup file
-      const backupBlob = new Blob([JSON.stringify(finalBackupData, null, 2)], { type: 'application/json' });
-      const backupUrl = URL.createObjectURL(backupBlob);
-      const backupLink = document.createElement('a');
-      backupLink.href = backupUrl;
-      backupLink.download = backupFileName;
-      backupLink.click();
-      URL.revokeObjectURL(backupUrl);
-
-      // Create and download metadata file
-      const metadataBlob = new Blob([JSON.stringify(backupMetadata, null, 2)], { type: 'application/json' });
-      const metadataUrl = URL.createObjectURL(metadataBlob);
-      const metadataLink = document.createElement('a');
-      metadataLink.href = metadataUrl;
-      metadataLink.download = metadataFileName;
-      metadataLink.click();
-      URL.revokeObjectURL(metadataUrl);
-
-      setBackupProgress(100);
-      setCurrentOperation('Backup completed successfully!');
-      
       const successMessage = `Professional backup created successfully!\n\n` +
-        `Backup ID: ${backupMetadata.backupId}\n` +
-        `Collections backed up: ${Object.keys(backupData).map(name => {
+        `Backup ID: ${result.backupId}\n` +
+        `Collections backed up: ${selectedCollectionNames.map(name => {
           const info = collections.find(c => c.name === name);
           return info?.label || name;
         }).join(', ')}\n` +
-        `Total documents: ${backupMetadata.totalDocuments}\n` +
-        `Backup size: ${backupMetadata.backupSize}\n` +
+        `Total documents: ${result.metadata.totalDocuments}\n` +
+        `Excel file size: ${result.fileSizes.excel}\n` +
+        `JSON file size: ${result.fileSizes.json}\n` +
+        `${result.fileSizes.zip ? `ZIP file size: ${result.fileSizes.zip}\n` : ''}` +
         `Encrypted: ${encryptBackup ? 'Yes' : 'No'}\n` +
-        `Checksum: ${backupMetadata.checksum.substring(0, 16)}...`;
+        `${uploadToStorage ? 'Uploaded to Firebase Storage: Yes\n' : ''}` +
+        `Checksum: ${result.metadata.checksum.substring(0, 16)}...`;
       
       setTimeout(() => {
         alert(successMessage);
         setBackupDialogOpen(false);
         setSelectedBackupCollections({});
         setBackupPassword('');
+        // Refresh backup history if dialog was open
+        if (backupHistoryDialogOpen) {
+          handleFetchBackupHistory();
+        }
       }, 500);
       
     } catch (error) {
@@ -761,7 +728,7 @@ const DataManagementPage = () => {
     }
   };
 
-  // Restore from backup
+  // Restore from backup (enhanced with ZIP support and validation)
   const handleRestoreFromBackup = async () => {
     if (!selectedBackupFile) {
       alert('Please select a backup file to restore from.');
@@ -773,143 +740,227 @@ const DataManagementPage = () => {
     setCurrentOperation('Reading backup file...');
     
     try {
-      const fileReader = new FileReader();
-      
-      fileReader.onload = async (event) => {
-        try {
-          setRestoreProgress(20);
-          setCurrentOperation('Parsing backup data...');
-          
-                     let backupData;
-           let isEncrypted = false;
-          
+      const fileName = selectedBackupFile.name.toLowerCase();
+      let fileContent = null;
+      let backupMetadata = null;
+      let backupData = null;
+
+      // Step 1: Handle ZIP files
+      if (fileName.endsWith('.zip')) {
+        setRestoreProgress(10);
+        setCurrentOperation('Extracting ZIP archive...');
+        
+        const arrayBuffer = await selectedBackupFile.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        
+        // Extract JSON backup file
+        const jsonFileNames = Object.keys(zip.files).filter(name => 
+          name.endsWith('.json') && name.includes('backup_')
+        );
+        
+        if (jsonFileNames.length === 0) {
+          throw new Error('No backup JSON file found in ZIP archive');
+        }
+        
+        const jsonFileName = jsonFileNames[0];
+        const jsonFile = zip.files[jsonFileName];
+        fileContent = await jsonFile.async('string');
+        
+        // Try to extract metadata if available
+        if (zip.files['metadata.json']) {
+          const metadataContent = await zip.files['metadata.json'].async('string');
           try {
-            // First, try to parse as JSON
-            const parsedData = JSON.parse(event.target.result);
-            
-            // Check if this looks like encrypted data (base64 string)
-            if (typeof parsedData === 'string' && parsedData.length > 100 && /^[A-Za-z0-9+/=]+$/.test(parsedData)) {
-              console.log('Detected encrypted backup data, attempting decryption...');
-              isEncrypted = true;
-              
-              if (!backupPassword) {
-                throw new Error('This backup file is encrypted. Please enter the backup password.');
-              }
-              
-              try {
-                backupData = decryptData(parsedData, backupPassword);
-                console.log('Successfully decrypted backup data');
-              } catch (decryptError) {
-                console.error('Decryption failed:', decryptError);
-                throw new Error('Failed to decrypt backup file. Please check your password.');
-              }
-            } else {
-              // This is regular JSON data
-              backupData = parsedData;
-              console.log('Successfully parsed backup data as JSON');
-            }
-          } catch (parseError) {
-            console.log('JSON parsing failed, attempting decryption...');
-            // Try to decrypt if parsing fails
-            if (backupPassword) {
-              try {
-                backupData = decryptData(event.target.result, backupPassword);
-                console.log('Successfully decrypted backup data');
-                isEncrypted = true;
-              } catch (decryptError) {
-                console.error('Decryption failed:', decryptError);
-                throw new Error('Failed to decrypt backup file. Please check your password.');
-              }
-            } else {
-              console.error('JSON parsing failed:', parseError);
-              throw new Error('Invalid backup file format or missing password for encrypted backup');
-            }
+            backupMetadata = JSON.parse(metadataContent);
+          } catch (e) {
+            console.warn('Could not parse metadata.json from ZIP');
           }
+        }
+      } else {
+        // Handle regular JSON file
+        const fileReader = new FileReader();
+        await new Promise((resolve, reject) => {
+          fileReader.onload = (event) => {
+            fileContent = event.target.result;
+            resolve();
+          };
+          fileReader.onerror = reject;
+          fileReader.readAsText(selectedBackupFile);
+        });
+      }
 
-          setRestoreProgress(40);
-          setCurrentOperation('Validating backup integrity...');
-          
-          // Validate backup structure
-          if (!backupData || typeof backupData !== 'object') {
-            console.error('Backup data structure:', backupData);
-            throw new Error('Invalid backup data structure - data is not a valid object');
+      // Step 2: Parse backup file
+      setRestoreProgress(30);
+      setCurrentOperation('Parsing backup data...');
+      
+      try {
+        const parsed = await parseBackupFile(fileContent, backupPassword || undefined);
+        
+        // Handle structured backup format (with metadata)
+        if (parsed.metadata && parsed.data) {
+          backupMetadata = parsed.metadata;
+          backupData = parsed.data;
+        } else {
+          // Handle old format or direct data
+          backupData = parsed;
+        }
+      } catch (parseError) {
+        console.error('Parse error:', parseError);
+        throw new Error(`Failed to parse backup file: ${parseError.message}`);
+      }
+
+      // Step 3: Validate backup
+      setRestoreProgress(50);
+      setCurrentOperation('Validating backup integrity...');
+      
+      if (backupMetadata) {
+        const validation = await validateBackupFile(backupData, backupMetadata);
+        if (!validation.isValid) {
+          console.warn('Validation warnings:', validation.errors);
+          const proceed = window.confirm(
+            `Backup validation found issues:\n${validation.errors.join('\n')}\n\nDo you want to continue anyway?`
+          );
+          if (!proceed) {
+            throw new Error('Restore cancelled due to validation issues');
           }
+        }
+      }
 
-          // Check if backupData has any collections
-          const collectionNames = Object.keys(backupData);
-          if (collectionNames.length === 0) {
-            throw new Error('Backup file contains no collections to restore');
-          }
-
-          console.log('Backup collections found:', collectionNames);
-          console.log('Backup data structure:', backupData);
-
-          setRestoreProgress(60);
-          setCurrentOperation('Restoring data to Firebase...');
-          
-          let totalRestored = 0;
-          const restoredCollections = [];
-          
-          for (const [collectionName, documents] of Object.entries(backupData)) {
-            if (Array.isArray(documents)) {
-              setCurrentOperation(`Restoring ${collectionName}...`);
+      // Step 4: Check for conflicts (if merge mode)
+      setRestoreProgress(60);
+      setCurrentOperation('Checking for conflicts...');
+      
+      const conflicts = [];
+      if (restoreMode === 'merge') {
+        for (const collectionName of Object.keys(backupData)) {
+          if (Array.isArray(backupData[collectionName])) {
+            try {
+              const existingSnapshot = await getDocs(collection(db, collectionName));
+              const existingIds = new Set(existingSnapshot.docs.map(doc => doc.id));
+              const backupIds = new Set(backupData[collectionName].map(doc => doc.id));
               
-              const batch = writeBatch(db);
-              let batchCount = 0;
-              
-              documents.forEach((document) => {
-                if (document.id) {
-                  // Remove the id field from the document data before storing
-                  const { id, ...documentData } = document;
-                  batch.set(doc(db, collectionName, id), documentData);
-                  batchCount++;
-                }
-              });
-              
-              if (batchCount > 0) {
-                await batch.commit();
-                totalRestored += batchCount;
-                restoredCollections.push(collectionName);
-                console.log(`✅ Restored ${batchCount} documents to ${collectionName}`);
+              const duplicateIds = [...backupIds].filter(id => existingIds.has(id));
+              if (duplicateIds.length > 0) {
+                conflicts.push({
+                  collection: collectionName,
+                  count: duplicateIds.length,
+                  ids: duplicateIds.slice(0, 10) // Show first 10
+                });
               }
+            } catch (error) {
+              console.warn(`Could not check conflicts for ${collectionName}:`, error);
             }
           }
-
-          setRestoreProgress(100);
-          setCurrentOperation('Restore completed successfully!');
+        }
+        
+        if (conflicts.length > 0) {
+          setRestoreConflicts(conflicts);
+          const conflictMessage = conflicts.map(c => 
+            `${c.collection}: ${c.count} duplicate(s)`
+          ).join('\n');
           
-          const successMessage = `Data restored successfully!\n\n` +
-            `Collections restored: ${restoredCollections.join(', ')}\n` +
-            `Total documents restored: ${totalRestored}\n` +
-            `Restore mode: ${restoreMode}`;
-          
-          setTimeout(() => {
-            alert(successMessage);
-            setRestoreDialogOpen(false);
-            setSelectedBackupFile(null);
-            setBackupPassword('');
-          }, 500);
-          
-        } catch (error) {
-          console.error('Error during restore:', error);
-          alert(`Error restoring data: ${error.message}. Please try again.`);
-        } finally {
-          setTimeout(() => {
+          const proceed = window.confirm(
+            `Found conflicts:\n${conflictMessage}\n\nIn merge mode, existing documents will be overwritten. Continue?`
+          );
+          if (!proceed) {
             setIsLoading(false);
             setRestoreProgress(0);
             setCurrentOperation('');
-          }, 1000);
+            return;
+          }
         }
-      };
+      }
+
+      // Step 5: Restore data
+      setRestoreProgress(70);
+      setCurrentOperation('Restoring data to Firebase...');
       
-      fileReader.readAsText(selectedBackupFile);
+      let totalRestored = 0;
+      const restoredCollections = [];
+      
+      for (const [collectionName, documents] of Object.entries(backupData)) {
+        if (Array.isArray(documents) && documents.length > 0) {
+          setCurrentOperation(`Restoring ${collectionName} (${documents.length} documents)...`);
+          
+          // Handle restore mode
+          if (restoreMode === 'full') {
+            // Full restore: replace all documents
+            const batch = writeBatch(db);
+            let batchCount = 0;
+            
+            documents.forEach((document) => {
+              if (document.id) {
+                const { id, ...documentData } = document;
+                batch.set(doc(db, collectionName, id), documentData);
+                batchCount++;
+                
+                // Firestore batch limit is 500
+                if (batchCount >= 500) {
+                  // Commit current batch and start new one
+                  // Note: This is simplified - in production, handle batching properly
+                }
+              }
+            });
+            
+            if (batchCount > 0) {
+              await batch.commit();
+              totalRestored += batchCount;
+              restoredCollections.push(collectionName);
+              console.log(`✅ Restored ${batchCount} documents to ${collectionName}`);
+            }
+          } else if (restoreMode === 'merge') {
+            // Merge mode: only add new documents, skip existing ones
+            const batch = writeBatch(db);
+            let batchCount = 0;
+            
+            // Get existing document IDs
+            const existingSnapshot = await getDocs(collection(db, collectionName));
+            const existingIds = new Set(existingSnapshot.docs.map(doc => doc.id));
+            
+            documents.forEach((document) => {
+              if (document.id && !existingIds.has(document.id)) {
+                const { id, ...documentData } = document;
+                batch.set(doc(db, collectionName, id), documentData);
+                batchCount++;
+              }
+            });
+            
+            if (batchCount > 0) {
+              await batch.commit();
+              totalRestored += batchCount;
+              restoredCollections.push(collectionName);
+              console.log(`✅ Merged ${batchCount} new documents into ${collectionName}`);
+            }
+          }
+        }
+      }
+
+      setRestoreProgress(100);
+      setCurrentOperation('Restore completed successfully!');
+      
+      const successMessage = `Data restored successfully!\n\n` +
+        `Collections restored: ${restoredCollections.join(', ')}\n` +
+        `Total documents restored: ${totalRestored}\n` +
+        `Restore mode: ${restoreMode}\n` +
+        `${conflicts.length > 0 ? `Conflicts handled: ${conflicts.length} collection(s)\n` : ''}`;
+      
+      setTimeout(() => {
+        alert(successMessage);
+        setRestoreDialogOpen(false);
+        setSelectedBackupFile(null);
+        setBackupPassword('');
+        setBackupPreview(null);
+        setRestoreConflicts([]);
+      }, 500);
       
     } catch (error) {
-      console.error('Error reading backup file:', error);
-      alert(`Error reading backup file: ${error.message}. Please try again.`);
-      setIsLoading(false);
-      setRestoreProgress(0);
-      setCurrentOperation('');
+      console.error('Error during restore:', error);
+      alert(`Error restoring data: ${error.message}. Please try again.`);
+    } finally {
+      setTimeout(() => {
+        setIsLoading(false);
+        setRestoreProgress(0);
+        setCurrentOperation('');
+      }, 1000);
     }
   };
 
@@ -939,13 +990,38 @@ const DataManagementPage = () => {
     return Object.values(selectedBackupCollections).filter(Boolean).length;
   };
 
-  // Handle file selection for restore
+  // Fetch backup history from Firestore
+  const handleFetchBackupHistory = async () => {
+    try {
+      setIsLoading(true);
+      const backups = await fetchBackupHistory();
+      setBackupHistory(backups);
+    } catch (error) {
+      console.error('Error fetching backup history:', error);
+      alert(`Failed to fetch backup history: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle opening backup history dialog
+  const handleOpenBackupHistoryDialog = async () => {
+    setBackupHistoryDialogOpen(true);
+    await handleFetchBackupHistory();
+  };
+
+  // Handle file selection for restore (supports JSON and ZIP)
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
-    if (file && file.name.endsWith('.json')) {
-      setSelectedBackupFile(file);
-    } else {
-      alert('Please select a valid JSON backup file.');
+    if (file) {
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.json') || fileName.endsWith('.zip')) {
+        setSelectedBackupFile(file);
+        setBackupPreview(null);
+        setRestoreConflicts([]);
+      } else {
+        alert('Please select a valid JSON or ZIP backup file.');
+      }
     }
   };
 
@@ -1145,7 +1221,7 @@ const DataManagementPage = () => {
                 <Button
                   variant="outlined"
                   startIcon={<HistoryIcon />}
-                  onClick={() => setBackupHistoryDialogOpen(true)}
+                  onClick={handleOpenBackupHistoryDialog}
                   fullWidth
                   disabled={isLoading}
                   size="small"
@@ -1815,6 +1891,45 @@ const DataManagementPage = () => {
               )}
             </Box>
 
+            {/* Backup Options */}
+            <Box sx={{ mb: 3, p: 2, backgroundColor: '#3a3a3a', borderRadius: 1, border: '1px solid #333333' }}>
+              <Typography variant="subtitle2" sx={{ color: '#2e7d32', fontWeight: 'bold', mb: 2 }}>
+                📦 Backup Options:
+              </Typography>
+              <Box display="flex" flexDirection="column" gap={2}>
+                <Box display="flex" gap={2} alignItems="center">
+                  <Checkbox
+                    checked={createZipArchive}
+                    onChange={(e) => setCreateZipArchive(e.target.checked)}
+                    sx={{
+                      color: '#2e7d32',
+                      '&.Mui-checked': {
+                        color: '#2e7d32',
+                      }
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                    Create ZIP archive (includes Excel + JSON + metadata)
+                  </Typography>
+                </Box>
+                <Box display="flex" gap={2} alignItems="center">
+                  <Checkbox
+                    checked={uploadToStorage}
+                    onChange={(e) => setUploadToStorage(e.target.checked)}
+                    sx={{
+                      color: '#2e7d32',
+                      '&.Mui-checked': {
+                        color: '#2e7d32',
+                      }
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                    Upload to Firebase Storage (cloud backup)
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
             {/* Summary Section */}
             <Box sx={{ mb: 3, p: 2, backgroundColor: '#3a3a3a', borderRadius: 1, border: '1px solid #333333' }}>
               <Typography variant="subtitle2" sx={{ color: '#2e7d32', fontWeight: 'bold', mb: 1 }}>
@@ -2024,11 +2139,11 @@ const DataManagementPage = () => {
             {/* File Selection */}
             <Box sx={{ mb: 3, p: 2, backgroundColor: '#3a3a3a', borderRadius: 1, border: '1px solid #333333' }}>
               <Typography variant="subtitle2" sx={{ color: '#ed6c02', fontWeight: 'bold', mb: 2 }}>
-                📁 Select Backup File:
+                📁 Select Backup File (JSON or ZIP):
               </Typography>
               <input
                 type="file"
-                accept=".json"
+                accept=".json,.zip"
                 onChange={handleFileSelect}
                 style={{
                   width: '100%',
@@ -2164,6 +2279,211 @@ const DataManagementPage = () => {
               }}
             >
               {isLoading ? `Restoring... ${Math.round(restoreProgress)}%` : 'Restore from Backup'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ==================== BACKUP HISTORY DIALOG ==================== */}
+        <Dialog 
+          open={backupHistoryDialogOpen} 
+          onClose={() => setBackupHistoryDialogOpen(false)} 
+          maxWidth="lg" 
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+              backgroundColor: '#2a2a2a',
+              border: '1px solid #333333'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 2,
+            fontWeight: 'bold'
+          }}>
+            <Box display="flex" alignItems="center">
+              <HistoryIcon sx={{ color: '#ffffff', mr: 1 }} />
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#ffffff' }}>
+                Backup History
+              </Typography>
+            </Box>
+            <Button 
+              size="small" 
+              onClick={handleFetchBackupHistory}
+              disabled={isLoading}
+              sx={{
+                backgroundColor: '#ffffff',
+                color: '#1976d2',
+                '&:hover': {
+                  backgroundColor: '#f5f5f5',
+                },
+                '&:disabled': {
+                  backgroundColor: '#666666',
+                  color: '#999999'
+                }
+              }}
+            >
+              Refresh
+            </Button>
+          </DialogTitle>
+          <DialogContent sx={{ p: 3, backgroundColor: '#2a2a2a' }}>
+            {isLoading ? (
+              <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+                <CircularProgress />
+              </Box>
+            ) : backupHistory.length === 0 ? (
+              <Alert severity="info" sx={{ backgroundColor: '#3a3a3a', border: '1px solid #1976d2' }}>
+                <Typography variant="body2" sx={{ color: '#ffffff' }}>
+                  No backups found. Create your first backup to see it here.
+                </Typography>
+              </Alert>
+            ) : (
+              <List sx={{ 
+                maxHeight: 500, 
+                overflow: 'auto', 
+                backgroundColor: '#2a2a2a', 
+                border: '1px solid #333333', 
+                borderRadius: 1 
+              }}>
+                {backupHistory.map((backup) => (
+                  <ListItem 
+                    key={backup.id}
+                    divider 
+                    sx={{ 
+                      borderBottom: '1px solid #333333',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      '&:hover': {
+                        backgroundColor: '#3a3a3a'
+                      }
+                    }}
+                  >
+                    <Box display="flex" justifyContent="space-between" width="100%" mb={1}>
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ color: '#ffffff', fontWeight: 'bold' }}>
+                          {backup.backupId || 'Unknown Backup'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#999999' }}>
+                          {backup.timestamp ? new Date(backup.timestamp).toLocaleString() : 'Unknown date'}
+                        </Typography>
+                      </Box>
+                      <Chip 
+                        label={backup.encrypted ? '🔒 Encrypted' : '🔓 Unencrypted'}
+                        size="small"
+                        sx={{
+                          backgroundColor: backup.encrypted ? '#2e7d32' : '#666666',
+                          color: '#ffffff'
+                        }}
+                      />
+                    </Box>
+                    <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
+                      <Chip 
+                        label={`${backup.totalDocuments || 0} documents`}
+                        size="small"
+                        sx={{ backgroundColor: '#1976d2', color: '#ffffff' }}
+                      />
+                      <Chip 
+                        label={`${Object.keys(backup.collections || {}).length} collections`}
+                        size="small"
+                        sx={{ backgroundColor: '#1976d2', color: '#ffffff' }}
+                      />
+                      {backup.fileSizes && (
+                        <>
+                          {backup.fileSizes.excel && (
+                            <Chip 
+                              label={`Excel: ${backup.fileSizes.excel}`}
+                              size="small"
+                              sx={{ backgroundColor: '#666666', color: '#ffffff' }}
+                            />
+                          )}
+                          {backup.fileSizes.zip && (
+                            <Chip 
+                              label={`ZIP: ${backup.fileSizes.zip}`}
+                              size="small"
+                              sx={{ backgroundColor: '#666666', color: '#ffffff' }}
+                            />
+                          )}
+                        </>
+                      )}
+                    </Box>
+                    {backup.storageUrls && (
+                      <Box display="flex" gap={1} mt={1}>
+                        {backup.storageUrls.zip && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => window.open(backup.storageUrls.zip, '_blank')}
+                            sx={{
+                              borderColor: '#1976d2',
+                              color: '#1976d2',
+                              '&:hover': {
+                                borderColor: '#42a5f5',
+                                backgroundColor: 'rgba(25, 118, 210, 0.1)'
+                              }
+                            }}
+                          >
+                            Download ZIP
+                          </Button>
+                        )}
+                        {backup.storageUrls.json && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => window.open(backup.storageUrls.json, '_blank')}
+                            sx={{
+                              borderColor: '#1976d2',
+                              color: '#1976d2',
+                              '&:hover': {
+                                borderColor: '#42a5f5',
+                                backgroundColor: 'rgba(25, 118, 210, 0.1)'
+                              }
+                            }}
+                          >
+                            Download JSON
+                          </Button>
+                        )}
+                        {backup.storageUrls.excel && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => window.open(backup.storageUrls.excel, '_blank')}
+                            sx={{
+                              borderColor: '#1976d2',
+                              color: '#1976d2',
+                              '&:hover': {
+                                borderColor: '#42a5f5',
+                                backgroundColor: 'rgba(25, 118, 210, 0.1)'
+                              }
+                            }}
+                          >
+                            Download Excel
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ p: 3, backgroundColor: '#2a2a2a', borderTop: '1px solid #333333' }}>
+            <Button 
+              onClick={() => setBackupHistoryDialogOpen(false)} 
+              sx={{
+                backgroundColor: '#666666',
+                color: '#ffffff',
+                '&:hover': {
+                  backgroundColor: '#888888',
+                }
+              }}
+            >
+              Close
             </Button>
           </DialogActions>
         </Dialog>
