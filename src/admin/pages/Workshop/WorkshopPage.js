@@ -1328,12 +1328,15 @@ const WorkshopPage = () => {
   const handleEditPayment = () => {
     // Handle both corporate and regular orders
     const paymentData = isCorporateOrder(selectedOrder) ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+    const initialCost = paymentData?.pickupDeliveryCost;
+    // Convert empty string or undefined to 0 for the form
+    const costValue = initialCost === '' || initialCost === undefined || initialCost === null ? 0 : parseFloat(initialCost) || 0;
     setEditPaymentData({
       deposit: paymentData?.deposit || '',
       amountPaid: paymentData?.amountPaid || '',
       pickupDeliveryEnabled: paymentData?.pickupDeliveryEnabled || false,
-      pickupDeliveryCost: paymentData?.pickupDeliveryCost || '',
-      pickupDeliveryServiceType: paymentData?.pickupDeliveryServiceType || 'both',
+      pickupDeliveryCost: costValue,
+      pickupDeliveryServiceType: paymentData?.pickupDeliveryServiceType || 'pickup',
       notes: paymentData?.notes || ''
     });
     setEditPaymentDialog(true);
@@ -1511,12 +1514,12 @@ const WorkshopPage = () => {
       // This matches the structure saved by NewOrderPage
       // Handle pickupDeliveryCost: convert number to string to match NewOrderPage format
       let pickupDeliveryCostValue = editPaymentData.pickupDeliveryCost;
-      if (pickupDeliveryCostValue !== undefined) {
+      if (pickupDeliveryCostValue !== undefined && pickupDeliveryCostValue !== null) {
         // If it's a number (from TextField parseFloat), convert to string
-        // If it's 0, save as '0' string, if empty/undefined, save as empty string
+        // If it's 0, save as '0' string, if empty string, save as empty string
         if (typeof pickupDeliveryCostValue === 'number') {
           pickupDeliveryCostValue = pickupDeliveryCostValue === 0 ? '0' : String(pickupDeliveryCostValue);
-        } else if (pickupDeliveryCostValue === '' || pickupDeliveryCostValue === null) {
+        } else if (pickupDeliveryCostValue === '') {
           pickupDeliveryCostValue = '';
         } else {
           pickupDeliveryCostValue = String(pickupDeliveryCostValue);
@@ -1546,7 +1549,7 @@ const WorkshopPage = () => {
         amountPaid: editPaymentData.amountPaid !== undefined ? String(editPaymentData.amountPaid) : (currentPaymentData?.amountPaid || ''),
         pickupDeliveryEnabled: pickupDeliveryEnabledValue,
         pickupDeliveryCost: pickupDeliveryCostValue,
-        pickupDeliveryServiceType: editPaymentData.pickupDeliveryServiceType || (currentPaymentData?.pickupDeliveryServiceType || 'both'),
+        pickupDeliveryServiceType: editPaymentData.pickupDeliveryServiceType !== undefined ? editPaymentData.pickupDeliveryServiceType : (currentPaymentData?.pickupDeliveryServiceType || 'both'),
         notes: editPaymentData.notes !== undefined ? String(editPaymentData.notes) : (currentPaymentData?.notes || ''),
       };
       
@@ -3797,24 +3800,21 @@ const WorkshopPage = () => {
               onFocus={handleAutoSelect}
               sx={{ mb: 2 }}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <Select
-                value={editPaymentData.pickupDeliveryEnabled ? 'Yes' : 'No'}
-                onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryEnabled: e.target.value === 'Yes' })}
-                displayEmpty
-              >
-                <MenuItem value="" disabled>
-                  Pickup & Delivery Enabled
-                </MenuItem>
-                <MenuItem value="Yes">Yes</MenuItem>
-                <MenuItem value="No">No</MenuItem>
-              </Select>
-            </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={editPaymentData.pickupDeliveryEnabled || false}
+                  onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryEnabled: e.target.checked })}
+                />
+              }
+              label="Pickup and Delivery"
+              sx={{ mb: 2 }}
+            />
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <Select
-                    value={editPaymentData.pickupDeliveryServiceType || 'both'}
+                    value={editPaymentData.pickupDeliveryServiceType || 'pickup'}
                     onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryServiceType: e.target.value })}
                     displayEmpty
                     sx={{

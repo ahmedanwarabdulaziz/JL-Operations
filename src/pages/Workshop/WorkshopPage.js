@@ -2023,6 +2023,7 @@ const WorkshopPage = () => {
       amountPaid: paymentData?.amountPaid || '',
       pickupDeliveryEnabled: paymentData?.pickupDeliveryEnabled || false,
       pickupDeliveryCost: paymentData?.pickupDeliveryCost || '',
+      pickupDeliveryServiceType: paymentData?.pickupDeliveryServiceType || 'pickup',
       notes: paymentData?.notes || ''
     });
     setEditPaymentDialog(true);
@@ -5037,24 +5038,21 @@ const WorkshopPage = () => {
               onFocus={handleAutoSelect}
               sx={{ mb: 2 }}
             />
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <Select
-                value={editPaymentData.pickupDeliveryEnabled ? 'Yes' : 'No'}
-                onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryEnabled: e.target.value === 'Yes' })}
-                displayEmpty
-              >
-                <MenuItem value="" disabled>
-                  Pickup & Delivery Enabled
-                </MenuItem>
-                <MenuItem value="Yes">Yes</MenuItem>
-                <MenuItem value="No">No</MenuItem>
-              </Select>
-            </FormControl>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={editPaymentData.pickupDeliveryEnabled || false}
+                  onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryEnabled: e.target.checked })}
+                />
+              }
+              label="Pickup and Delivery"
+              sx={{ mb: 2 }}
+            />
             <Grid container spacing={2} sx={{ mb: 2 }}>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <Select
-                    value={editPaymentData.pickupDeliveryServiceType || 'both'}
+                    value={editPaymentData.pickupDeliveryServiceType || 'pickup'}
                     onChange={(e) => setEditPaymentData({ ...editPaymentData, pickupDeliveryServiceType: e.target.value })}
                     displayEmpty
                     sx={{

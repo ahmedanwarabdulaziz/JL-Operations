@@ -438,17 +438,17 @@ const CorporateOrderPage = () => {
         // Corporate customer info
         corporateCustomer: {
           id: selectedCustomer.id,
-          corporateName: selectedCustomer.corporateName,
-          email: selectedCustomer.email,
-          phone: selectedCustomer.phone,
-          address: selectedCustomer.address
+          corporateName: selectedCustomer.corporateName || '',
+          email: selectedCustomer.email || '',
+          phone: selectedCustomer.phone || '',
+          address: selectedCustomer.address || ''
         },
         // Contact person info
         contactPerson: {
           id: selectedContactPerson.id,
-          name: selectedContactPerson.name,
-          email: selectedContactPerson.email,
-          phone: selectedContactPerson.phone,
+          name: selectedContactPerson.name || '',
+          email: selectedContactPerson.email || '',
+          phone: selectedContactPerson.phone || '',
           position: selectedContactPerson.position || ''
         },
         // Order details
