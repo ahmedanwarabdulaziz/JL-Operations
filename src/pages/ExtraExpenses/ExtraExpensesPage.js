@@ -426,7 +426,8 @@ const ExtraExpensesPage = () => {
 
   // Filter expenses based on search and filters
   const filterExpenses = () => {
-    let filtered = [...extraExpenses];
+    // Exclude Order-Specific expenses - they are already shown in their invoice
+    let filtered = extraExpenses.filter(expense => expense.expenseType !== 'order-specific');
     
     // Search filter
     if (searchTerm) {
@@ -471,14 +472,19 @@ const ExtraExpensesPage = () => {
         filtered = filtered.filter(expense => expense.expenseType === 'business');
       } else if (expenseTypeFilter === 'home') {
         filtered = filtered.filter(expense => expense.expenseType === 'home');
-      } else if (expenseTypeFilter === 'order-specific') {
-        filtered = filtered.filter(expense => expense.expenseType === 'order-specific');
       } else if (expenseTypeFilter === 'taxed') {
         filtered = filtered.filter(expense => expense.tax > 0);
       } else if (expenseTypeFilter === 'no_tax') {
         filtered = filtered.filter(expense => expense.tax === 0);
       }
     }
+    
+    // Sort by date: newest first
+    filtered.sort((a, b) => {
+      const dateA = a.orderDate?.toDate ? a.orderDate.toDate() : new Date(a.orderDate || 0);
+      const dateB = b.orderDate?.toDate ? b.orderDate.toDate() : new Date(b.orderDate || 0);
+      return dateB - dateA;
+    });
     
     setFilteredExpenses(filtered);
     calculateSummaryStats(filtered);
@@ -1614,7 +1620,6 @@ const ExtraExpensesPage = () => {
                 <MenuItem value="general">General</MenuItem>
                 <MenuItem value="business">Business</MenuItem>
                 <MenuItem value="home">Home</MenuItem>
-                <MenuItem value="order-specific">Order-Specific</MenuItem>
                 <MenuItem value="taxed">With Tax</MenuItem>
                 <MenuItem value="no_tax">No Tax</MenuItem>
               </Select>

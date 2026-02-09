@@ -91,6 +91,12 @@ const DashboardPage = () => {
         const order = { id: doc.id, ...doc.data() };
         const deadline = order.orderDetails?.deadline;
         
+        // Exclude Done status orders
+        const orderStatus = order.orderStatus || order.status || order.invoiceStatus || order.orderDetails?.status;
+        if (typeof orderStatus === 'string' && orderStatus.trim().toLowerCase() === 'done') {
+          return;
+        }
+        
         if (deadline) {
           // Use toDateObject utility for consistent date handling
           const deadlineDate = toDateObject(deadline);
