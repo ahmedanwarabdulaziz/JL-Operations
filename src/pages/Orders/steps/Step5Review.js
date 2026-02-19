@@ -348,12 +348,6 @@ const Step5Review = ({
                 </Typography>
               </Box>
             )}
-            {hasValue(paymentDetails.notes) && (
-              <Box>
-                <Typography variant="body2" color="text.secondary">Additional Notes</Typography>
-                <Typography variant="body1" sx={{ fontStyle: 'italic', color: '#ffffff' }}>{paymentDetails.notes}</Typography>
-              </Box>
-            )}
           </Box>
         </CardContent>
       </Card>

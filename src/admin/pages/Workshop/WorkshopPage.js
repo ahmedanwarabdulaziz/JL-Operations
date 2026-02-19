@@ -1890,26 +1890,10 @@ const WorkshopPage = () => {
         }
       };
       setSelectedOrder(updatedSelectedOrder);
-      
-      // Refresh the orders list to ensure consistency
-      await fetchOrders();
-      
-      // Update the selected order again with the fresh data from the database
-      const refreshedOrdersQuery = query(
-        collection(db, collectionName), 
-        orderBy('orderDetails.billInvoice', 'desc')
-      );
-      const refreshedOrders = await getDocs(refreshedOrdersQuery);
-      const refreshedOrdersData = refreshedOrders.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        orderType: isCorporate ? 'corporate' : 'regular'
-      }));
-      
-      const finalUpdatedOrder = refreshedOrdersData.find(order => order.id === selectedOrder.id);
-      if (finalUpdatedOrder) {
-        setSelectedOrder(finalUpdatedOrder);
-      }
+
+      // Update orders list in place (same as Add Payment / individual workshop) so UI reflects change immediately
+      setOrders(prev => prev.map(order => order.id === selectedOrder.id ? updatedSelectedOrder : order));
+      setFilteredOrders(prev => prev.map(order => order.id === selectedOrder.id ? updatedSelectedOrder : order));
     } catch (error) {
       console.error('Error processing deposit:', error);
       showError(`Failed to process deposit: ${error.message}`);

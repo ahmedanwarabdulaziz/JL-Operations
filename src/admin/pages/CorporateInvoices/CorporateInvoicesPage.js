@@ -371,7 +371,7 @@ const CorporateInvoicesPage = () => {
 
   // Corporate invoice calculations
   const calculateCorporateInvoiceTotals = (order) => {
-    if (!order) return { subtotal: 0, delivery: 0, tax: 0, creditCardFee: 0, total: 0 };
+    if (!order) return { subtotal: 0, delivery: 0, deliveryLabel: 'Delivery', tax: 0, creditCardFee: 0, total: 0 };
 
     // Calculate subtotal from furniture groups (without delivery)
     const furnitureGroups = order.furnitureGroups || [];
@@ -429,9 +429,20 @@ const CorporateInvoicesPage = () => {
     // Calculate total (subtotal + delivery + tax + credit card fee)
     const total = subtotal + delivery + tax + creditCardFee;
 
+    const deliveryLabel = !paymentDetails.pickupDeliveryEnabled || delivery <= 0
+      ? 'Delivery'
+      : paymentDetails.pickupDeliveryServiceType === 'pickup'
+        ? 'Pickup'
+        : paymentDetails.pickupDeliveryServiceType === 'delivery'
+          ? 'Delivery'
+          : paymentDetails.pickupDeliveryServiceType === 'both'
+            ? 'Delivery & Pickup'
+            : 'Delivery';
+
     return {
       subtotal: parseFloat(subtotal.toFixed(2)),
       delivery: parseFloat(delivery.toFixed(2)),
+      deliveryLabel,
       tax: parseFloat(tax.toFixed(2)),
       creditCardFee: parseFloat(creditCardFee.toFixed(2)),
       total: parseFloat(total.toFixed(2))
@@ -895,7 +906,7 @@ const CorporateInvoicesPage = () => {
                     
                     ${totals.delivery > 0 ? `
                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                      <span style="color: black; font-size: 14px;">Delivery:</span>
+                      <span style="color: black; font-size: 14px;">${totals.deliveryLabel || 'Delivery'}:</span>
                       <span style="font-weight: bold; color: black; font-size: 14px;">
                         $${totals.delivery.toFixed(2)}
                       </span>
@@ -2113,7 +2124,7 @@ const CorporateInvoicesPage = () => {
                               
                               {totals.delivery > 0 && (
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                  <Typography variant="body1" sx={{ color: 'black' }}>Delivery:</Typography>
+                                  <Typography variant="body1" sx={{ color: 'black' }}>{totals.deliveryLabel || 'Delivery'}:</Typography>
                                   <Typography variant="body1" sx={{ fontWeight: 'bold', color: 'black' }}>
                                     ${totals.delivery.toFixed(2)}
                                   </Typography>

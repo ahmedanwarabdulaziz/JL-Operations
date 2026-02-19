@@ -1856,40 +1856,29 @@ const WorkshopPage = () => {
 
   // Get status color
   const getStatusColor = (order) => {
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const depositReceived = order.paymentData?.depositReceived;
-    
-    // Debug logging
-    console.log('Status Debug:', {
-      orderId: order.id,
-      requiredDeposit,
-      amountPaid,
-      depositReceived,
-      condition1: depositReceived,
-      condition2: (amountPaid >= requiredDeposit && requiredDeposit > 0)
-    });
-    
+    const paymentData = order?.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+    const depositReceived = paymentData?.depositReceived;
+
     // If deposit is received or amount paid >= required deposit, show green
     if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
-      console.log('Returning SUCCESS (green)');
       return 'success';
     }
     // If some payment made but not enough, show orange
     if (amountPaid > 0) {
-      console.log('Returning WARNING (orange)');
       return 'warning';
     }
     // No payment made, show red
-    console.log('Returning ERROR (red)');
     return 'error';
   };
 
   // Get status text
   const getStatusText = (order) => {
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
-    const depositReceived = order.paymentData?.depositReceived;
+    const paymentData = order?.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+    const depositReceived = paymentData?.depositReceived;
     
     // Match the same logic as getStatusColor
     if (depositReceived || (amountPaid >= requiredDeposit && requiredDeposit > 0)) {
@@ -1932,9 +1921,9 @@ const WorkshopPage = () => {
   // Calculate deposit status based on amount paid vs required deposit
   const getDepositStatus = (order) => {
     if (!order) return { isReceived: false, status: 'No deposit set' };
-    
-    const requiredDeposit = parseFloat(order.paymentData?.deposit) || 0;
-    const amountPaid = parseFloat(order.paymentData?.amountPaid) || 0;
+    const paymentData = order.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    const requiredDeposit = parseFloat(paymentData?.deposit) || 0;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
     
     if (requiredDeposit <= 0) {
       return { isReceived: false, status: 'No deposit required' };
@@ -2634,9 +2623,10 @@ const WorkshopPage = () => {
         }
       };
       setSelectedOrder(updatedSelectedOrder);
-      
-      // Refresh the orders list to ensure consistency (this will fetch from both collections)
-      await fetchOrders();
+
+      // Update orders list in place so UI (sidebar + detail) reflects change immediately for both regular and corporate
+      setOrders(prev => prev.map(order => order.id === selectedOrder.id ? updatedSelectedOrder : order));
+      setFilteredOrders(prev => prev.map(order => order.id === selectedOrder.id ? updatedSelectedOrder : order));
     } catch (error) {
       console.error('Error processing deposit:', error);
       showError(`Failed to process deposit: ${error.message}`);
