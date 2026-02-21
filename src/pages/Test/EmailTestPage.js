@@ -8,7 +8,6 @@ import {
   Alert,
   Box,
   Grid,
-  Divider,
   CircularProgress,
   Switch,
   FormControlLabel,
@@ -17,20 +16,16 @@ import {
 import {
   sendCompletionEmailWithGmail,
   loadGmailConfig,
-  getGmailConfig,
   getGmailConfigStatus,
   ensureGmailAuthorized
 } from '../../services/emailService';
 
 const EmailTestPage = () => {
-  const [gmailConfig, setGmailConfig] = useState({ userEmail: '', accessToken: '' });
+  const [configStatus, setConfigStatus] = useState(null);
   const [authResult, setAuthResult] = useState(null);
-  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
-  const [configStatus, setConfigStatus] = useState(null);
-  
-  // Test email fields
   const [testEmail, setTestEmail] = useState('');
   const [customerName, setCustomerName] = useState('Test Customer');
   const [orderNumber, setOrderNumber] = useState('TEST-001');
@@ -38,34 +33,21 @@ const EmailTestPage = () => {
   const [treatments, setTreatments] = useState('Leather Treatment, Fabric Protection');
 
   useEffect(() => {
-    const config = loadGmailConfig();
-    setGmailConfig({ 
-      userEmail: config.userEmail || '', 
-      accessToken: config.accessToken ? 'Set' : '' 
-    });
+    loadGmailConfig();
     setConfigStatus(getGmailConfigStatus());
   }, []);
 
-  const handleAuthorizeGmail = async () => {
-    setIsAuthorizing(true);
+  const handleCheckAuth = async () => {
+    setIsCheckingAuth(true);
     setAuthResult(null);
-    
     try {
-      const result = getGmailConfig();
-      if (result.isConfigured) {
-        setGmailConfig({
-          userEmail: result.userEmail,
-          accessToken: 'Set'
-        });
-        setAuthResult({ success: true, message: '✅ Gmail is already configured from login!' });
-        setConfigStatus(getGmailConfigStatus());
-      } else {
-        setAuthResult({ success: false, message: '❌ Gmail not configured. Please login to the application first.' });
-      }
+      await ensureGmailAuthorized();
+      setConfigStatus(getGmailConfigStatus());
+      setAuthResult({ success: true, message: '✅ You are logged in. Email can be sent from the server.' });
     } catch (error) {
-      setAuthResult({ success: false, message: `❌ Gmail check failed: ${error.message}` });
+      setAuthResult({ success: false, message: `❌ ${error.message}` });
     } finally {
-      setIsAuthorizing(false);
+      setIsCheckingAuth(false);
     }
   };
 
@@ -74,118 +56,61 @@ const EmailTestPage = () => {
       setSendResult({ success: false, message: 'Please enter a test email address' });
       return;
     }
-
     setIsSending(true);
     setSendResult(null);
-    
     try {
-      // Create test order data
       const testOrderData = {
-        personalInfo: {
-          customerName: customerName,
-          email: testEmail
-        },
-        orderDetails: {
-          billInvoice: orderNumber
-        },
+        personalInfo: { customerName, email: testEmail },
+        orderDetails: { billInvoice: orderNumber },
         furnitureData: {
-          groups: treatments.split(',').map(treatment => ({
+          groups: treatments.split(',').map((treatment) => ({
             treatment: treatment.trim(),
             furnitureType: `Test ${treatment.trim()} Item`
           }))
         },
-        paymentData: {
-          totalAmount: 1500
-        }
+        paymentData: { totalAmount: 1500 }
       };
-
-      console.log('🧪 Test - Sending completion email with data:', testOrderData);
-
-      const onProgress = (message) => {
-        console.log('🧪 Test - Email progress:', message);
-        setSendResult({ success: true, message: `📧 ${message}` });
-      };
-
+      const onProgress = (message) => setSendResult({ success: true, message: `📧 ${message}` });
       const result = await sendCompletionEmailWithGmail(
         testOrderData,
         testEmail,
         includeReview,
         onProgress
       );
-      
-      console.log('🧪 Test - Email result:', result);
       setSendResult(result);
-      
     } catch (error) {
-      console.error('🧪 Test - Error:', error);
       setSendResult({ success: false, message: `Error: ${error.message}` });
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleTestGmailAuth = async () => {
-    setIsAuthorizing(true);
-    setAuthResult(null);
-    
-    try {
-      console.log('🧪 Test - Testing Gmail authorization...');
-      const config = await ensureGmailAuthorized();
-      console.log('🧪 Test - Gmail config:', config);
-      setAuthResult({ success: true, message: '✅ Gmail authorization test successful!' });
-    } catch (error) {
-      console.error('🧪 Test - Gmail auth error:', error);
-      setAuthResult({ success: false, message: `❌ Gmail authorization test failed: ${error.message}` });
-    } finally {
-      setIsAuthorizing(false);
-    }
-  };
+  const isConfigured = configStatus?.gmail?.configured;
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
-        🧪 Email Testing Page
+        Email Testing Page
       </Typography>
-      
+
       <Grid container spacing={3}>
-        {/* Gmail Configuration */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Gmail Configuration
+                Email status
               </Typography>
-              
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Status: {configStatus?.isConfigured ? '✅ Configured' : '❌ Not Configured'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Email: {gmailConfig.userEmail || 'Not set'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Token: {gmailConfig.accessToken || 'Not set'}
-                </Typography>
-              </Box>
-              
-              <Button
-                variant="contained"
-                onClick={handleAuthorizeGmail}
-                disabled={isAuthorizing}
-                startIcon={isAuthorizing ? <CircularProgress size={20} /> : null}
-                sx={{ mr: 1 }}
-              >
-                {isAuthorizing ? 'Authorizing...' : 'Authorize Gmail'}
-              </Button>
-              
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {configStatus?.gmail?.message || 'Loading...'}
+              </Typography>
               <Button
                 variant="outlined"
-                onClick={handleTestGmailAuth}
-                disabled={isAuthorizing}
+                onClick={handleCheckAuth}
+                disabled={isCheckingAuth}
+                startIcon={isCheckingAuth ? <CircularProgress size={20} /> : null}
               >
-                Test Auth
+                {isCheckingAuth ? 'Checking...' : 'Check session'}
               </Button>
-              
               {authResult && (
                 <Alert severity={authResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
                   {authResult.message}
@@ -195,14 +120,12 @@ const EmailTestPage = () => {
           </Card>
         </Grid>
 
-        {/* Completion Email Test */}
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Completion Email Test
               </Typography>
-              
               <TextField
                 fullWidth
                 label="Test Email Address"
@@ -211,7 +134,6 @@ const EmailTestPage = () => {
                 placeholder="test@example.com"
                 sx={{ mb: 2 }}
               />
-              
               <TextField
                 fullWidth
                 label="Customer Name"
@@ -219,7 +141,6 @@ const EmailTestPage = () => {
                 onChange={(e) => setCustomerName(e.target.value)}
                 sx={{ mb: 2 }}
               />
-              
               <TextField
                 fullWidth
                 label="Order Number"
@@ -227,7 +148,6 @@ const EmailTestPage = () => {
                 onChange={(e) => setOrderNumber(e.target.value)}
                 sx={{ mb: 2 }}
               />
-              
               <TextField
                 fullWidth
                 label="Treatments (comma-separated)"
@@ -236,29 +156,21 @@ const EmailTestPage = () => {
                 placeholder="Leather Treatment, Fabric Protection"
                 sx={{ mb: 2 }}
               />
-              
               <FormControlLabel
-                control={
-                  <Switch
-                    checked={includeReview}
-                    onChange={(e) => setIncludeReview(e.target.checked)}
-                  />
-                }
+                control={<Switch checked={includeReview} onChange={(e) => setIncludeReview(e.target.checked)} />}
                 label="Include Review Request"
                 sx={{ mb: 2 }}
               />
-              
               <Button
                 variant="contained"
                 color="primary"
                 onClick={handleTestCompletionEmail}
-                disabled={isSending || !testEmail.trim()}
+                disabled={isSending || !testEmail.trim() || !isConfigured}
                 startIcon={isSending ? <CircularProgress size={20} /> : null}
                 fullWidth
               >
                 {isSending ? 'Sending...' : 'Send Test Completion Email'}
               </Button>
-              
               {sendResult && (
                 <Alert severity={sendResult.success ? 'success' : 'error'} sx={{ mt: 2 }}>
                   {sendResult.message}
@@ -268,25 +180,11 @@ const EmailTestPage = () => {
           </Card>
         </Grid>
 
-        {/* Debug Information */}
         <Grid item xs={12}>
           <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-            <Typography variant="h6" gutterBottom>
-              🔍 Debug Information
+            <Typography variant="body2" color="text.secondary">
+              Emails are sent from the server. Log in with your PIN to send. Check the browser console (F12) for progress logs.
             </Typography>
-            <Typography variant="body2" paragraph>
-              Check the browser console (F12) for detailed debug logs when testing emails.
-            </Typography>
-            <Typography variant="body2" paragraph>
-              Common issues to check:
-            </Typography>
-            <ul>
-              <li>Gmail authorization status</li>
-              <li>Customer email address format</li>
-              <li>Order data structure</li>
-              <li>Network connectivity</li>
-              <li>Gmail API quotas</li>
-            </ul>
           </Paper>
         </Grid>
       </Grid>

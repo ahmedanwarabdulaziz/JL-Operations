@@ -10,6 +10,9 @@ node_modules/
 /build
 /dist
 
+# Secret files (never commit)
+functions/.secrets-*.txt
+
 # Environment variables
 .env
 .env.local
