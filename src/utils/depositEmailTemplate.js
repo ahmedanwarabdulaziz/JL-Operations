@@ -34,12 +34,13 @@ export const generateDepositEmailTemplate = (orderData) => {
         .email-header { background-color:#1A1A1A; color:#DAA520; padding:25px; text-align:center; }
         .email-header h1 { margin:0; font-size:28px; font-weight:bold; }
         .email-body { padding:25px 30px; }
-        .greeting { font-size:17px; margin-bottom:20px; }
-        .deposit-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:25px 0; border-radius:5px; }
+        .email-body p { margin:0 0 10px 0; }
+        .greeting { font-size:17px; margin-bottom:10px; }
+        .deposit-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:15px 0; border-radius:5px; }
         .deposit-amount { color:#333333; font-weight:bold; }
         .invoice-number { font-weight:bold; color:#333333; }
-        .closing { margin-top:25px; }
-        .signature { font-weight:bold; color:#1A1A1A; }
+        .closing { margin-top:15px; margin-bottom:0; }
+        .signature { font-weight:bold; color:#1A1A1A; margin-top:10px; }
         .email-footer { background-color:#2C2C2C; color:#ccc; padding:20px; text-align:center; font-size:12px; }
     </style>
 </head>
@@ -80,6 +81,7 @@ export const generateDepositReminderEmailTemplate = (orderData) => {
   const billNo = orderDetails?.billInvoice || 'N/A';
   const depositAmount = parseFloat(paymentData?.deposit) || 0;
   const formattedAmount = depositAmount > 0 ? depositAmount.toFixed(2) : '0.00';
+  const customerFirstName = (orderData?.personalInfo?.customerName || orderData?.contactPerson?.name || 'Customer').split(' ')[0];
   const currentYear = new Date().getFullYear();
   const YOUR_BUSINESS_EMAIL_SIGNATURE = 'JL Team';
   const YOUR_BUSINESS_NAME = 'JL Upholstery';
@@ -98,10 +100,11 @@ export const generateDepositReminderEmailTemplate = (orderData) => {
         .email-header { background-color:#1A1A1A; color:#DAA520; padding:25px; text-align:center; }
         .email-header h1 { margin:0; font-size:28px; font-weight:bold; }
         .email-body { padding:25px 30px; }
-        .deposit-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:25px 0; border-radius:5px; }
+        .email-body p { margin:0 0 10px 0; }
+        .deposit-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:15px 0; border-radius:5px; }
         .deposit-amount { color:#333333; font-weight:bold; }
-        .closing { margin-top:25px; }
-        .signature { font-weight:bold; color:#1A1A1A; }
+        .closing { margin-top:15px; margin-bottom:0; }
+        .signature { font-weight:bold; color:#1A1A1A; margin-top:10px; }
         .email-footer { background-color:#2C2C2C; color:#ccc; padding:20px; text-align:center; font-size:12px; }
     </style>
 </head>
@@ -112,6 +115,7 @@ export const generateDepositReminderEmailTemplate = (orderData) => {
                 <h1>Deposit Reminder – Fabric Order Confirmation</h1>
             </div>
             <div class="email-body">
+                <p>Dear ${customerFirstName},</p>
                 <p>Thank you again for confirming your fabric selection — we're excited to bring your project to life.</p>
                 <p>This is a gentle reminder regarding the deposit of <span class="deposit-amount">$${formattedAmount}</span>, which is required to secure and place your fabric order. Please note that we submit all fabric orders every Monday.</p>
                 <p>Once the deposit is received, we'll confirm your fabric order and ensure everything stays on track for your timeline.</p>
@@ -131,10 +135,10 @@ export const generateDepositReminderEmailTemplate = (orderData) => {
 
 /**
  * Pickup ready email – same visual style as other JL emails.
- * pickupOptions: { customerName, pickupDate, timeStart, timeEnd, remainingBalanceFormatted }
+ * pickupOptions: { customerName (full or first), pickupDate, timeStart, timeEnd, remainingBalanceFormatted }
  */
 export const generatePickupReadyEmailTemplate = (pickupOptions) => {
-  const customerName = pickupOptions?.customerName || 'Customer';
+  const customerFirstName = (pickupOptions?.customerName || 'Customer').split(' ')[0];
   const pickupDate = pickupOptions?.pickupDate || '[Insert Date]';
   const timeStart = pickupOptions?.timeStart || '12:00 PM';
   const timeEnd = pickupOptions?.timeEnd || '2:00 PM';
@@ -157,11 +161,11 @@ export const generatePickupReadyEmailTemplate = (pickupOptions) => {
         .email-header { background-color:#1A1A1A; color:#DAA520; padding:25px; text-align:center; }
         .email-header h1 { margin:0; font-size:28px; font-weight:bold; }
         .email-body { padding:25px 30px; }
-        .greeting { font-size:17px; margin-bottom:20px; }
-        .pickup-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:25px 0; border-radius:5px; }
+        .email-body p { margin:0 0 10px 0; }
+        .pickup-details { background-color:#f9f9f9; border:1px solid #e0e0e0; padding:20px; margin:15px 0; border-radius:5px; }
         .balance-amount { color:#333333; font-weight:bold; }
-        .closing { margin-top:25px; }
-        .signature { font-weight:bold; color:#1A1A1A; }
+        .closing { margin-top:15px; margin-bottom:0; }
+        .signature { font-weight:bold; color:#1A1A1A; margin-top:10px; }
         .email-footer { background-color:#2C2C2C; color:#ccc; padding:20px; text-align:center; font-size:12px; }
     </style>
 </head>
@@ -172,7 +176,7 @@ export const generatePickupReadyEmailTemplate = (pickupOptions) => {
                 <h1>Your Furniture Is Ready for Pickup</h1>
             </div>
             <div class="email-body">
-                <p class="greeting">Dear ${customerName},</p>
+                <p>Dear ${customerFirstName},</p>
                 <p>Great news — your furniture is ready for pickup!</p>
                 <p>You can collect it on <strong>${pickupDate}</strong>, between <strong>${timeStart}</strong> and <strong>${timeEnd}</strong>.</p>
                 <div class="pickup-details">
