@@ -262,7 +262,11 @@ const WorkshopPage = () => {
     event?.preventDefault();
     event?.stopPropagation();
     handleInvoicesMenuClose();
-    navigate('/admin/corporate-invoices');
+    if (selectedOrder) {
+      navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`);
+    } else {
+      navigate('/admin/corporate-invoices');
+    }
   };
 
   // Fetch invoice statuses

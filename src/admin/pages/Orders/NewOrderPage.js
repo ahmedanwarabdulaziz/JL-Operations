@@ -24,7 +24,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../shared/components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../shared/firebase/config';
-import { sendEmailWithConfig, ensureGmailAuthorized } from '../shared/services/emailService';
+import { sendEmailWithConfig } from '../shared/services/emailService';
 import Step1PersonalInfo from './steps/Step1PersonalInfo';
 import Step2OrderDetails from './steps/Step2OrderDetails';
 import Step3Furniture from './steps/Step3Furniture';
@@ -673,8 +673,6 @@ const NewOrderPage = () => {
             paymentData: paymentDetails
           };
           
-          // Auto-check and authorize Gmail if needed
-          await ensureGmailAuthorized();
           const emailResult = await sendEmailWithConfig(orderDataForEmail, personalInfo.email);
           if (emailResult.success) {
             const action = isEditMode ? 'updated' : 'created';
@@ -685,9 +683,9 @@ const NewOrderPage = () => {
           }
         } catch (emailError) {
           console.error('Error sending email:', emailError);
-          if (emailError.message.includes('Not signed in')) {
+          if (emailError.message?.includes('not configured') || emailError.message?.includes('REACT_APP')) {
             const action = isEditMode ? 'updated' : 'created';
-            showError(`Order ${action} but email not sent: Please sign in with Gmail first`);
+            showError(`Order ${action} but email not sent: Email not configured. Ensure API and REACT_APP_EMAIL_API_SECRET are set.`);
           } else {
             const action = isEditMode ? 'updated' : 'created';
             showError(`Order ${action} but failed to send email`);

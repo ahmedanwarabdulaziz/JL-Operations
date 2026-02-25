@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import CryptoJS from 'crypto-js';
+import { auth } from '../../firebase/config';
+import { signInAnonymously, signOut as firebaseSignOut } from 'firebase/auth';
 
 const SESSION_KEY = 'adminSession';
 const SESSION_HOURS = 24;
@@ -41,21 +43,33 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const session = getStoredSession();
-    setUser(session ? PLACEHOLDER_USER : null);
-    setLoading(false);
+    let cancelled = false;
+    const run = async () => {
+      const session = getStoredSession();
+      if (session) {
+        setUser(PLACEHOLDER_USER);
+        await signInAnonymously(auth).catch((err) => console.warn('Firebase anonymous sign-in:', err?.message));
+      } else {
+        setUser(null);
+      }
+      if (!cancelled) setLoading(false);
+    };
+    run();
+    return () => { cancelled = true; };
   }, []);
 
-  const loginWithPin = (pin) => {
+  const loginWithPin = async (pin) => {
     const entered = String(pin).trim();
     const hash = CryptoJS.SHA256(entered).toString();
     if (hash !== CORRECT_PIN_SHA256) throw new Error('Invalid PIN');
     const expiresAt = Math.floor(Date.now() / 1000) + SESSION_HOURS * 3600;
     setStoredSession(expiresAt);
     setUser(PLACEHOLDER_USER);
+    await signInAnonymously(auth).catch((err) => console.warn('Firebase anonymous sign-in:', err?.message));
   };
 
   const logout = () => {
+    firebaseSignOut(auth).catch(() => {});
     clearStoredSession();
     try {
       ['gmailConfig', 'gmailAccessToken', 'gmailUser'].forEach((k) => localStorage.removeItem(k));

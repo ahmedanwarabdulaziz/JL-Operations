@@ -1,5 +1,5 @@
 import { generateOrderEmailTemplate } from '../utils/emailTemplate';
-import { generateDepositEmailTemplate } from '../utils/depositEmailTemplate';
+import { generateDepositEmailTemplate, generateDepositReminderEmailTemplate } from '../utils/depositEmailTemplate';
 import { db } from '../firebase/config';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { getSessionToken } from '../components/Auth/AuthContext';
@@ -12,14 +12,20 @@ const EMAIL_SECRET = process.env.REACT_APP_EMAIL_API_SECRET || 'jl-email-2024';
 let gmailConfig = { userEmail: 'JL Upholstery', isConfigured: false };
 
 async function sendEmailCore(to, subject, html) {
-  if (!getSessionToken()) throw new Error('Please log in to send emails.');
-  if (!EMAIL_SECRET) throw new Error('Email not configured. Add REACT_APP_EMAIL_API_SECRET to .env.local');
-  const res = await fetch(`${API_BASE}/api/send-email`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret: EMAIL_SECRET, to, subject, html })
-  });
-  const data = await res.json();
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: EMAIL_SECRET, to, subject, html })
+    });
+  } catch (err) {
+    if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      throw new Error('Cannot reach email server. Run "npm run start:api" in the project. Emails are sent via Gmail (JL email + app password) on the server—set GMAIL_USER and GMAIL_APP_PASSWORD in the server environment.');
+    }
+    throw err;
+  }
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || 'Failed to send email');
   return { success: true };
 }
@@ -78,6 +84,21 @@ export const sendDepositEmailWithGmail = async (orderData, customerEmail, onProg
   await sendEmailCore(customerEmail, `Deposit Payment Confirmed - Invoice #${billNo}`, emailContent);
   updateProgress('Deposit confirmation sent successfully!');
   return { success: true, message: `Deposit confirmation sent successfully to ${customerEmail}!` };
+};
+
+export const sendDepositReminderEmailWithGmail = async (orderData, customerEmail, onProgress) => {
+  const updateProgress = (msg) => {
+    if (onProgress) onProgress(msg);
+    console.log('📧 Deposit Reminder Email Progress:', msg);
+  };
+  updateProgress('Preparing deposit reminder...');
+  const emailContent = generateDepositReminderEmailTemplate(orderData);
+  const billNo = orderData?.orderDetails?.billInvoice || 'N/A';
+  const subject = `Deposit Reminder – Fabric Order Confirmation (Order #${billNo})`;
+  updateProgress('Sending deposit reminder...');
+  await sendEmailCore(customerEmail, subject, emailContent);
+  updateProgress('Deposit reminder sent successfully!');
+  return { success: true, message: `Deposit reminder sent successfully to ${customerEmail}!` };
 };
 
 export const isGmailConfigured = () => {
@@ -222,6 +243,7 @@ export const sendCompletionEmailWithGmail = async (
 
 export const sendEmailWithConfig = sendEmailWithGmail;
 export const sendDepositEmailWithConfig = sendDepositEmailWithGmail;
+export const sendDepositReminderEmailWithConfig = sendDepositReminderEmailWithGmail;
 export const loadEmailConfig = loadGmailConfig;
 export const saveEmailConfig = saveGmailConfig;
 export const isSignedIn = isGmailConfigured;

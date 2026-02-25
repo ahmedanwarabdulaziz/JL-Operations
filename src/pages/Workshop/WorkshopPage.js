@@ -75,7 +75,7 @@ import {
   Business as BusinessIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
-import { sendEmailWithConfig, sendDepositEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
+import { sendEmailWithConfig, sendDepositEmailWithConfig, sendDepositReminderEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
 
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
@@ -120,6 +120,7 @@ const WorkshopPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'individual', 'corporate'
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendingDepositReminderEmail, setSendingDepositReminderEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
@@ -2526,6 +2527,48 @@ const WorkshopPage = () => {
     }
   };
 
+  const handleSendDepositReminderEmail = async () => {
+    if (!selectedOrder) {
+      showError('No order selected');
+      return;
+    }
+    const customerEmail = selectedOrder.orderType === 'corporate'
+      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      : selectedOrder.personalInfo?.email;
+    if (!customerEmail) {
+      showError('No email address found for this customer');
+      return;
+    }
+    const paymentData = selectedOrder.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder.paymentData;
+    const orderDataForEmail = {
+      orderDetails: selectedOrder.orderDetails,
+      paymentData: paymentData || selectedOrder.paymentDetails,
+      paymentDetails: paymentData || selectedOrder.paymentDetails,
+      personalInfo: selectedOrder.personalInfo,
+      corporateCustomer: selectedOrder.corporateCustomer,
+      contactPerson: selectedOrder.contactPerson,
+    };
+    try {
+      setSendingDepositReminderEmail(true);
+      const onProgress = (msg) => showSuccess(`📧 ${msg}`);
+      const result = await sendDepositReminderEmailWithConfig(orderDataForEmail, customerEmail, onProgress);
+      if (result.success) {
+        showSuccess('✅ Deposit reminder email sent successfully!');
+      } else {
+        showError(`❌ Failed to send: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error sending deposit reminder email:', error);
+      if (error.message?.includes('Not signed in')) {
+        showError('Please sign in with Gmail first by going to the Test Email page');
+      } else {
+        showError(`Failed to send deposit reminder: ${error.message}`);
+      }
+    } finally {
+      setTimeout(() => setSendingDepositReminderEmail(false), 500);
+    }
+  };
+
   // Handle deposit received
   const handleDepositReceived = async () => {
     if (!selectedOrder) {
@@ -3436,178 +3479,187 @@ const WorkshopPage = () => {
                 </Box>
               )}
 
-              {/* Top Buttons - Arranged in a single row */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 3 }}>
-                {/* Send Order Email Button */}
-                <Button
-                  variant="contained"
-                  size="medium"
-                  startIcon={sendingEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SendIcon sx={{ color: '#000000' }} />}
-                  onClick={handleSendEmail}
-                  disabled={sendingEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate' 
-                    ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
-                    : selectedOrder?.personalInfo?.email)}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  {sendingEmail ? 'Sending Email...' : 'Send Order Email'}
-                </Button>
-                
-                {/* Status Button */}
-                <Button
-                  variant="contained"
-                  size="medium"
-                  startIcon={<AssignmentIcon />}
-                  onClick={() => {
-                    setEditingStatus(selectedOrder.invoiceStatus);
-                    setStatusDialogOpen(true);
-                  }}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  {getStatusInfo(selectedOrder.invoiceStatus).label}
-                </Button>
+              {/* Top Buttons - Compact icon + small text for space */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5 }}>
+                {/* Send Order Email */}
+                <Tooltip title={sendingEmail ? 'Sending...' : 'Send Order Email'}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={handleSendEmail}
+                      disabled={sendingEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
+                        ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                        : selectedOrder?.personalInfo?.email)}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      {sendingEmail ? <CircularProgress size={18} sx={{ color: '#000000' }} /> : <SendIcon fontSize="small" />}
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Email</Typography>
+                  </Box>
+                </Tooltip>
 
+                {/* Deposit Email */}
+                <Tooltip title={sendingDepositReminderEmail ? 'Sending...' : 'Deposit Email'}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={handleSendDepositReminderEmail}
+                      disabled={sendingDepositReminderEmail}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      {sendingDepositReminderEmail ? <CircularProgress size={18} sx={{ color: '#000000' }} /> : <PaymentIcon fontSize="small" />}
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Deposit</Typography>
+                  </Box>
+                </Tooltip>
 
-                {/* Allocation Button */}
-                <Button
-                  variant="contained"
-                  size="medium"
-                  startIcon={<BarChartIcon />}
-                  onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  {selectedOrder.allocation && selectedOrder.allocation.allocations ? 'Edit Allocation' : 'Allocate'}
-                </Button>
+                {/* Status */}
+                <Tooltip title={`Status: ${getStatusInfo(selectedOrder.invoiceStatus).label}`}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => { setEditingStatus(selectedOrder.invoiceStatus); setStatusDialogOpen(true); }}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      <AssignmentIcon fontSize="small" />
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Status</Typography>
+                  </Box>
+                </Tooltip>
 
-                {/* Invoices Button with Menu */}
-                <Button
-                  variant="contained"
-                  size="medium"
-                  type="button"
-                  aria-controls={invoicesMenuOpen ? 'invoices-menu' : undefined}
-                  aria-haspopup="true"
-                  aria-expanded={invoicesMenuOpen ? 'true' : undefined}
-                  startIcon={<ReceiptIcon sx={{ color: '#000000' }} />}
-                  endIcon={<ArrowDropDownIcon sx={{ color: '#000000' }} />}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (!selectedOrder) {
-                      showError('Please select an order first');
-                      return;
-                    }
-                    setInvoicesMenuAnchor(event.currentTarget);
-                  }}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  Invoices
-                </Button>
+                {/* Allocation */}
+                <Tooltip title={selectedOrder.allocation?.allocations ? 'Edit Allocation' : 'Allocate'}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      <BarChartIcon fontSize="small" />
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Allocate</Typography>
+                  </Box>
+                </Tooltip>
+
+                {/* Invoices (menu) */}
+                <Tooltip title="Invoices">
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      aria-controls={invoicesMenuOpen ? 'invoices-menu' : undefined}
+                      aria-haspopup="true"
+                      aria-expanded={invoicesMenuOpen ? 'true' : undefined}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!selectedOrder) { showError('Please select an order first'); return; }
+                        setInvoicesMenuAnchor(event.currentTarget);
+                      }}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      <ReceiptIcon fontSize="small" />
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Invoices</Typography>
+                  </Box>
+                </Tooltip>
                 <Menu
                   id="invoices-menu"
                   anchorEl={invoicesMenuAnchor}
                   open={invoicesMenuOpen}
                   onClose={() => setInvoicesMenuAnchor(null)}
-                  MenuListProps={{
-                    'aria-labelledby': 'invoices-button',
-                  }}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  }}
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'left',
-                  }}
+                  MenuListProps={{ 'aria-labelledby': 'invoices-button' }}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                   PaperProps={{
                     sx: {
                       mt: 1,
                       minWidth: 200,
                       backgroundColor: '#2a2a2a',
                       border: '1px solid #444',
-                      '& .MuiMenuItem-root': {
-                        color: '#ffffff',
-                        '&:hover': {
-                          backgroundColor: '#3a3a3a',
-                        },
-                      },
+                      '& .MuiMenuItem-root': { color: '#ffffff', '&:hover': { backgroundColor: '#3a3a3a' } },
                     },
                   }}
                 >
-                  <MenuItem onClick={() => {
-                    setInvoicesMenuAnchor(null);
-                    if (selectedOrder) {
-                      navigate(`/admin/invoices?orderId=${selectedOrder.id}`);
-                    }
-                  }}>
+                  <MenuItem onClick={() => { setInvoicesMenuAnchor(null); if (selectedOrder) navigate(`/admin/invoices?orderId=${selectedOrder.id}`); }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Regular Invoices
                   </MenuItem>
-                  <MenuItem onClick={() => {
-                    setInvoicesMenuAnchor(null);
-                    navigate('/admin/corporate-invoices');
-                  }}>
+                  <MenuItem onClick={() => { setInvoicesMenuAnchor(null); if (selectedOrder) navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`); else navigate('/admin/corporate-invoices'); }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Corporate Invoices
                   </MenuItem>
                 </Menu>
 
-                {/* Send Completion Email Button */}
-                <Button
-                  variant="contained"
-                  size="medium"
-                  startIcon={sendingCompletionEmail ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <CheckCircleIcon sx={{ color: '#000000' }} />}
-                  onClick={handleSendCompletionEmail}
-                  disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate' 
-                    ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
-                    : selectedOrder?.personalInfo?.email)}
-                  sx={{
-                    background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                    color: '#000000',
-                    border: '2px solid #f27921',
-                    fontWeight: 'bold',
-                    '&:hover': {
-                      background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                      border: '2px solid #e06810'
-                    }
-                  }}
-                >
-                  {sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}
-                </Button>
+                {/* Send Completion Email */}
+                <Tooltip title={sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={handleSendCompletionEmail}
+                      disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
+                        ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                        : selectedOrder?.personalInfo?.email)}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      {sendingCompletionEmail ? <CircularProgress size={18} sx={{ color: '#000000' }} /> : <CheckCircleIcon fontSize="small" />}
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Complete</Typography>
+                  </Box>
+                </Tooltip>
               </Box>
             </Box>
 

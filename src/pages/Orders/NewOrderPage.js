@@ -27,7 +27,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, addDoc, query, orderBy, doc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { sendEmailWithConfig, ensureGmailAuthorized } from '../../services/emailService';
+import { sendEmailWithConfig } from '../../services/emailService';
 import { getOrderCostBreakdown, calculateOrderTax, calculatePickupDeliveryCost } from '../../shared/utils/orderCalculations';
 import Step1PersonalInfo from './steps/Step1PersonalInfo';
 import Step2OrderDetails from './steps/Step2OrderDetails';
@@ -803,8 +803,6 @@ const NewOrderPage = () => {
             paymentData: paymentDetails
           };
           
-          // Auto-check and authorize Gmail if needed
-          await ensureGmailAuthorized();
           const emailResult = await sendEmailWithConfig(orderDataForEmail, personalInfo.email);
           setEmailSending(false);
           
@@ -821,8 +819,8 @@ const NewOrderPage = () => {
           console.error('Error sending email:', emailError);
           setEmailSending(false);
           
-          if (emailError.message.includes('Not signed in')) {
-            setEmailError({ message: 'Please sign in with Gmail first' });
+          if (emailError.message?.includes('not configured') || emailError.message?.includes('REACT_APP')) {
+            setEmailError({ message: 'Email not configured. Add REACT_APP_EMAIL_API_SECRET and ensure API is running.' });
           } else {
             setEmailError({ message: emailError.message || 'Failed to send email' });
           }
@@ -988,10 +986,10 @@ const NewOrderPage = () => {
         background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)',
         borderBottom: '2px solid #333333'
       }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
+        <Typography component="span" variant="h4" sx={{ fontWeight: 'bold', mb: 1, color: '#b98f33' }}>
           📋 Order Summary
         </Typography>
-        <Typography variant="h6" sx={{ color: '#ffffff', opacity: 0.9 }}>
+        <Typography component="span" variant="h6" sx={{ color: '#ffffff', opacity: 0.9, display: 'block' }}>
           Order #{orderDetails.billInvoice} - {personalInfo.customerName}
         </Typography>
       </DialogTitle>
@@ -1351,7 +1349,7 @@ const NewOrderPage = () => {
       disableEscapeKeyDown
     >
       <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+        <Typography component="span" variant="h6" sx={{ fontWeight: 'bold' }}>
           {emailSending ? 'Sending Email...' : emailResult ? 'Email Status' : 'Email Error'}
         </Typography>
       </DialogTitle>
@@ -1429,7 +1427,6 @@ const NewOrderPage = () => {
                 setEmailError(null);
                 setEmailSending(true);
                 try {
-                  await ensureGmailAuthorized();
                   const orderDataForEmail = {
                     personalInfo,
                     orderDetails,
@@ -1618,7 +1615,7 @@ const NewOrderPage = () => {
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <WarningIcon color="warning" sx={{ mr: 1 }} />
-            <Typography variant="h6">
+            <Typography component="span" variant="h6">
               {duplicateCustomers.length === 1 ? 'Existing Customer Found' : 'Multiple Customers Found'}
             </Typography>
           </Box>
@@ -1749,7 +1746,7 @@ const NewOrderPage = () => {
           borderBottom: '1px solid #b98f33'
         }}>
           <SearchIcon sx={{ color: '#000000', fontSize: 28 }} />
-          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
+          <Typography component="span" variant="h6" sx={{ fontWeight: 'bold', color: '#000000' }}>
             Search Existing Customers
           </Typography>
         </DialogTitle>

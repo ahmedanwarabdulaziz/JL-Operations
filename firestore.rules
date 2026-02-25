@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // App uses PIN login only; allow read/write so client can access after PIN (no Firebase Auth required)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
