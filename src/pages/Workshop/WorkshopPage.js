@@ -75,7 +75,7 @@ import {
   Business as BusinessIcon
 } from '@mui/icons-material';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
-import { sendEmailWithConfig, sendDepositEmailWithConfig, sendDepositReminderEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
+import { sendEmailWithConfig, sendDepositEmailWithConfig, sendDepositReminderEmailWithConfig, sendPickupReadyEmailWithConfig, sendCompletionEmailWithGmail, ensureGmailAuthorized } from '../../services/emailService';
 
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
@@ -121,6 +121,12 @@ const WorkshopPage = () => {
   const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'individual', 'corporate'
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendingDepositReminderEmail, setSendingDepositReminderEmail] = useState(false);
+  const [pickupEmailDialogOpen, setPickupEmailDialogOpen] = useState(false);
+  const [pickupEmailDate, setPickupEmailDate] = useState('');
+  const [pickupTimeStart, setPickupTimeStart] = useState('12:00 PM');
+  const [pickupTimeEnd, setPickupTimeEnd] = useState('2:00 PM');
+  const [pickupRemainingBalance, setPickupRemainingBalance] = useState('');
+  const [sendingPickupEmail, setSendingPickupEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
@@ -2569,6 +2575,61 @@ const WorkshopPage = () => {
     }
   };
 
+  const handleOpenPickupEmailDialog = () => {
+    if (!selectedOrder) {
+      showError('Please select an order first');
+      return;
+    }
+    const totals = selectedOrder ? calculateInvoiceTotals(selectedOrder) : null;
+    const paymentData = selectedOrder?.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder?.paymentData;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+    const balanceDue = totals ? (totals.grandTotal - amountPaid).toFixed(2) : '0.00';
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setPickupRemainingBalance(balanceDue);
+    setPickupEmailDate(tomorrow.toISOString().split('T')[0]);
+    setPickupTimeStart('12:00 PM');
+    setPickupTimeEnd('2:00 PM');
+    setPickupEmailDialogOpen(true);
+  };
+
+  const formatPickupDateForEmail = (dateStr) => {
+    if (!dateStr) return '[Insert Date]';
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  const handleSendPickupReadyEmail = async () => {
+    if (!selectedOrder) return;
+    const customerEmail = selectedOrder.orderType === 'corporate'
+      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      : selectedOrder.personalInfo?.email;
+    if (!customerEmail) {
+      showError('No email address found for this customer');
+      return;
+    }
+    const balanceVal = parseFloat(pickupRemainingBalance) || 0;
+    const pickupOptions = {
+      customerName: selectedOrder.personalInfo?.customerName || selectedOrder.contactPerson?.name || 'Customer',
+      pickupDate: formatPickupDateForEmail(pickupEmailDate),
+      timeStart: pickupTimeStart || '12:00 PM',
+      timeEnd: pickupTimeEnd || '2:00 PM',
+      remainingBalanceFormatted: `$${balanceVal.toFixed(2)}`,
+    };
+    try {
+      setSendingPickupEmail(true);
+      const onProgress = (msg) => showSuccess(`📧 ${msg}`);
+      await sendPickupReadyEmailWithConfig(customerEmail, pickupOptions, onProgress);
+      showSuccess('✅ Pickup ready email sent successfully!');
+      setPickupEmailDialogOpen(false);
+    } catch (error) {
+      console.error('Error sending pickup ready email:', error);
+      showError(error.message || 'Failed to send pickup ready email');
+    } finally {
+      setSendingPickupEmail(false);
+    }
+  };
+
   // Handle deposit received
   const handleDepositReceived = async () => {
     if (!selectedOrder) {
@@ -3660,8 +3721,79 @@ const WorkshopPage = () => {
                     <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Complete</Typography>
                   </Box>
                 </Tooltip>
+
+                {/* Pickup Ready Email */}
+                <Tooltip title={sendingPickupEmail ? 'Sending...' : 'Pickup Ready Email'}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <IconButton
+                      size="small"
+                      onClick={handleOpenPickupEmailDialog}
+                      disabled={sendingPickupEmail}
+                      sx={{
+                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                        color: '#000000',
+                        border: '2px solid #f27921',
+                        borderRadius: 1,
+                        minWidth: 52,
+                        py: 0.75,
+                        px: 0.75,
+                        '&:hover': { background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)', border: '2px solid #e06810' }
+                      }}
+                    >
+                      {sendingPickupEmail ? <CircularProgress size={18} sx={{ color: '#000000' }} /> : <ShippingIcon fontSize="small" />}
+                    </IconButton>
+                    <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 600 }}>Pickup</Typography>
+                  </Box>
+                </Tooltip>
               </Box>
             </Box>
+
+            {/* Pickup Ready Email Dialog */}
+            <Dialog open={pickupEmailDialogOpen} onClose={() => !sendingPickupEmail && setPickupEmailDialogOpen(false)} maxWidth="sm" fullWidth>
+              <DialogTitle sx={{ background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)', color: '#000', fontWeight: 'bold' }}>
+                <Typography component="span" variant="h6">Pickup Ready Email</Typography>
+              </DialogTitle>
+              <DialogContent sx={{ pt: 3 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField
+                    label="Pickup Date"
+                    type="date"
+                    value={pickupEmailDate}
+                    onChange={(e) => setPickupEmailDate(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                  <TextField
+                    label="Time From (e.g. 12:00 PM)"
+                    value={pickupTimeStart}
+                    onChange={(e) => setPickupTimeStart(e.target.value)}
+                    placeholder="12:00 PM"
+                    fullWidth
+                  />
+                  <TextField
+                    label="Time To (e.g. 2:00 PM)"
+                    value={pickupTimeEnd}
+                    onChange={(e) => setPickupTimeEnd(e.target.value)}
+                    placeholder="2:00 PM"
+                    fullWidth
+                  />
+                  <TextField
+                    label="Remaining Balance ($)"
+                    type="number"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    value={pickupRemainingBalance}
+                    onChange={(e) => setPickupRemainingBalance(e.target.value)}
+                    fullWidth
+                  />
+                </Box>
+              </DialogContent>
+              <DialogActions sx={{ p: 2 }}>
+                <Button onClick={() => setPickupEmailDialogOpen(false)} disabled={sendingPickupEmail}>Cancel</Button>
+                <Button variant="contained" onClick={handleSendPickupReadyEmail} disabled={sendingPickupEmail}>
+                  {sendingPickupEmail ? 'Sending...' : 'Send Email'}
+                </Button>
+              </DialogActions>
+            </Dialog>
 
             {/* First Row - Personal Info and Order Details */}
             <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>

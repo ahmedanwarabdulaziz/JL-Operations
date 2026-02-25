@@ -1,5 +1,5 @@
 import { generateOrderEmailTemplate } from '../utils/emailTemplate';
-import { generateDepositEmailTemplate, generateDepositReminderEmailTemplate } from '../utils/depositEmailTemplate';
+import { generateDepositEmailTemplate, generateDepositReminderEmailTemplate, generatePickupReadyEmailTemplate } from '../utils/depositEmailTemplate';
 import { db } from '../firebase/config';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { getSessionToken } from '../components/Auth/AuthContext';
@@ -99,6 +99,20 @@ export const sendDepositReminderEmailWithGmail = async (orderData, customerEmail
   await sendEmailCore(customerEmail, subject, emailContent);
   updateProgress('Deposit reminder sent successfully!');
   return { success: true, message: `Deposit reminder sent successfully to ${customerEmail}!` };
+};
+
+export const sendPickupReadyEmailWithGmail = async (customerEmail, pickupOptions, onProgress) => {
+  const updateProgress = (msg) => {
+    if (onProgress) onProgress(msg);
+    console.log('📧 Pickup Ready Email Progress:', msg);
+  };
+  updateProgress('Preparing pickup ready email...');
+  const emailContent = generatePickupReadyEmailTemplate(pickupOptions);
+  const subject = 'Your Furniture Is Ready for Pickup';
+  updateProgress('Sending pickup ready email...');
+  await sendEmailCore(customerEmail, subject, emailContent);
+  updateProgress('Pickup ready email sent successfully!');
+  return { success: true, message: `Pickup ready email sent successfully to ${customerEmail}!` };
 };
 
 export const isGmailConfigured = () => {
@@ -244,6 +258,7 @@ export const sendCompletionEmailWithGmail = async (
 export const sendEmailWithConfig = sendEmailWithGmail;
 export const sendDepositEmailWithConfig = sendDepositEmailWithGmail;
 export const sendDepositReminderEmailWithConfig = sendDepositReminderEmailWithGmail;
+export const sendPickupReadyEmailWithConfig = sendPickupReadyEmailWithGmail;
 export const loadEmailConfig = loadGmailConfig;
 export const saveEmailConfig = saveGmailConfig;
 export const isSignedIn = isGmailConfigured;
