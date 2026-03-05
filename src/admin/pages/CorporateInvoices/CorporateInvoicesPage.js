@@ -653,7 +653,7 @@ const CorporateInvoicesPage = () => {
       return;
     }
     const invoiceNumber = formatCorporateInvoiceForInvoice(selectedOrder.orderDetails?.billInvoice) || 'N/A';
-    const fileName = `Invoice-${invoiceNumber}.pdf`;
+    const fileName = `Invoice ${invoiceNumber}.pdf`;
 
     try {
       const totals = calculateCorporateInvoiceTotals(selectedOrder);

@@ -126,6 +126,7 @@ const WorkshopPage = () => {
   const [pickupTimeStart, setPickupTimeStart] = useState('12:00 PM');
   const [pickupTimeEnd, setPickupTimeEnd] = useState('2:00 PM');
   const [pickupRemainingBalance, setPickupRemainingBalance] = useState('');
+  const [pickupPaymentMethod, setPickupPaymentMethod] = useState('etransfer'); // 'cash' | 'etransfer'
   const [sendingPickupEmail, setSendingPickupEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -2590,6 +2591,7 @@ const WorkshopPage = () => {
     setPickupEmailDate(tomorrow.toISOString().split('T')[0]);
     setPickupTimeStart('12:00 PM');
     setPickupTimeEnd('2:00 PM');
+    setPickupPaymentMethod('etransfer');
     setPickupEmailDialogOpen(true);
   };
 
@@ -2615,6 +2617,8 @@ const WorkshopPage = () => {
       timeStart: pickupTimeStart || '12:00 PM',
       timeEnd: pickupTimeEnd || '2:00 PM',
       remainingBalanceFormatted: `$${balanceVal.toFixed(2)}`,
+      paymentMethod: pickupPaymentMethod,
+      etransferEmail: 'jl@jlupholstery.com',
     };
     try {
       setSendingPickupEmail(true);
@@ -3509,6 +3513,19 @@ const WorkshopPage = () => {
                       }
                     </span>
                   </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Status:</Typography>
+                    <Chip
+                      size="small"
+                      label={getStatusInfo(selectedOrder.invoiceStatus)?.label || selectedOrder.invoiceStatus || 'N/A'}
+                      sx={{
+                        backgroundColor: getStatusInfo(selectedOrder.invoiceStatus)?.color || '#757575',
+                        color: '#fff',
+                        fontWeight: 600,
+                        fontSize: '0.75rem'
+                      }}
+                    />
+                  </Box>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
                   <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
@@ -3749,12 +3766,41 @@ const WorkshopPage = () => {
             </Box>
 
             {/* Pickup Ready Email Dialog */}
-            <Dialog open={pickupEmailDialogOpen} onClose={() => !sendingPickupEmail && setPickupEmailDialogOpen(false)} maxWidth="sm" fullWidth>
-              <DialogTitle sx={{ background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)', color: '#000', fontWeight: 'bold' }}>
-                <Typography component="span" variant="h6">Pickup Ready Email</Typography>
-              </DialogTitle>
-              <DialogContent sx={{ pt: 3 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Dialog
+              open={pickupEmailDialogOpen}
+              onClose={() => !sendingPickupEmail && setPickupEmailDialogOpen(false)}
+              maxWidth="sm"
+              fullWidth
+              PaperProps={{
+                sx: {
+                  backgroundColor: '#3a3a3a',
+                  borderRadius: 2,
+                  border: '2px solid #b98f33',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                }
+              }}
+            >
+              <DialogContent sx={{ p: 0, backgroundColor: '#3a3a3a', overflow: 'visible' }}>
+                {/* Header as first child so it never overlaps content */}
+                <Box
+                  sx={{
+                    background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+                    color: '#000000',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    py: 2,
+                    px: 3,
+                    pr: 6,
+                    borderBottom: '2px solid #1a1a1a',
+                    flexShrink: 0
+                  }}
+                >
+                  <ShippingIcon sx={{ flexShrink: 0, color: '#000000' }} />
+                  <Typography component="span" variant="h6" sx={{ flex: 1, color: '#000000' }}>Pickup Ready Email</Typography>
+                </Box>
+                <Box sx={{ pt: 4, px: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <TextField
                     label="Pickup Date"
                     type="date"
@@ -3762,6 +3808,16 @@ const WorkshopPage = () => {
                     onChange={(e) => setPickupEmailDate(e.target.value)}
                     InputLabelProps={{ shrink: true }}
                     fullWidth
+                    sx={{
+                      '& .MuiInputLabel-root': { color: '#b98f33' },
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#555' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '& .MuiInputBase-input': { color: '#fff' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: '#b98f33' },
+                      '& .MuiSvgIcon-root': { color: '#b98f33' }
+                    }}
+                    inputProps={{ sx: { color: '#fff' } }}
                   />
                   <TextField
                     label="Time From (e.g. 12:00 PM)"
@@ -3769,6 +3825,15 @@ const WorkshopPage = () => {
                     onChange={(e) => setPickupTimeStart(e.target.value)}
                     placeholder="12:00 PM"
                     fullWidth
+                    sx={{
+                      '& .MuiInputLabel-root': { color: '#b98f33' },
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#555' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '& .MuiInputBase-input': { color: '#fff' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: '#b98f33' }
+                    }}
+                    inputProps={{ sx: { color: '#fff' } }}
                   />
                   <TextField
                     label="Time To (e.g. 2:00 PM)"
@@ -3776,20 +3841,51 @@ const WorkshopPage = () => {
                     onChange={(e) => setPickupTimeEnd(e.target.value)}
                     placeholder="2:00 PM"
                     fullWidth
+                    sx={{
+                      '& .MuiInputLabel-root': { color: '#b98f33' },
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#555' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                      '& .MuiInputBase-input': { color: '#fff' },
+                      '& .MuiInputLabel-root.Mui-focused': { color: '#b98f33' }
+                    }}
+                    inputProps={{ sx: { color: '#fff' } }}
                   />
-                  <TextField
-                    label="Remaining Balance ($)"
-                    type="number"
-                    inputProps={{ min: 0, step: 0.01 }}
-                    value={pickupRemainingBalance}
-                    onChange={(e) => setPickupRemainingBalance(e.target.value)}
-                    fullWidth
-                  />
+                  <Box sx={{
+                    p: 2,
+                    backgroundColor: '#2a2a2a',
+                    borderRadius: 1,
+                    border: '1px solid #444',
+                    borderLeft: '4px solid #b98f33'
+                  }}>
+                    <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 'bold', display: 'block', mb: 0.5 }}>Remaining balance</Typography>
+                    <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
+                      ${(parseFloat(pickupRemainingBalance) || 0).toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Typography variant="subtitle2" sx={{ color: '#b98f33', fontWeight: 'bold', mt: 1 }}>Payment at pickup</Typography>
+                  <RadioGroup
+                    row
+                    value={pickupPaymentMethod}
+                    onChange={(e) => setPickupPaymentMethod(e.target.value)}
+                    sx={{ gap: 2 }}
+                  >
+                    <FormControlLabel
+                      value="cash"
+                      control={<Radio sx={{ color: '#b98f33', '&.Mui-checked': { color: '#b98f33' } }} />}
+                      label={<Typography sx={{ color: '#fff' }}>Cash</Typography>}
+                    />
+                    <FormControlLabel
+                      value="etransfer"
+                      control={<Radio sx={{ color: '#b98f33', '&.Mui-checked': { color: '#b98f33' } }} />}
+                      label={<Typography sx={{ color: '#fff' }}>E-transfer</Typography>}
+                    />
+                  </RadioGroup>
                 </Box>
               </DialogContent>
-              <DialogActions sx={{ p: 2 }}>
-                <Button onClick={() => setPickupEmailDialogOpen(false)} disabled={sendingPickupEmail}>Cancel</Button>
-                <Button variant="contained" onClick={handleSendPickupReadyEmail} disabled={sendingPickupEmail}>
+              <DialogActions sx={{ p: 2, gap: 1, backgroundColor: '#3a3a3a', borderTop: '1px solid #555' }}>
+                <Button onClick={() => setPickupEmailDialogOpen(false)} disabled={sendingPickupEmail} sx={buttonStyles.cancelButton}>Cancel</Button>
+                <Button variant="contained" onClick={handleSendPickupReadyEmail} disabled={sendingPickupEmail} sx={buttonStyles.primaryButton}>
                   {sendingPickupEmail ? 'Sending...' : 'Send Email'}
                 </Button>
               </DialogActions>
