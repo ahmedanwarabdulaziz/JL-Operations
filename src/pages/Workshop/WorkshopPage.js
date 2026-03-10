@@ -1638,34 +1638,20 @@ const WorkshopPage = () => {
     };
   }, [editingFurnitureData, lastSavedData, selectedOrder]);
 
-  // Auto-save on page unload
+  // Auto-save on page unload (support both regular and corporate orders)
   useEffect(() => {
-    const handleBeforeUnload = (e) => {
+    const handleBeforeUnload = () => {
       if (hasUnsavedChanges && selectedOrder && editingFurnitureData) {
-        console.log('Saving changes before page unload for order:', selectedOrder.id);
-        
-        // Use synchronous save for beforeunload
-        const saveChanges = async () => {
-          try {
-            const orderRef = doc(db, 'orders', selectedOrder.id);
-            await updateDoc(orderRef, {
-              furnitureData: editingFurnitureData
-            });
-            console.log('Successfully saved changes before unload');
-          } catch (error) {
-            console.error('Error saving changes before unload:', error);
-          }
-        };
-        
-        // Save synchronously - this is the only way to ensure it completes
-        saveChanges();
+        const orderRef = getOrderRef(selectedOrder);
+        const furnitureDataToSave = editingFurnitureData || (selectedOrder.orderType === 'corporate' ? { groups: selectedOrder.furnitureGroups || [] } : selectedOrder.furnitureData);
+        const updateData = selectedOrder.orderType === 'corporate'
+          ? { furnitureGroups: (furnitureDataToSave?.groups || []) }
+          : { furnitureData: furnitureDataToSave || {} };
+        updateDoc(orderRef, updateData).catch(err => console.error('Save on unload failed:', err));
       }
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, selectedOrder, editingFurnitureData]);
 
   // Search function
@@ -2386,6 +2372,47 @@ const WorkshopPage = () => {
       showError('Failed to update furniture group');
     }
   };
+
+  // Save pending furniture edits (for auto-save on navigate/unmount). Returns true if saved.
+  const saveCurrentEdits = useCallback(async () => {
+    if (!selectedOrder || !editingFurnitureData) return false;
+    try {
+      let furnitureDataToSave = editingFurnitureData;
+      if (!furnitureDataToSave.groups) furnitureDataToSave = { ...furnitureDataToSave, groups: [] };
+      const orderRef = getOrderRef(selectedOrder);
+      const updateData = selectedOrder.orderType === 'corporate'
+        ? { furnitureGroups: furnitureDataToSave.groups }
+        : { furnitureData: furnitureDataToSave };
+      await updateDoc(orderRef, updateData);
+      const updatedOrder = {
+        ...selectedOrder,
+        ...(selectedOrder.orderType === 'corporate' ? { furnitureGroups: furnitureDataToSave.groups } : { furnitureData: furnitureDataToSave })
+      };
+      setSelectedOrder(updatedOrder);
+      setOrders(prev => prev.map(o => (o.id === selectedOrder.id ? updatedOrder : o)));
+      setFilteredOrders(prev => prev.map(o => (o.id === selectedOrder.id ? updatedOrder : o)));
+      setEditingFurnitureData(null);
+      setLastSavedData(JSON.stringify(furnitureDataToSave));
+      setHasUnsavedChanges(false);
+      return true;
+    } catch (err) {
+      console.error('Auto-save workshop edits failed:', err);
+      return false;
+    }
+  }, [selectedOrder, editingFurnitureData]);
+
+  // Auto-save when leaving the page (e.g. Sidebar link)
+  const saveRef = useRef(saveCurrentEdits);
+  saveRef.current = saveCurrentEdits;
+  const editingRef = useRef({ selectedOrder, editingFurnitureData });
+  editingRef.current = { selectedOrder, editingFurnitureData };
+  useEffect(() => {
+    return () => {
+      if (editingRef.current.selectedOrder && editingRef.current.editingFurnitureData) {
+        saveRef.current();
+      }
+    };
+  }, []);
 
   // Update furniture group data in editing state only
   const updateFurnitureGroup = (groupIndex, fieldName, value) => {
@@ -3348,7 +3375,7 @@ const WorkshopPage = () => {
             variant="contained"
             fullWidth
             startIcon={<InventoryIcon />}
-            onClick={() => navigate('/admin/material-request')}
+            onClick={async () => { await saveCurrentEdits(); navigate('/admin/material-request'); }}
             sx={{
               mb: 2,
               background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3703,11 +3730,11 @@ const WorkshopPage = () => {
                     },
                   }}
                 >
-                  <MenuItem onClick={() => { setInvoicesMenuAnchor(null); if (selectedOrder) navigate(`/admin/invoices?orderId=${selectedOrder.id}`); }}>
+                  <MenuItem onClick={async () => { setInvoicesMenuAnchor(null); await saveCurrentEdits(); if (selectedOrder) navigate(`/admin/invoices?orderId=${selectedOrder.id}`); }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Regular Invoices
                   </MenuItem>
-                  <MenuItem onClick={() => { setInvoicesMenuAnchor(null); if (selectedOrder) navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`); else navigate('/admin/corporate-invoices'); }}>
+                  <MenuItem onClick={async () => { setInvoicesMenuAnchor(null); await saveCurrentEdits(); if (selectedOrder) navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`); else navigate('/admin/corporate-invoices'); }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Corporate Invoices
                   </MenuItem>

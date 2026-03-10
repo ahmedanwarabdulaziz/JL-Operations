@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -215,6 +215,7 @@ const WorkshopPage = () => {
   const [includeReviewChecked, setIncludeReviewChecked] = useState(true);
   
   const navigate = useNavigate();
+  const lastSavedFurnitureRef = useRef(null);
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
@@ -247,21 +248,23 @@ const WorkshopPage = () => {
     setInvoicesMenuAnchor(null);
   };
 
-  // Handler to navigate to regular invoices page
-  const handleNavigateToRegularInvoices = (event) => {
+  // Handler to navigate to regular invoices page (auto-save edits first)
+  const handleNavigateToRegularInvoices = async (event) => {
     event?.preventDefault();
     event?.stopPropagation();
     handleInvoicesMenuClose();
+    await saveCurrentEdits();
     if (selectedOrder) {
       navigate(`/admin/invoices?orderId=${selectedOrder.id}`);
     }
   };
 
-  // Handler to navigate to corporate invoices page
-  const handleNavigateToCorporateInvoices = (event) => {
+  // Handler to navigate to corporate invoices page (auto-save edits first)
+  const handleNavigateToCorporateInvoices = async (event) => {
     event?.preventDefault();
     event?.stopPropagation();
     handleInvoicesMenuClose();
+    await saveCurrentEdits();
     if (selectedOrder) {
       navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`);
     } else {
@@ -1650,6 +1653,7 @@ const WorkshopPage = () => {
       
       // Clear the editing state
       setEditingFurnitureData(null);
+      lastSavedFurnitureRef.current = JSON.stringify(furnitureDataToSave);
       
       showSuccess(`Furniture group ${groupIndex + 1} updated successfully`);
     } catch (error) {
@@ -1657,6 +1661,63 @@ const WorkshopPage = () => {
       showError('Failed to update furniture group');
     }
   };
+
+  // Save any pending furniture edits to Firebase (used before navigation / unload). Returns true if saved.
+  const saveCurrentEdits = useCallback(async () => {
+    if (!selectedOrder || !editingFurnitureData) return false;
+    try {
+      const isCorporate = isCorporateOrder(selectedOrder);
+      const collectionName = isCorporate ? 'corporate-orders' : 'orders';
+      let furnitureDataToSave;
+      if (isCorporate) {
+        furnitureDataToSave = editingFurnitureData || { groups: selectedOrder.furnitureGroups || [] };
+      } else {
+        furnitureDataToSave = editingFurnitureData || selectedOrder.furnitureData;
+      }
+      const orderRef = doc(db, collectionName, selectedOrder.id);
+      if (isCorporate) {
+        await updateDoc(orderRef, { furnitureGroups: furnitureDataToSave.groups || [] });
+      } else {
+        await updateDoc(orderRef, { furnitureData: furnitureDataToSave });
+      }
+      const updatedOrder = isCorporate
+        ? { ...selectedOrder, furnitureGroups: furnitureDataToSave.groups || [] }
+        : { ...selectedOrder, furnitureData: furnitureDataToSave };
+      setSelectedOrder(updatedOrder);
+      setOrders(prev => prev.map(order => (order.id === selectedOrder.id ? updatedOrder : order)));
+      setFilteredOrders(prev => prev.map(order => (order.id === selectedOrder.id ? updatedOrder : order)));
+      setEditingFurnitureData(null);
+      lastSavedFurnitureRef.current = JSON.stringify(furnitureDataToSave);
+      return true;
+    } catch (err) {
+      console.error('Error auto-saving workshop edits:', err);
+      return false;
+    }
+  }, [selectedOrder, editingFurnitureData]);
+
+  // Auto-save when navigating away (invoice menu) or closing tab
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (selectedOrder && editingFurnitureData) {
+        saveCurrentEdits();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedOrder, editingFurnitureData, saveCurrentEdits]);
+
+  // Auto-save when leaving the page (e.g. Sidebar link click) - cleanup runs on unmount
+  const saveRef = useRef(saveCurrentEdits);
+  saveRef.current = saveCurrentEdits;
+  const editingRef = useRef({ selectedOrder, editingFurnitureData });
+  editingRef.current = { selectedOrder, editingFurnitureData };
+  useEffect(() => {
+    return () => {
+      if (editingRef.current.selectedOrder && editingRef.current.editingFurnitureData) {
+        saveRef.current();
+      }
+    };
+  }, []);
 
   // Update furniture group data in editing state only
   const updateFurnitureGroup = (groupIndex, fieldName, value) => {
