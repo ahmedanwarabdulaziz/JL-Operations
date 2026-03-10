@@ -120,6 +120,48 @@ const MaterialRequestPage = () => {
     return null;
   };
 
+  /**
+   * Get the "received baseline" (old materialJLQnty at time of receive) for computing additional.
+   * Formula: additional = current materialJLQnty - baseline.
+   * Priority: (1) Stored JL from status/materialReceivedQty (correct), (2) Legacy fallback so row always shows.
+   */
+  const parseReceivedQuantity = (materialStatus, group, currentQnty) => {
+    if (!materialStatus || typeof materialStatus !== 'string') return null;
+    const statusStr = String(materialStatus).trim();
+    const current = Number(currentQnty) || 0;
+    if (current <= 0) return null;
+
+    // 1) Stored JL at receive: "Received:X" (preferred - correct value)
+    if (statusStr.toLowerCase().startsWith('received:')) {
+      const part = statusStr.split(':')[1];
+      if (part != null) {
+        const q = parseFloat(String(part).trim());
+        if (!isNaN(q) && q >= 0) return q;
+      }
+    }
+
+    if (statusStr !== 'Received' && statusStr.toLowerCase() !== 'received') return null;
+
+    // 2) Stored on group (we persist when marking Received)
+    const stored = group.materialReceivedQty != null ? parseFloat(group.materialReceivedQty) : NaN;
+    if (!isNaN(stored) && stored >= 0) return stored;
+
+    // 3) Number anywhere in status string
+    const numMatch = statusStr.match(/\d+(\.\d+)?/);
+    if (numMatch) {
+      const n = parseFloat(numMatch[0]);
+      if (!isNaN(n) && n >= 0 && n <= current) return n;
+    }
+
+    // 4) Legacy "Received" with no stored JL: use materialQnty so the additional row SHOWS (value may be approximate).
+    // Correct fix for legacy: set materialReceivedQty or "Received:X" in Firebase, or re-mark Receive after ordering.
+    const materialQnty = parseFloat(group.materialQnty) || 0;
+    if (materialQnty > 0 && materialQnty < current) return materialQnty;
+
+    // 5) No usable baseline: no additional
+    return current;
+  };
+
   // Extract materials from orders (excluding completed/canceled orders)
   const extractMaterialsFromOrders = useCallback((ordersList) => {
     const materials = [];
@@ -191,6 +233,42 @@ const MaterialRequestPage = () => {
             // Create unique ID: include groupIndex if there are duplicates
             const baseId = `${order.id}_${group.materialCode}_${group.materialCompany}`;
             const uniqueId = duplicateIndex > 0 ? `${baseId}_${duplicateIndex}` : baseId;
+            
+            // Material was received: only show additional qty (workshop JL increase) in Materials Required
+            const statusStr = materialStatus ? String(materialStatus).trim() : '';
+            const isReceived = statusStr.toLowerCase() === 'received' || statusStr.toLowerCase().startsWith('received:');
+            if (isReceived) {
+              const receivedQty = parseReceivedQuantity(materialStatus, group, currentQnty);
+              if (receivedQty !== null) {
+                const additionalQnty = currentQnty - receivedQty;
+                if (additionalQnty > 0) {
+                  materials.push({
+                    id: `${uniqueId}_additional`,
+                    orderId: order.id,
+                    groupIndex: groupIndex,
+                    invoiceNo: order.orderDetails?.billInvoice || 'N/A',
+                    materialCompany: group.materialCompany,
+                    materialCode: group.materialCode,
+                    materialName: group.materialName || group.materialCode,
+                    quantity: additionalQnty,
+                    materialQntyJL: currentQnty,
+                    orderedQntyJL: receivedQty,
+                    unit: group.unit || 'Yard',
+                    materialStatus: null,
+                    materialNote: group.materialNote || '',
+                    orderDate: order.createdAt,
+                    customerName: order.orderType === 'corporate' 
+                      ? (order.corporateCustomer?.corporateName || 'N/A')
+                      : (order.personalInfo?.customerName || 'N/A'),
+                    orderStatus: orderStatus,
+                    isAdditional: true,
+                    additionalQnty: additionalQnty,
+                    orderType: order.orderType || 'regular'
+                  });
+                }
+              }
+              return; // received materials don't go to ordered or "not ordered" list
+            }
             
             if (orderedQnty !== null && orderedQnty > 0) {
               // Material was ordered - always add to ordered materials
@@ -531,6 +609,9 @@ const MaterialRequestPage = () => {
         if (newStatus === 'Ordered') {
           const currentQuantity = material.materialQntyJL || material.quantity || 0;
           statusToStore = `Ordered:${currentQuantity}`;
+        } else if (newStatus === 'Received') {
+          const currentQuantity = material.materialQntyJL || material.quantity || 0;
+          statusToStore = `Received:${currentQuantity}`;
         }
         
         await updateDoc(generalExpenseRef, {
@@ -712,6 +793,11 @@ const MaterialRequestPage = () => {
           newOrderedQuantity = 0;
         }
         statusToStore = null;
+      } else if (newStatus === 'Received') {
+        // Store the ORDERED quantity as received (what was actually received), not current materialJLQnty.
+        // So when JL is later increased in workshop, additional = materialJLQnty - receivedQty is correct.
+        const receivedQty = existingOrderedQty > 0 ? existingOrderedQty : currentTotalQty;
+        statusToStore = `Received:${receivedQty}`;
       } else {
         statusToStore = newStatus;
       }
@@ -757,14 +843,21 @@ const MaterialRequestPage = () => {
                  `currentStatus=${groupToUpdate.materialStatus}, newStatus=${statusToStore}, ` +
                  `totalQty=${groupToUpdate.materialJLQnty}`);
       
-      // Update only the specific group at the target index
+      // Update only the specific group at the target index (persist received qty = ordered qty at time of receive)
+      const receivedQtyToStore = (newStatus === 'Received')
+        ? (existingOrderedQty > 0 ? existingOrderedQty : currentTotalQty)
+        : undefined;
       const updatedFurnitureGroups = furnitureGroups.map((group, index) => {
         if (index === targetGroupIndex) {
-          return { 
-            ...group, 
+          const updated = {
+            ...group,
             materialStatus: statusToStore,
             materialNote: note || group.materialNote || ''
           };
+          if (receivedQtyToStore != null) {
+            updated.materialReceivedQty = receivedQtyToStore;
+          }
+          return updated;
         }
         return group;
       });
