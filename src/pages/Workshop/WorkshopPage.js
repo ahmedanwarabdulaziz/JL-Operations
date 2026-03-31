@@ -176,39 +176,6 @@ const WorkshopPage = () => {
   // State for invoices menu
   const [invoicesMenuAnchor, setInvoicesMenuAnchor] = useState(null);
   const invoicesMenuOpen = Boolean(invoicesMenuAnchor);
-
-  // Header action confirmation dialog (avoid misclicks)
-  const confirmActionRef = useRef(null);
-  const [headerConfirmDialogOpen, setHeaderConfirmDialogOpen] = useState(false);
-  const [headerConfirmDialogTitle, setHeaderConfirmDialogTitle] = useState('');
-  const [headerConfirmDialogMessage, setHeaderConfirmDialogMessage] = useState('');
-  const [headerConfirmDialogConfirmText, setHeaderConfirmDialogConfirmText] = useState('Confirm');
-
-  const openConfirmDialog = useCallback(({ title, message, confirmText = 'Confirm', onConfirm }) => {
-    confirmActionRef.current = onConfirm;
-    setHeaderConfirmDialogTitle(title || 'Confirm Action');
-    setHeaderConfirmDialogMessage(message || '');
-    setHeaderConfirmDialogConfirmText(confirmText || 'Confirm');
-    setHeaderConfirmDialogOpen(true);
-  }, []);
-
-  const closeConfirmDialog = useCallback(() => {
-    setHeaderConfirmDialogOpen(false);
-    confirmActionRef.current = null;
-  }, []);
-
-  const handleConfirmDialogConfirm = useCallback(async () => {
-    const action = confirmActionRef.current;
-    closeConfirmDialog();
-    if (typeof action === 'function') {
-      try {
-        await action();
-      } catch (error) {
-        console.error('Confirmation action failed:', error);
-        showError('Action failed. Please try again.');
-      }
-    }
-  }, [closeConfirmDialog, showError]);
   
   // Enhanced validation dialog state (from Finance page)
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -256,6 +223,39 @@ const WorkshopPage = () => {
   const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
   
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
+
+  // Header action confirmation dialog (avoid misclicks)
+  const confirmActionRef = useRef(null);
+  const [headerConfirmDialogOpen, setHeaderConfirmDialogOpen] = useState(false);
+  const [headerConfirmDialogTitle, setHeaderConfirmDialogTitle] = useState('');
+  const [headerConfirmDialogMessage, setHeaderConfirmDialogMessage] = useState('');
+  const [headerConfirmDialogConfirmText, setHeaderConfirmDialogConfirmText] = useState('Confirm');
+
+  const openConfirmDialog = useCallback(({ title, message, confirmText = 'Confirm', onConfirm }) => {
+    confirmActionRef.current = onConfirm;
+    setHeaderConfirmDialogTitle(title || 'Confirm Action');
+    setHeaderConfirmDialogMessage(message || '');
+    setHeaderConfirmDialogConfirmText(confirmText || 'Confirm');
+    setHeaderConfirmDialogOpen(true);
+  }, []);
+
+  const closeConfirmDialog = useCallback(() => {
+    setHeaderConfirmDialogOpen(false);
+    confirmActionRef.current = null;
+  }, []);
+
+  const handleConfirmDialogConfirm = useCallback(async () => {
+    const action = confirmActionRef.current;
+    closeConfirmDialog();
+    if (typeof action === 'function') {
+      try {
+        await action();
+      } catch (error) {
+        console.error('Confirmation action failed:', error);
+        showError('Action failed. Please try again.');
+      }
+    }
+  }, [closeConfirmDialog, showError]);
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
   const { platforms, loading: platformsLoading } = usePlatforms();
