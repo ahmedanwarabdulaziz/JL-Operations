@@ -85,6 +85,9 @@ const CorporateInvoicesPage = () => {
   const [activeTab, setActiveTab] = useState(0); // 0 = Active, 1 = Closed
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [workOrderDialogOpen, setWorkOrderDialogOpen] = useState(false);
+  const [workOrderSelections, setWorkOrderSelections] = useState({});
+  const [workOrderPrintToggles, setWorkOrderPrintToggles] = useState({});
   const navigate = useNavigate();
   const listContainerRef = useRef(null);
   const { showSuccess, showError } = useNotification();
@@ -718,6 +721,361 @@ const CorporateInvoicesPage = () => {
     }
   };
 
+  const handlePrintWorkOrder = () => {
+    if (!selectedOrder) {
+      showError('Please select an order first');
+      return;
+    }
+
+    const furnitureGroups = selectedOrder.furnitureGroups || [];
+    if (furnitureGroups.length === 0) {
+      showError('No furniture groups found');
+      return;
+    }
+
+    const initialSelections = {};
+    const initialPrintToggles = {};
+    furnitureGroups.forEach((group, index) => {
+      initialSelections[index] = 'furniture';
+      initialPrintToggles[index] = true;
+    });
+    setWorkOrderSelections(initialSelections);
+    setWorkOrderPrintToggles(initialPrintToggles);
+    setWorkOrderDialogOpen(true);
+  };
+
+  const handleWorkOrderFormTypeChange = (groupIndex, formType) => {
+    setWorkOrderSelections(prev => ({
+      ...prev,
+      [groupIndex]: formType
+    }));
+  };
+
+  const handleWorkOrderPrintToggleChange = (groupIndex, enabled) => {
+    setWorkOrderPrintToggles(prev => ({
+      ...prev,
+      [groupIndex]: enabled
+    }));
+  };
+
+  const handleGenerateWorkOrder = async () => {
+    if (!selectedOrder) {
+      showError('Please select an order first');
+      return;
+    }
+
+    try {
+      const printWindow = window.open('', '_blank', 'width=900,height=1200');
+      const furnitureGroups = selectedOrder.furnitureGroups || [];
+
+      const formatDeadline = (deadline) => {
+        if (!deadline) return null;
+        try {
+          let dateObj;
+          if (deadline && typeof deadline === 'object' && deadline.toDate) {
+            dateObj = deadline.toDate();
+          } else if (deadline && typeof deadline === 'object' && deadline.seconds) {
+            dateObj = new Date(deadline.seconds * 1000);
+          } else {
+            dateObj = new Date(deadline);
+          }
+          if (isNaN(dateObj.getTime())) return null;
+          return dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        } catch (error) {
+          console.error('Error formatting deadline:', error);
+          return null;
+        }
+      };
+
+      const deadlineFormatted = formatDeadline(selectedOrder.orderDetails?.deadline);
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Work Order - ${selectedOrder.orderDetails?.billInvoice || 'N/A'}</title>
+          <style>
+            body {
+              font-family: 'Arial', sans-serif;
+              margin: 0;
+              padding: 0;
+              background-color: #f5f5f5;
+            }
+            .page {
+              width: 100%;
+              min-height: 100vh;
+              padding: 20px;
+              box-sizing: border-box;
+              background-color: white;
+              page-break-after: always;
+              position: relative;
+            }
+            .page:last-child { page-break-after: auto; }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 20px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 10px;
+            }
+            .logo {
+              font-size: 28px;
+              font-weight: bold;
+              color: #274290;
+            }
+            .work-order-title {
+              text-align: right;
+            }
+            .work-order-title h1 {
+              margin: 0;
+              font-size: 28px;
+              color: #000;
+            }
+            .work-order-title .invoice-number {
+              font-size: 20px;
+              font-weight: bold;
+              color: #f27921;
+              margin-top: 5px;
+            }
+            .section {
+              margin-bottom: 20px;
+              border: 1px solid #ccc;
+              padding: 15px;
+              border-radius: 5px;
+            }
+            .section-title {
+              font-weight: bold;
+              font-size: 16px;
+              margin-bottom: 10px;
+              color: #274290;
+              text-transform: uppercase;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 5px;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px 20px;
+            }
+            .info-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .info-label {
+              font-size: 12px;
+              color: #666;
+              margin-bottom: 2px;
+            }
+            .info-value {
+              font-size: 14px;
+              font-weight: 500;
+              color: #000;
+              min-height: 18px;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 2px;
+            }
+            .large-text {
+              min-height: 60px;
+              border: 1px solid #ddd;
+              padding: 8px;
+              border-radius: 3px;
+              background-color: #fafafa;
+              white-space: pre-wrap;
+            }
+            .checklist {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 8px 20px;
+            }
+            .checklist-item {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              font-size: 14px;
+            }
+            .checkbox {
+              width: 16px;
+              height: 16px;
+              border: 2px solid #000;
+              display: inline-block;
+            }
+            .footer {
+              position: absolute;
+              bottom: 20px;
+              left: 20px;
+              right: 20px;
+              display: flex;
+              justify-content: space-between;
+              font-size: 12px;
+              color: #666;
+              border-top: 1px solid #eee;
+              padding-top: 10px;
+            }
+            @media print {
+              body { background-color: white; }
+              .page { min-height: auto; padding: 10px; }
+            }
+          </style>
+        </head>
+        <body>
+          ${furnitureGroups.map((group, groupIndex) => {
+            const isEnabled = workOrderPrintToggles[groupIndex] !== false;
+            if (!isEnabled) return '';
+
+            const formType = workOrderSelections[groupIndex] || 'furniture';
+            const titleSuffix = formType === 'cushion' ? 'Cushion Form' : 'Furniture Form';
+
+            const customerName =
+              selectedOrder.corporateCustomer?.corporateName ||
+              selectedOrder.contactPerson?.name ||
+              'Corporate Customer';
+
+            const customerPhone =
+              selectedOrder.contactPerson?.phone ||
+              selectedOrder.corporateCustomer?.phone ||
+              '';
+
+            const customerEmail =
+              selectedOrder.contactPerson?.email ||
+              selectedOrder.corporateCustomer?.email ||
+              '';
+
+            const customerAddress =
+              selectedOrder.corporateCustomer?.address ||
+              '';
+
+            return `
+              <div class="page">
+                <div class="header">
+                  <div class="logo">JL Upholstery</div>
+                  <div class="work-order-title">
+                    <h1>Work Order</h1>
+                    <div class="invoice-number">#${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                    <div style="margin-top: 6px; font-size: 14px; font-weight: 600;">${titleSuffix} • Group ${groupIndex + 1}</div>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <div class="section-title">Customer Information</div>
+                  <div class="info-grid">
+                    <div class="info-item">
+                      <div class="info-label">Customer</div>
+                      <div class="info-value">${customerName}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Date</div>
+                      <div class="info-value">${formatDateOnly(selectedOrder.createdAt) || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Phone</div>
+                      <div class="info-value">${customerPhone}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Email</div>
+                      <div class="info-value">${customerEmail}</div>
+                    </div>
+                    <div class="info-item" style="grid-column: 1 / span 2;">
+                      <div class="info-label">Address</div>
+                      <div class="info-value">${customerAddress}</div>
+                    </div>
+                    <div class="info-item" style="grid-column: 1 / span 2;">
+                      <div class="info-label">Deadline</div>
+                      <div class="info-value">${deadlineFormatted || ''}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <div class="section-title">Furniture Group</div>
+                  <div class="info-grid">
+                    <div class="info-item">
+                      <div class="info-label">Furniture Type</div>
+                      <div class="info-value">${group.furnitureType || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Treatment</div>
+                      <div class="info-value">${group.treatment || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Material Company</div>
+                      <div class="info-value">${group.materialCompany || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Material Code</div>
+                      <div class="info-value">${group.materialCode || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Unit</div>
+                      <div class="info-value">${group.unit || ''}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label">Quantity</div>
+                      <div class="info-value">${group.quantity || ''}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <div class="section-title">Notes</div>
+                  <div class="info-item">
+                    <div class="info-label">Labour Note</div>
+                    <div class="large-text">${group.labourNote || ''}</div>
+                  </div>
+                  <div class="info-item" style="margin-top: 10px;">
+                    <div class="info-label">Customer Note</div>
+                    <div class="large-text">${group.customerNote || ''}</div>
+                  </div>
+                  <div class="info-item" style="margin-top: 10px;">
+                    <div class="info-label">Foam Note</div>
+                    <div class="large-text">${group.foamNote || ''}</div>
+                  </div>
+                  <div class="info-item" style="margin-top: 10px;">
+                    <div class="info-label">Painting Note</div>
+                    <div class="large-text">${group.paintingNote || ''}</div>
+                  </div>
+                </div>
+
+                <div class="section">
+                  <div class="section-title">Checklist</div>
+                  <div class="checklist">
+                    <div class="checklist-item"><span class="checkbox"></span> Material Confirmed</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Measurements Confirmed</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Foam Confirmed</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Painting Confirmed</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Cutting Complete</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Sewing Complete</div>
+                    <div class="checklist-item"><span class="checkbox"></span> Upholstery Complete</div>
+                    <div class="checklist-item"><span class="checkbox"></span> QC Complete</div>
+                  </div>
+                </div>
+
+                <div class="footer">
+                  <div>JL Upholstery • Work Order</div>
+                  <div>Invoice #${selectedOrder.orderDetails?.billInvoice || 'N/A'} • Group ${groupIndex + 1}</div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      showSuccess('Work order print preview opened successfully');
+    } catch (error) {
+      console.error('Error generating work order:', error);
+      showError('Failed to generate work order');
+    }
+  };
+
   const getStatusColor = (status) => {
     // Find status color from invoiceStatuses
     const statusObj = invoiceStatuses.find(s => s.value === status || s.label === status);
@@ -799,7 +1157,7 @@ const CorporateInvoicesPage = () => {
   };
 
   return (
-    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default' }}>
+    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default', minHeight: 0 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
@@ -811,7 +1169,7 @@ const CorporateInvoicesPage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 200px)', backgroundColor: '#f5f5f5' }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5' }}>
         {/* Left Column - Corporate Orders List */}
         <Paper 
           sx={{ 
@@ -967,7 +1325,7 @@ const CorporateInvoicesPage = () => {
       </Paper>
 
       {/* Right Column - Corporate Invoices Display */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {selectedOrder ? (
           <>
             {/* Header with Credit Card Fee Toggle */}
@@ -1057,6 +1415,43 @@ const CorporateInvoicesPage = () => {
                     }}
                   >
                     Print
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<PrintIcon sx={{ color: '#000000' }} />}
+                    onClick={handlePrintWorkOrder}
+                    disabled={!selectedOrder}
+                    sx={{
+                      background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+                      color: '#000000',
+                      border: '3px solid #000000',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+                      position: 'relative',
+                      '&:hover': {
+                        background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                        border: '3px solid #1a2d5a',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                      },
+                      '&:disabled': {
+                        background: 'linear-gradient(145deg, #a0a0a0 0%, #808080 50%, #606060 100%)',
+                        border: '3px solid #666666',
+                        color: '#666666',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2)'
+                      },
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: '50%',
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
+                        borderRadius: '6px 6px 0 0',
+                        pointerEvents: 'none'
+                      }
+                    }}
+                  >
+                    Print Work Order
                   </Button>
                   <Button
                     variant="contained"
@@ -1398,7 +1793,7 @@ const CorporateInvoicesPage = () => {
 
 
             {/* Invoice Content */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+            <Box sx={{ flex: 1, overflow: 'auto', p: 3, minHeight: 0 }}>
               {(() => {
                 const totals = calculateCorporateInvoiceTotals(selectedOrder);
                 return (
@@ -1955,6 +2350,188 @@ const CorporateInvoicesPage = () => {
         )}
       </Box>
       </Box>
+
+      {/* Work Order Form Type Dialog */}
+      <Dialog 
+        open={workOrderDialogOpen} 
+        onClose={() => setWorkOrderDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            backgroundColor: '#1a1a1a',
+            border: '2px solid #333333',
+            borderRadius: 2,
+            boxShadow: 4
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+          color: '#000000', 
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '1.2rem',
+          borderBottom: '3px solid #4CAF50',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2)'
+        }}>
+          Select Form Type for Each Furniture Group
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, backgroundColor: '#1a1a1a' }}>
+          {(selectedOrder?.furnitureGroups || []).map((group, index) => (
+            <Box key={index} sx={{ 
+              mb: 2, 
+              p: 2, 
+              border: '2px solid #333333', 
+              borderRadius: 2,
+              backgroundColor: '#2a2a2a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              boxShadow: 2,
+              '&:hover': {
+                boxShadow: 4,
+                borderColor: '#d4af5a',
+                backgroundColor: '#3a3a3a'
+              }
+            }}>
+              <Typography variant="h6" sx={{ 
+                fontWeight: 'bold', 
+                color: '#d4af5a', 
+                minWidth: '200px',
+                textTransform: 'uppercase'
+              }}>
+                {group.furnitureType || `Furniture Group ${index + 1}`}
+              </Typography>
+              
+              <Box sx={{ display: 'flex', gap: 1, flex: 1, alignItems: 'center' }}>
+                <Button
+                  variant={workOrderSelections[index] === 'furniture' ? 'contained' : 'outlined'}
+                  onClick={() => handleWorkOrderFormTypeChange(index, 'furniture')}
+                  sx={{
+                    background: workOrderSelections[index] === 'furniture' 
+                      ? 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)'
+                      : 'transparent',
+                    color: workOrderSelections[index] === 'furniture' ? '#000000' : '#d4af5a',
+                    borderColor: '#d4af5a',
+                    border: workOrderSelections[index] === 'furniture' ? '3px solid #4CAF50' : '2px solid #d4af5a',
+                    fontWeight: 'bold',
+                    px: 2,
+                    boxShadow: workOrderSelections[index] === 'furniture' 
+                      ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)'
+                      : 'none',
+                    '&:hover': {
+                      background: workOrderSelections[index] === 'furniture' 
+                        ? 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                        : 'linear-gradient(145deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      borderColor: workOrderSelections[index] === 'furniture' ? '#45a049' : '#b98f33',
+                      boxShadow: workOrderSelections[index] === 'furniture' 
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        : '0 2px 4px rgba(0,0,0,0.2)'
+                    }
+                  }}
+                >
+                  Furniture Form
+                </Button>
+                
+                <Button
+                  variant={workOrderSelections[index] === 'cushion' ? 'contained' : 'outlined'}
+                  onClick={() => handleWorkOrderFormTypeChange(index, 'cushion')}
+                  sx={{
+                    background: workOrderSelections[index] === 'cushion' 
+                      ? 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)'
+                      : 'transparent',
+                    color: workOrderSelections[index] === 'cushion' ? '#000000' : '#d4af5a',
+                    borderColor: '#d4af5a',
+                    border: workOrderSelections[index] === 'cushion' ? '3px solid #4CAF50' : '2px solid #d4af5a',
+                    fontWeight: 'bold',
+                    px: 2,
+                    boxShadow: workOrderSelections[index] === 'cushion' 
+                      ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)'
+                      : 'none',
+                    '&:hover': {
+                      background: workOrderSelections[index] === 'cushion' 
+                        ? 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)'
+                        : 'linear-gradient(145deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      borderColor: workOrderSelections[index] === 'cushion' ? '#45a049' : '#b98f33',
+                      boxShadow: workOrderSelections[index] === 'cushion' 
+                        ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+                        : '0 2px 4px rgba(0,0,0,0.2)'
+                    }
+                  }}
+                >
+                  Cushion Form
+                </Button>
+
+                <Box sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold' }}>
+                    Print:
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={workOrderPrintToggles[index] || false}
+                        onChange={(e) => handleWorkOrderPrintToggleChange(index, e.target.checked)}
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: '#d4af5a',
+                            '& + .MuiSwitch-track': {
+                              backgroundColor: '#d4af5a',
+                            },
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: '#d4af5a',
+                          },
+                        }}
+                      />
+                    }
+                    label=""
+                    sx={{ margin: 0 }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, backgroundColor: '#1a1a1a', borderTop: '1px solid #333333' }}>
+          <Button
+            onClick={() => setWorkOrderDialogOpen(false)}
+            sx={{
+              color: '#ffffff',
+              fontWeight: 'bold',
+              border: '2px solid #333333',
+              backgroundColor: '#2a2a2a',
+              '&:hover': {
+                backgroundColor: '#3a3a3a',
+                borderColor: '#d4af5a'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              setWorkOrderDialogOpen(false);
+              handleGenerateWorkOrder();
+            }}
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              border: '3px solid #4CAF50',
+              fontWeight: 'bold',
+              px: 3,
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            Generate Work Order
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Notification Snackbar */}
       <Snackbar
