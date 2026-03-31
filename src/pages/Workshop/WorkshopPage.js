@@ -176,6 +176,39 @@ const WorkshopPage = () => {
   // State for invoices menu
   const [invoicesMenuAnchor, setInvoicesMenuAnchor] = useState(null);
   const invoicesMenuOpen = Boolean(invoicesMenuAnchor);
+
+  // Header action confirmation dialog (avoid misclicks)
+  const confirmActionRef = useRef(null);
+  const [headerConfirmDialogOpen, setHeaderConfirmDialogOpen] = useState(false);
+  const [headerConfirmDialogTitle, setHeaderConfirmDialogTitle] = useState('');
+  const [headerConfirmDialogMessage, setHeaderConfirmDialogMessage] = useState('');
+  const [headerConfirmDialogConfirmText, setHeaderConfirmDialogConfirmText] = useState('Confirm');
+
+  const openConfirmDialog = useCallback(({ title, message, confirmText = 'Confirm', onConfirm }) => {
+    confirmActionRef.current = onConfirm;
+    setHeaderConfirmDialogTitle(title || 'Confirm Action');
+    setHeaderConfirmDialogMessage(message || '');
+    setHeaderConfirmDialogConfirmText(confirmText || 'Confirm');
+    setHeaderConfirmDialogOpen(true);
+  }, []);
+
+  const closeConfirmDialog = useCallback(() => {
+    setHeaderConfirmDialogOpen(false);
+    confirmActionRef.current = null;
+  }, []);
+
+  const handleConfirmDialogConfirm = useCallback(async () => {
+    const action = confirmActionRef.current;
+    closeConfirmDialog();
+    if (typeof action === 'function') {
+      try {
+        await action();
+      } catch (error) {
+        console.error('Confirmation action failed:', error);
+        showError('Action failed. Please try again.');
+      }
+    }
+  }, [closeConfirmDialog, showError]);
   
   // Enhanced validation dialog state (from Finance page)
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -3228,6 +3261,58 @@ const WorkshopPage = () => {
 
   return (
     <>
+      {/* Confirm Action Dialog (prevents misclicks) */}
+      <Dialog
+        open={headerConfirmDialogOpen}
+        onClose={closeConfirmDialog}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            backgroundColor: '#3a3a3a',
+            borderRadius: 2,
+            border: '2px solid #b98f33',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+          }
+        }}
+      >
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+          color: '#000000',
+          fontWeight: 'bold'
+        }}>
+          {headerConfirmDialogTitle}
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: '#3a3a3a' }}>
+          <Typography variant="body2" sx={{ color: '#ffffff', mt: 1, whiteSpace: 'pre-wrap' }}>
+            {headerConfirmDialogMessage}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ backgroundColor: '#3a3a3a' }}>
+          <Button onClick={closeConfirmDialog} sx={buttonStyles.cancelButton}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDialogConfirm}
+            variant="contained"
+            sx={{
+              backgroundColor: '#b98f33',
+              color: '#000000',
+              border: '2px solid #8b6b1f',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, #b98f33 0%, #d4af5a 100%)',
+              '&:hover': {
+                backgroundColor: '#d4af5a',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 6px 12px rgba(0,0,0,0.4)'
+              }
+            }}
+          >
+            {headerConfirmDialogConfirmText}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Email Operation Overlay */}
       {(sendingEmail || processingDeposit) && (
         <Box
@@ -3591,7 +3676,19 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={handleSendEmail}
+                      onClick={() => {
+                        const rawEmail = selectedOrder?.orderType === 'corporate'
+                          ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email || '')
+                          : (selectedOrder?.personalInfo?.email || '');
+                        const email = (rawEmail || '').trim();
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Send order email?',
+                          message: `Send order email for #${bill}${email ? ` to ${email}` : ''}?`,
+                          confirmText: 'Send',
+                          onConfirm: handleSendEmail
+                        });
+                      }}
                       disabled={sendingEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
                         ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
                         : selectedOrder?.personalInfo?.email)}
@@ -3617,7 +3714,15 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={handleSendDepositReminderEmail}
+                      onClick={() => {
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Send deposit email?',
+                          message: `Send deposit email for #${bill}?`,
+                          confirmText: 'Send',
+                          onConfirm: handleSendDepositReminderEmail
+                        });
+                      }}
                       disabled={sendingDepositReminderEmail}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3641,7 +3746,18 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={() => { setEditingStatus(selectedOrder.invoiceStatus); setStatusDialogOpen(true); }}
+                      onClick={() => {
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Edit status?',
+                          message: `Open status editor for order #${bill}?`,
+                          confirmText: 'Open',
+                          onConfirm: async () => {
+                            setEditingStatus(selectedOrder.invoiceStatus);
+                            setStatusDialogOpen(true);
+                          }
+                        });
+                      }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                         color: '#000000',
@@ -3664,7 +3780,15 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={() => handleStandaloneAllocationDialog(selectedOrder)}
+                      onClick={() => {
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: selectedOrder?.allocation?.allocations ? 'Edit allocation?' : 'Allocate?',
+                          message: `${selectedOrder?.allocation?.allocations ? 'Open allocation editor' : 'Start allocation'} for order #${bill}?`,
+                          confirmText: 'Open',
+                          onConfirm: async () => handleStandaloneAllocationDialog(selectedOrder)
+                        });
+                      }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                         color: '#000000',
@@ -3694,7 +3818,14 @@ const WorkshopPage = () => {
                         event.preventDefault();
                         event.stopPropagation();
                         if (!selectedOrder) { showError('Please select an order first'); return; }
-                        setInvoicesMenuAnchor(event.currentTarget);
+                        const anchor = event.currentTarget;
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Open invoices menu?',
+                          message: `Open invoices options for order #${bill}?`,
+                          confirmText: 'Open',
+                          onConfirm: async () => setInvoicesMenuAnchor(anchor)
+                        });
                       }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3730,11 +3861,38 @@ const WorkshopPage = () => {
                     },
                   }}
                 >
-                  <MenuItem onClick={async () => { setInvoicesMenuAnchor(null); await saveCurrentEdits(); if (selectedOrder) navigate(`/admin/invoices?orderId=${selectedOrder.id}`); }}>
+                  <MenuItem onClick={() => {
+                    const orderId = selectedOrder?.id;
+                    const bill = selectedOrder?.orderDetails?.billInvoice || orderId || 'N/A';
+                    setInvoicesMenuAnchor(null);
+                    openConfirmDialog({
+                      title: 'Open regular invoices?',
+                      message: `Go to Regular Invoices for order #${bill}?`,
+                      confirmText: 'Open',
+                      onConfirm: async () => {
+                        await saveCurrentEdits();
+                        if (orderId) navigate(`/admin/invoices?orderId=${orderId}`);
+                      }
+                    });
+                  }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Regular Invoices
                   </MenuItem>
-                  <MenuItem onClick={async () => { setInvoicesMenuAnchor(null); await saveCurrentEdits(); if (selectedOrder) navigate(`/admin/corporate-invoices?orderId=${selectedOrder.id}`); else navigate('/admin/corporate-invoices'); }}>
+                  <MenuItem onClick={() => {
+                    const orderId = selectedOrder?.id;
+                    const bill = selectedOrder?.orderDetails?.billInvoice || orderId || 'N/A';
+                    setInvoicesMenuAnchor(null);
+                    openConfirmDialog({
+                      title: 'Open corporate invoices?',
+                      message: `Go to Corporate Invoices for order #${bill}?`,
+                      confirmText: 'Open',
+                      onConfirm: async () => {
+                        await saveCurrentEdits();
+                        if (orderId) navigate(`/admin/corporate-invoices?orderId=${orderId}`);
+                        else navigate('/admin/corporate-invoices');
+                      }
+                    });
+                  }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Corporate Invoices
                   </MenuItem>
@@ -3745,7 +3903,19 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={handleSendCompletionEmail}
+                      onClick={() => {
+                        const rawEmail = selectedOrder?.orderType === 'corporate'
+                          ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email || '')
+                          : (selectedOrder?.personalInfo?.email || '');
+                        const email = (rawEmail || '').trim();
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Send completion email?',
+                          message: `Send completion email for #${bill}${email ? ` to ${email}` : ''}?`,
+                          confirmText: 'Send',
+                          onConfirm: handleSendCompletionEmail
+                        });
+                      }}
                       disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
                         ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
                         : selectedOrder?.personalInfo?.email)}
@@ -3771,7 +3941,15 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={handleOpenPickupEmailDialog}
+                      onClick={() => {
+                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
+                        openConfirmDialog({
+                          title: 'Send pickup ready email?',
+                          message: `Open pickup ready email dialog for #${bill}?`,
+                          confirmText: 'Open',
+                          onConfirm: handleOpenPickupEmailDialog
+                        });
+                      }}
                       disabled={sendingPickupEmail}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',

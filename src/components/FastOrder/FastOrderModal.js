@@ -705,7 +705,10 @@ const FastOrderModal = ({ open, onClose, onSubmit, customers = [] }) => {
                                      <Button
                      variant="contained"
                      size="small"
-                     onClick={() => handleUseExistingCustomer(customer)}
+                     onClick={() => {
+                       handleUseExistingCustomer(customer);
+                       setActiveStep(prev => prev + 1);
+                     }}
                      sx={buttonStyles.primaryButton}
                    >
                      Use This Customer
