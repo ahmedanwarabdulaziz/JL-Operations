@@ -1,10 +1,24 @@
 export const generateOrderEmailTemplate = (orderData) => {
-  const {
-    personalInfo,
-    orderDetails,
-    furnitureData,
-    paymentData
-  } = orderData;
+  const safeOrderData = orderData || {};
+
+  const personalInfo =
+    safeOrderData.personalInfo ||
+    {
+      customerName:
+        safeOrderData.contactPerson?.name ||
+        safeOrderData.corporateCustomer?.corporateName ||
+        'Customer'
+    };
+
+  const orderDetails = safeOrderData.orderDetails || {};
+
+  const furnitureData =
+    safeOrderData.furnitureData ||
+    {
+      groups: safeOrderData.furnitureGroups || []
+    };
+
+  const paymentData = safeOrderData.paymentData || safeOrderData.paymentDetails || {};
 
   const customerFirstName = personalInfo.customerName?.split(' ')[0] || 'Customer';
   const billNo = orderDetails.billInvoice;

@@ -2549,22 +2549,36 @@ const WorkshopPage = () => {
       setSendingEmail(true);
 
       // Prepare order data in the same format as NewOrderPage
-      const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
-        corporateCustomer: selectedOrder.corporateCustomer,
-        contactPerson: selectedOrder.contactPerson,
-        orderDetails: selectedOrder.orderDetails,
-        furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
-        },
-        paymentData: selectedOrder.paymentData
-      } : {
-        personalInfo: selectedOrder.personalInfo,
-        orderDetails: selectedOrder.orderDetails,
-        furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
-        },
-        paymentData: selectedOrder.paymentData
-      };
+      const isCorporate = selectedOrder.orderType === 'corporate';
+      const corporateDisplayName =
+        selectedOrder.contactPerson?.name ||
+        selectedOrder.corporateCustomer?.corporateName ||
+        'Customer';
+
+      const orderDataForEmail = isCorporate
+        ? {
+            // Keep these for other templates / future use
+            corporateCustomer: selectedOrder.corporateCustomer,
+            contactPerson: selectedOrder.contactPerson,
+
+            // Normalized fields expected by generateOrderEmailTemplate
+            personalInfo: {
+              customerName: corporateDisplayName
+            },
+            orderDetails: selectedOrder.orderDetails,
+            furnitureData: {
+              groups: selectedOrder.furnitureGroups || selectedOrder.furnitureData?.groups || []
+            },
+            paymentData: selectedOrder.paymentDetails || selectedOrder.paymentData || {}
+          }
+        : {
+            personalInfo: selectedOrder.personalInfo,
+            orderDetails: selectedOrder.orderDetails,
+            furnitureData: {
+              groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
+            },
+            paymentData: selectedOrder.paymentData || {}
+          };
 
       // Progress callback for email sending
       const onEmailProgress = (message) => {
@@ -3684,12 +3698,12 @@ const WorkshopPage = () => {
                         const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
                         openConfirmDialog({
                           title: 'Send order email?',
-                          message: `Send order email for #${bill}${email ? ` to ${email}` : ''}?`,
+                          message: `Send order email for #${bill}${email ? ' to ' + email : ''}?`,
                           confirmText: 'Send',
                           onConfirm: handleSendEmail
                         });
                       }}
-                      disabled={sendingEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
+                      disabled={sendingEmail || !(selectedOrder?.orderType === 'corporate'
                         ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
                         : selectedOrder?.personalInfo?.email)}
                       sx={{
@@ -3911,7 +3925,7 @@ const WorkshopPage = () => {
                         const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
                         openConfirmDialog({
                           title: 'Send completion email?',
-                          message: `Send completion email for #${bill}${email ? ` to ${email}` : ''}?`,
+                          message: `Send completion email for #${bill}${email ? ' to ' + email : ''}?`,
                           confirmText: 'Send',
                           onConfirm: handleSendCompletionEmail
                         });
