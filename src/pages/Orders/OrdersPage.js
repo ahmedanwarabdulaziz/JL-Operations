@@ -40,7 +40,8 @@ import {
   Phone as PhoneIcon,
   FlashOn as FlashOnIcon,
   Business as BusinessIcon,
-  LocationOn as LocationIcon
+  LocationOn as LocationIcon,
+  ContentCopy as DuplicateIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
@@ -913,6 +914,25 @@ const OrdersPage = () => {
                             }}
                           >
                             <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        )}
+                        {order.orderType === 'corporate' && (
+                        <Tooltip title="Duplicate Order">
+                          <IconButton
+                            size="small"
+                            sx={{ color: '#b98f33' }}
+                            onClick={() => {
+                              navigate('/admin/orders/corporate', {
+                                state: {
+                                  duplicateMode: true,
+                                  orderData: order,
+                                  activeStep: 1 // Skip customer selection, go to furniture
+                                }
+                              });
+                            }}
+                          >
+                            <DuplicateIcon />
                           </IconButton>
                         </Tooltip>
                         )}

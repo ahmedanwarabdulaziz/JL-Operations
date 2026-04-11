@@ -41,7 +41,7 @@ import {
   LocationOn as LocationIcon,
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useNotification } from '../../shared/components/Common/NotificationSystem';
 import { collection, getDocs, query, orderBy, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -100,6 +100,11 @@ const CorporateOrderPage = () => {
 
   const { showSuccess, showError } = useNotification();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Duplicate mode: pre-fill from an existing order
+  const isDuplicateMode = location.state?.duplicateMode || false;
+  const duplicateOrderData = location.state?.orderData || null;
 
   // Fetch corporate customers
   const fetchCorporateCustomers = async () => {
@@ -113,6 +118,40 @@ const CorporateOrderPage = () => {
       }));
       setCorporateCustomers(customers);
       setFilteredCustomers(customers);
+
+      // If duplicating, pre-select the corporate customer and contact person
+      if (isDuplicateMode && duplicateOrderData) {
+        const srcCorp = duplicateOrderData.corporateCustomer;
+        const srcContact = duplicateOrderData.contactPerson;
+        const matched = customers.find(c => c.id === srcCorp?.id);
+        if (matched) {
+          setSelectedCustomer(matched);
+          // Find matching contact person inside the matched customer
+          const matchedContact = (matched.contactPersons || []).find(
+            cp => cp.id === srcContact?.id || cp.name === srcContact?.name
+          );
+          if (matchedContact) {
+            setSelectedContactPerson(matchedContact);
+          }
+        }
+        // Pre-fill furniture and payment
+        setOrderData(prev => ({
+          ...prev,
+          furnitureGroups: duplicateOrderData.furnitureGroups || [],
+          paymentDetails: {
+            ...(duplicateOrderData.paymentDetails || prev.paymentDetails),
+            amountPaid: 0,
+            depositReceived: false
+          }
+        }));
+        // Pre-fill note
+        const note = duplicateOrderData.orderDetails?.note || {};
+        setOrderNote(note.value || '');
+        setOrderNoteCaption(note.caption || 'Note');
+        // Jump to step specified in location state (default 1 = Furniture)
+        const jumpStep = location.state?.activeStep ?? 1;
+        setActiveStep(jumpStep);
+      }
     } catch (error) {
       console.error('Error fetching corporate customers:', error);
       showError('Failed to fetch corporate customers');
@@ -646,7 +685,7 @@ const CorporateOrderPage = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-          Corporate Order
+          {isDuplicateMode ? 'Duplicate Corporate Order' : 'Corporate Order'}
         </Typography>
 
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>

@@ -55,6 +55,7 @@ const NewOrderPage = () => {
   
   // Check if we're in edit mode
   const isEditMode = location.state?.editMode || false;
+  const isDuplicateMode = location.state?.duplicateMode || false;
   const orderToEdit = location.state?.orderData || null;
   const initialActiveStep = location.state?.activeStep || 0;
   
@@ -225,6 +226,39 @@ const NewOrderPage = () => {
           if (location.state?.activeStep !== undefined) {
             setActiveStep(location.state.activeStep);
           }
+        } else if (isDuplicateMode && orderToEdit) {
+          // Duplicate mode: pre-fill everything from source order but generate a new bill number
+          setPersonalInfo(orderToEdit.personalInfo || {});
+          setFurnitureGroups(orderToEdit.furnitureData?.groups || []);
+          // Copy payment structure but reset paid amounts — nothing has been paid on the new order yet
+          const sourcePayment = orderToEdit.paymentData || {};
+          setPaymentDetails({
+            ...sourcePayment,
+            amountPaid: 0,          // Clear paid amount
+            depositReceived: false   // Not yet received
+          });
+          // Generate a fresh bill number and use today's date
+          const nextBillNumber = await getNextBillNumber();
+          const sourceOrderDetails = orderToEdit.orderDetails || {};
+          setOrderDetails({
+            ...sourceOrderDetails,
+            billInvoice: nextBillNumber,                          // New unique bill number
+            startDate: new Date().toISOString().split('T')[0]     // Today's date
+          });
+          // Mark the existing customer as linked (so no duplicate customer record is created)
+          const existingCustomer = customersData.find(c => {
+            const op = orderToEdit.personalInfo || {};
+            if (c.phone && op.phone && c.phone.trim() === op.phone.trim()) return true;
+            if (c.email && op.email && c.email.toLowerCase().trim() === op.email.toLowerCase().trim()) return true;
+            return false;
+          });
+          if (existingCustomer) {
+            setIsUsingExistingCustomer(true);
+            setSelectedExistingCustomer(existingCustomer);
+          }
+          if (location.state?.activeStep !== undefined) {
+            setActiveStep(location.state.activeStep);
+          }
         } else {
           // Get and set next bill number for new orders
           const nextBillNumber = await getNextBillNumber();
@@ -240,7 +274,7 @@ const NewOrderPage = () => {
     };
 
     loadInitialData();
-  }, [showError, isEditMode, orderToEdit]);
+  }, [showError, isEditMode, isDuplicateMode, orderToEdit]);
 
   // Validation functions
   const validatePersonalInfo = () => {
@@ -1461,7 +1495,7 @@ const NewOrderPage = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-          {isEditMode ? 'Edit Order' : 'Create New Order'}
+          {isEditMode ? 'Edit Order' : isDuplicateMode ? 'Duplicate Order' : 'Create New Order'}
         </Typography>
 
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>

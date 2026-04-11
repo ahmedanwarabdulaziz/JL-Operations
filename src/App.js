@@ -47,6 +47,8 @@ import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPa
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
 import ControlPage from './admin/pages/Control/ControlPage';
 import MigrationUtilityPage from './admin/pages/Migration/MigrationUtilityPage';
+import CorporateQuotesPage from './pages/CorporateQuotes/CorporateQuotesPage';
+import NewQuotePage from './pages/CorporateQuotes/NewQuotePage';
 
         // Website Management imports
         import AdminWebsiteLayout from './admin/layouts/WebsiteLayout';
@@ -245,6 +247,8 @@ const AppContent = () => {
           <Route path="/extra-expenses" element={<Navigate to="/admin/extra-expenses" replace />} />
           <Route path="/admin/extra-expenses" element={<ExtraExpensesPage />} />
           <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />
+          <Route path="/admin/corporate-quotes" element={<CorporateQuotesPage />} />
+          <Route path="/admin/corporate-quotes/new" element={<NewQuotePage />} />
         </Routes>
       </AdminMainLayout>
     );

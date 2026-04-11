@@ -48,6 +48,7 @@ import ArchiveIcon from '@mui/icons-material/Archive';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 
 
 import { useFirebaseStatus } from '../../contexts/FirebaseContext';
@@ -72,6 +73,7 @@ const menuItems = [
 
 const corporateItems = [
   { text: 'Corporate Customers', path: '/admin/corporate-customers', icon: <CorporateFareIcon /> },
+  { text: 'Corporate Quotes', path: '/admin/corporate-quotes', icon: <RequestQuoteIcon /> },
 ];
 
 
