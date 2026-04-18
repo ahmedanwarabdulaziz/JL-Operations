@@ -24,6 +24,7 @@ import {
   DialogActions,
   Grid,
   Divider,
+  Tooltip,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -39,6 +40,7 @@ import {
   ExpandLess as ExpandLessIcon,
   Note as NoteIcon,
   PictureAsPdf as PdfIcon,
+  ContentCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
@@ -745,6 +747,23 @@ const CorporateCustomerInvoicesPage = () => {
                         >
                           PDF
                         </Button>
+                        <Tooltip title="Duplicate Order">
+                          <IconButton
+                            size="small"
+                            sx={{ color: '#b98f33' }}
+                            onClick={() => {
+                              navigate('/admin/orders/corporate', {
+                                state: {
+                                  duplicateMode: true,
+                                  orderData: invoice,
+                                  activeStep: 1 // Skip customer selection, go to furniture
+                                }
+                              });
+                            }}
+                          >
+                            <DuplicateIcon />
+                          </IconButton>
+                        </Tooltip>
                       </Box>
                     </TableCell>
                   </TableRow>

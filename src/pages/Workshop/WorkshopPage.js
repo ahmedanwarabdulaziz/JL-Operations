@@ -813,34 +813,9 @@ const WorkshopPage = () => {
         allocation: allocationData
       };
 
-      // Force hide allocation dialog and show confirmation
-      setStandaloneAllocationDialogHidden(true);
-      setStandaloneAllocationDialogOpen(false); // Also close it completely
-      
-      // Longer delay to ensure dialog is completely hidden before showing confirmation
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Show confirmation dialog with allocation summary
-      const allocationSummary = standaloneMonthlyAllocations.map(allocation => 
-        `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
-      ).join(', ');
-
-      const confirmed = await showConfirm(
-        'Confirm Allocation',
-        `Are you sure you want to apply this allocation?\n\n` +
-        `Order: ${selectedOrderForStandaloneAllocation.orderDetails?.billInvoice || selectedOrderForStandaloneAllocation.id}\n` +
-        `Allocations: ${allocationSummary}\n` +
-        `Total Revenue: ${formatCurrency(standaloneTotalRevenue)}\n` +
-        `Total Cost: ${formatCurrency(standaloneTotalCost)}\n` +
-        `Total Profit: ${formatCurrency(standaloneTotalRevenue - standaloneTotalCost)}`
-      );
-
-      if (!confirmed) {
-        // Reopen allocation dialog if user cancels
-        setStandaloneAllocationDialogHidden(false);
-        setStandaloneAllocationDialogOpen(true);
-        return; // User cancelled
-      }
+      // Close allocation dialog and save directly without confirmation
+      setStandaloneAllocationDialogOpen(false);
+      setStandaloneAllocationDialogHidden(false);
       
       const orderRef = doc(db, getOrderCollectionName(selectedOrderForStandaloneAllocation), selectedOrderForStandaloneAllocation.id);
       await updateDoc(orderRef, updateData);
@@ -997,40 +972,12 @@ const WorkshopPage = () => {
         allocation: allocationData
       };
 
-      // Force hide allocation dialog and show confirmation
-      setAllocationDialogHidden(true);
-      setAllocationDialogOpen(false); // Also close it completely
-      
-      // Longer delay to ensure dialog is completely hidden before showing confirmation
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Show enhanced confirmation dialog with email options
-      const allocationSummary = monthlyAllocations.map(allocation => 
-        `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
-      ).join(', ');
+      // Close allocation dialog and save directly without confirmation
+      setAllocationDialogOpen(false);
+      setAllocationDialogHidden(false);
 
       // Determine email + collection handling
       const isCorporateOrder = selectedOrderForAllocation.orderType === 'corporate';
-      const rawCustomerEmail = isCorporateOrder
-        ? (selectedOrderForAllocation.contactPerson?.email || selectedOrderForAllocation.corporateCustomer?.email || '')
-        : (selectedOrderForAllocation.personalInfo?.email || '');
-      const customerEmail = rawCustomerEmail.trim();
-      const hasEmail = !isCorporateOrder && customerEmail !== '';
-
-      const confirmed = await showEnhancedConfirm(
-        'Confirm Order Completion & Email',
-        '', // Empty message since we display order/customer info directly in dialog
-        hasEmail,
-        includeReviewRequest
-      );
-
-      if (!confirmed || !confirmed.confirmed) {
-        // Reopen allocation dialog if user cancels
-        setAllocationDialogHidden(false);
-        setAllocationDialogOpen(true);
-        return; // User cancelled
-      }
-      
       const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
       const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
@@ -1108,71 +1055,6 @@ const WorkshopPage = () => {
 
         showSuccess('Corporate order completed, allocated, and closed successfully');
       } else {
-        // Send completion email if customer has email and user confirmed
-        console.log('🔍 Workshop Debug - Email sending conditions:', {
-          hasCustomerEmail: !!customerEmail,
-          customerEmail: customerEmail,
-          confirmedSendEmail: Boolean(confirmed.sendEmail),
-          confirmedIncludeReview: Boolean(confirmed.includeReviewRequest)
-        });
-        
-        if (customerEmail && confirmed.sendEmail) {
-          try {
-            setSendingCompletionEmail(true);
-            
-            // Prepare order data for email
-            const orderDataForEmail = {
-              personalInfo: sanitizedOrderData.personalInfo,
-              orderDetails: sanitizedOrderData.orderDetails,
-              furnitureData: {
-                groups: sanitizedOrderData.furnitureData?.groups || []
-              },
-              paymentData: sanitizedOrderData.paymentData
-            };
-
-            console.log('🔍 Workshop Debug - Order data prepared for email:', {
-              hasPersonalInfo: !!orderDataForEmail.personalInfo,
-              hasOrderDetails: !!orderDataForEmail.orderDetails,
-              hasFurnitureData: !!orderDataForEmail.furnitureData,
-              furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
-            });
-
-            // Progress callback for email sending
-            const onEmailProgress = (message) => {
-              console.log('🔍 Workshop Debug - Email progress:', message);
-              showSuccess(`📧 ${message}`);
-            };
-
-            console.log('🔍 Workshop Debug - Calling sendCompletionEmailWithGmail...');
-            
-            // Send the completion email
-            const emailResult = await sendCompletionEmailWithGmail(
-              orderDataForEmail, 
-              customerEmail, 
-              Boolean(confirmed.includeReviewRequest), 
-              onEmailProgress
-            );
-            
-            console.log('🔍 Workshop Debug - Email result:', emailResult);
-            
-            if (emailResult.success) {
-              showSuccess('✅ Completion email sent successfully!');
-            } else {
-              showError(`❌ Failed to send completion email: ${emailResult.message}`);
-            }
-          } catch (error) {
-            console.error('🔍 Workshop Debug - Error sending completion email:', error);
-            showError(`Failed to send completion email: ${error.message}`);
-          } finally {
-            setSendingCompletionEmail(false);
-          }
-        } else {
-          console.log('🔍 Workshop Debug - Email not sent because:', {
-            noCustomerEmail: !customerEmail,
-            userDidNotConfirm: !confirmed.sendEmail
-          });
-        }
-        
         showSuccess('Order completed and allocated successfully');
       }
       
@@ -3761,16 +3643,8 @@ const WorkshopPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => {
-                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
-                        openConfirmDialog({
-                          title: 'Edit status?',
-                          message: `Open status editor for order #${bill}?`,
-                          confirmText: 'Open',
-                          onConfirm: async () => {
-                            setEditingStatus(selectedOrder.invoiceStatus);
-                            setStatusDialogOpen(true);
-                          }
-                        });
+                        setEditingStatus(selectedOrder.invoiceStatus);
+                        setStatusDialogOpen(true);
                       }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3795,13 +3669,7 @@ const WorkshopPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => {
-                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
-                        openConfirmDialog({
-                          title: selectedOrder?.allocation?.allocations ? 'Edit allocation?' : 'Allocate?',
-                          message: `${selectedOrder?.allocation?.allocations ? 'Open allocation editor' : 'Start allocation'} for order #${bill}?`,
-                          confirmText: 'Open',
-                          onConfirm: async () => handleStandaloneAllocationDialog(selectedOrder)
-                        });
+                        handleStandaloneAllocationDialog(selectedOrder);
                       }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3832,14 +3700,7 @@ const WorkshopPage = () => {
                         event.preventDefault();
                         event.stopPropagation();
                         if (!selectedOrder) { showError('Please select an order first'); return; }
-                        const anchor = event.currentTarget;
-                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
-                        openConfirmDialog({
-                          title: 'Open invoices menu?',
-                          message: `Open invoices options for order #${bill}?`,
-                          confirmText: 'Open',
-                          onConfirm: async () => setInvoicesMenuAnchor(anchor)
-                        });
+                        setInvoicesMenuAnchor(event.currentTarget);
                       }}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3875,37 +3736,21 @@ const WorkshopPage = () => {
                     },
                   }}
                 >
-                  <MenuItem onClick={() => {
+                  <MenuItem onClick={async () => {
                     const orderId = selectedOrder?.id;
-                    const bill = selectedOrder?.orderDetails?.billInvoice || orderId || 'N/A';
                     setInvoicesMenuAnchor(null);
-                    openConfirmDialog({
-                      title: 'Open regular invoices?',
-                      message: `Go to Regular Invoices for order #${bill}?`,
-                      confirmText: 'Open',
-                      onConfirm: async () => {
-                        await saveCurrentEdits();
-                        if (orderId) navigate(`/admin/invoices?orderId=${orderId}`);
-                      }
-                    });
+                    await saveCurrentEdits();
+                    if (orderId) navigate(`/admin/invoices?orderId=${orderId}`);
                   }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Regular Invoices
                   </MenuItem>
-                  <MenuItem onClick={() => {
+                  <MenuItem onClick={async () => {
                     const orderId = selectedOrder?.id;
-                    const bill = selectedOrder?.orderDetails?.billInvoice || orderId || 'N/A';
                     setInvoicesMenuAnchor(null);
-                    openConfirmDialog({
-                      title: 'Open corporate invoices?',
-                      message: `Go to Corporate Invoices for order #${bill}?`,
-                      confirmText: 'Open',
-                      onConfirm: async () => {
-                        await saveCurrentEdits();
-                        if (orderId) navigate(`/admin/corporate-invoices?orderId=${orderId}`);
-                        else navigate('/admin/corporate-invoices');
-                      }
-                    });
+                    await saveCurrentEdits();
+                    if (orderId) navigate(`/admin/corporate-invoices?orderId=${orderId}`);
+                    else navigate('/admin/corporate-invoices');
                   }}>
                     <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
                     Corporate Invoices
@@ -3917,19 +3762,7 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={() => {
-                        const rawEmail = selectedOrder?.orderType === 'corporate'
-                          ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email || '')
-                          : (selectedOrder?.personalInfo?.email || '');
-                        const email = (rawEmail || '').trim();
-                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
-                        openConfirmDialog({
-                          title: 'Send completion email?',
-                          message: `Send completion email for #${bill}${email ? ' to ' + email : ''}?`,
-                          confirmText: 'Send',
-                          onConfirm: handleSendCompletionEmail
-                        });
-                      }}
+                      onClick={handleSendCompletionEmail}
                       disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
                         ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
                         : selectedOrder?.personalInfo?.email)}
@@ -3955,15 +3788,7 @@ const WorkshopPage = () => {
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <IconButton
                       size="small"
-                      onClick={() => {
-                        const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
-                        openConfirmDialog({
-                          title: 'Send pickup ready email?',
-                          message: `Open pickup ready email dialog for #${bill}?`,
-                          confirmText: 'Open',
-                          onConfirm: handleOpenPickupEmailDialog
-                        });
-                      }}
+                      onClick={handleOpenPickupEmailDialog}
                       disabled={sendingPickupEmail}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',

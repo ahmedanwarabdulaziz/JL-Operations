@@ -698,106 +698,15 @@ const WorkshopPage = () => {
         allocation: allocationData
       };
 
-      // Force hide allocation dialog and show confirmation
-      setAllocationDialogHidden(true);
-      setAllocationDialogOpen(false); // Also close it completely
-      
-      // Longer delay to ensure dialog is completely hidden before showing confirmation
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Show enhanced confirmation dialog with email options
-      const allocationSummary = monthlyAllocations.map(allocation => 
-        `${allocation.month}/${allocation.year}: ${allocation.percentage.toFixed(1)}%`
-      ).join(', ');
-
-      // Check if customer has email
-      const customerEmail = selectedOrderForAllocation.personalInfo?.email;
-      const hasEmail = customerEmail && customerEmail.trim() !== '';
-
-      const confirmed = await showEnhancedConfirm(
-        'Confirm Order Completion & Email',
-        '', // Empty message since we display order/customer info directly in dialog
-        hasEmail,
-        includeReviewRequest
-      );
-
-      if (!confirmed || !confirmed.confirmed) {
-        // Reopen allocation dialog if user cancels
-        setAllocationDialogHidden(false);
-        setAllocationDialogOpen(true);
-        return; // User cancelled
-      }
+      // Close allocation dialog and proceed directly without confirmation
+      setAllocationDialogOpen(false);
+      setAllocationDialogHidden(false);
       
       // Handle both corporate and regular orders
       const isCorporateOrder = selectedOrderForAllocation.orderType === 'corporate';
       const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
       const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
-      
-      // Send completion email if customer has email and user confirmed
-      console.log('🔍 Admin Workshop Debug - Email sending conditions:', {
-        hasCustomerEmail: !!customerEmail,
-        customerEmail: customerEmail,
-        confirmedSendEmail: confirmed.sendEmail,
-        confirmedIncludeReview: confirmed.includeReviewRequest
-      });
-      
-      if (customerEmail && confirmed.sendEmail) {
-        try {
-          setSendingCompletionEmail(true);
-          
-          // Prepare order data for email
-          const orderDataForEmail = {
-            personalInfo: selectedOrderForAllocation.personalInfo,
-            orderDetails: selectedOrderForAllocation.orderDetails,
-            furnitureData: {
-              groups: selectedOrderForAllocation.furnitureData?.groups || []
-            },
-            paymentData: selectedOrderForAllocation.paymentData
-          };
-
-          console.log('🔍 Admin Workshop Debug - Order data prepared for email:', {
-            hasPersonalInfo: !!orderDataForEmail.personalInfo,
-            hasOrderDetails: !!orderDataForEmail.orderDetails,
-            hasFurnitureData: !!orderDataForEmail.furnitureData,
-            furnitureGroupsCount: orderDataForEmail.furnitureData?.groups?.length || 0
-          });
-
-          // Progress callback for email sending
-          const onEmailProgress = (message) => {
-            console.log('🔍 Admin Workshop Debug - Email progress:', message);
-            showSuccess(`📧 ${message}`);
-          };
-
-          console.log('🔍 Admin Workshop Debug - Calling sendCompletionEmailWithGmail...');
-          
-          // Send the completion email
-          const emailResult = await sendCompletionEmailWithGmail(
-            orderDataForEmail, 
-            customerEmail, 
-            confirmed.includeReviewRequest, 
-            onEmailProgress
-          );
-          
-          console.log('🔍 Admin Workshop Debug - Email result:', emailResult);
-          
-          if (emailResult.success) {
-            showSuccess('✅ Completion email sent successfully!');
-          } else {
-            showError(`❌ Failed to send completion email: ${emailResult.message}`);
-          }
-        } catch (error) {
-          console.error('🔍 Admin Workshop Debug - Error sending completion email:', error);
-          showError(`Failed to send completion email: ${error.message}`);
-        } finally {
-          setSendingCompletionEmail(false);
-        }
-      } else {
-        console.log('🔍 Admin Workshop Debug - Email not sent because:', {
-          noCustomerEmail: !customerEmail,
-          userDidNotConfirm: !confirmed.sendEmail
-        });
-      }
       
       showSuccess('Order completed and allocated successfully');
       setAllocationDialogOpen(false);
@@ -1793,19 +1702,46 @@ const WorkshopPage = () => {
     includeReview: true
   });
 
-  // Completion Email Functions
-  const handleSendCompletionEmail = () => {
+  // Completion Email Functions - send directly without confirmation dialog
+  const handleSendCompletionEmail = async () => {
     if (!selectedOrder?.personalInfo?.email) {
       showError('No customer email available for this order');
       return;
     }
     
-    // Open the completion email dialog
-    setCompletionEmailDialog({
-      open: true,
-      sendEmail: true,
-      includeReview: true
-    });
+    try {
+      setSendingCompletionEmail(true);
+      
+      const orderDataForEmail = {
+        personalInfo: selectedOrder.personalInfo,
+        orderDetails: selectedOrder.orderDetails,
+        furnitureData: {
+          groups: selectedOrder.furnitureData?.groups || []
+        },
+        paymentData: selectedOrder.paymentData
+      };
+
+      const onEmailProgress = (message) => {
+        showSuccess(`📧 ${message}`);
+      };
+
+      const emailResult = await sendCompletionEmailWithGmail(
+        orderDataForEmail, 
+        selectedOrder.personalInfo.email, 
+        true, // includeReview
+        onEmailProgress
+      );
+      
+      if (emailResult.success) {
+        showSuccess('✅ Completion email sent successfully!');
+      } else {
+        showError(`❌ Failed to send completion email: ${emailResult.message}`);
+      }
+    } catch (error) {
+      showError(`Failed to send completion email: ${error.message}`);
+    } finally {
+      setSendingCompletionEmail(false);
+    }
   };
 
   const handleCompletionEmailConfirm = async () => {
@@ -2547,17 +2483,13 @@ const WorkshopPage = () => {
                   {sendingCompletionEmail ? 'Sending...' : 'Send Completion Email'}
                 </Button>
 
-                {/* Invoices Button with Menu */}
+                {/* Invoices Button - navigates directly */}
                 <Button
                   variant="contained"
                   size="medium"
                   type="button"
-                  aria-controls={invoicesMenuOpen ? 'invoices-menu' : undefined}
-                  aria-haspopup="true"
-                  aria-expanded={invoicesMenuOpen ? 'true' : undefined}
                   startIcon={<ReceiptIcon sx={{ color: '#000000' }} />}
-                  endIcon={<ArrowDropDownIcon sx={{ color: '#000000' }} />}
-                  onClick={handleInvoicesMenuClick}
+                  onClick={handleNavigateToRegularInvoices}
                   disabled={!selectedOrder}
                   sx={{
                     px: 3,
@@ -2598,46 +2530,6 @@ const WorkshopPage = () => {
                 >
                   Invoices
                 </Button>
-                <Menu
-                  id="invoices-menu"
-                  anchorEl={invoicesMenuAnchor}
-                  open={invoicesMenuOpen}
-                  onClose={handleInvoicesMenuClose}
-                  MenuListProps={{
-                    'aria-labelledby': 'invoices-button',
-                  }}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  }}
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'left',
-                  }}
-                  PaperProps={{
-                    sx: {
-                      mt: 1,
-                      minWidth: 200,
-                      backgroundColor: '#2a2a2a',
-                      border: '1px solid #444',
-                      '& .MuiMenuItem-root': {
-                        color: '#ffffff',
-                        '&:hover': {
-                          backgroundColor: '#3a3a3a',
-                        },
-                      },
-                    },
-                  }}
-                >
-                  <MenuItem onClick={handleNavigateToRegularInvoices}>
-                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
-                    Regular Invoices
-                  </MenuItem>
-                  <MenuItem onClick={handleNavigateToCorporateInvoices}>
-                    <ReceiptIcon sx={{ mr: 1, color: '#b98f33' }} />
-                    Corporate Invoices
-                  </MenuItem>
-                </Menu>
               </Box>
             </Box>
 
