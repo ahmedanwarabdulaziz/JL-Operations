@@ -529,7 +529,7 @@ const CorporateInvoicesPage = () => {
               <div style="flex: 1; margin-right: 16px;">
                 <h6 style="font-weight: bold; color: black; margin-bottom: 8px; font-size: 18px;">Invoice to:</h6>
                 <h5 style="font-weight: bold; margin-bottom: 8px; color: black; font-size: 20px;">${order.corporateCustomer?.corporateName || 'N/A'}</h5>
-                ${order.contactPerson?.name ? `<div style="display: flex; align-items: center; margin-bottom: 4px;"><span style="margin-right: 8px; font-size: 16px; color: #666666;">👤</span><span style="color: black;">${order.contactPerson.name}</span></div>` : ''}
+                ${order.contactPerson?.name ? `<div style="display: flex; align-items: center; margin-bottom: 4px;"><span style="margin-right: 8px; font-size: 16px; color: #666666;">👤</span><span style="color: black;">${order.contactPerson.name}</span>${order.orderDetails?.note?.value ? `<span style="color: black; margin-left: 8px;">• <strong>${order.orderDetails.note.caption || 'Note'}:</strong> ${order.orderDetails.note.value}</span>` : ''}</div>` : ''}
                 ${order.contactPerson?.phone ? `<div style="display: flex; align-items: center; margin-bottom: 4px;"><span style="margin-right: 8px; font-size: 16px; color: #666666;">📞</span><span style="color: black;">${order.contactPerson.phone}</span></div>` : ''}
                 ${order.contactPerson?.email ? `<div style="display: flex; align-items: center; margin-bottom: 4px;"><span style="margin-right: 8px; font-size: 16px; color: #666666;">✉️</span><span style="color: black;">${order.contactPerson.email}</span></div>` : ''}
                 ${order.corporateCustomer?.address ? `<div style="display: flex; align-items: flex-start; margin-bottom: 4px;"><span style="margin-right: 8px; font-size: 16px; color: #666666; margin-top: 2px;">📍</span><span style="white-space: pre-line; color: black;">${order.corporateCustomer.address}</span></div>` : ''}
@@ -1157,7 +1157,7 @@ const CorporateInvoicesPage = () => {
   };
 
   return (
-    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default', minHeight: 0 }}>
+    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default', minHeight: 0, overflow: 'hidden' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
@@ -1169,7 +1169,7 @@ const CorporateInvoicesPage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5' }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5', overflow: 'hidden' }}>
         {/* Left Column - Corporate Orders List */}
         <Paper 
           sx={{ 
@@ -1325,7 +1325,7 @@ const CorporateInvoicesPage = () => {
       </Paper>
 
       {/* Right Column - Corporate Invoices Display */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
         {selectedOrder ? (
           <>
             {/* Header with Credit Card Fee Toggle */}

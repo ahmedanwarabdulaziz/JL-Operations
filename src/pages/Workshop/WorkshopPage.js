@@ -127,6 +127,7 @@ const WorkshopPage = () => {
   const [pickupTimeEnd, setPickupTimeEnd] = useState('2:00 PM');
   const [pickupRemainingBalance, setPickupRemainingBalance] = useState('');
   const [pickupPaymentMethod, setPickupPaymentMethod] = useState('etransfer'); // 'cash' | 'etransfer'
+  const [pickupTaxMode, setPickupTaxMode] = useState('normal'); // 'normal' | 'fullTax'
   const [sendingPickupEmail, setSendingPickupEmail] = useState(false);
   const [processingDeposit, setProcessingDeposit] = useState(false);
   const [paymentDialog, setPaymentDialog] = useState(false);
@@ -2532,23 +2533,74 @@ const WorkshopPage = () => {
     }
   };
 
+  // Calculate full-tax total (13% HST on entire subtotal, like a tax invoice)
+  const calculateFullTaxTotal = (order) => {
+    if (!order) return 0;
+    const paymentData = order.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    const breakdown = getOrderCostBreakdown(order);
+    let subtotal = breakdown.material + breakdown.labour + breakdown.foam + breakdown.painting;
+    
+    // Add pickup/delivery cost if enabled
+    if (paymentData?.pickupDeliveryEnabled) {
+      const pickupCost = parseFloat(paymentData.pickupDeliveryCost) || 0;
+      const serviceType = paymentData.pickupDeliveryServiceType;
+      if (serviceType === 'both') {
+        subtotal += pickupCost * 2;
+      } else {
+        subtotal += pickupCost;
+      }
+    }
+
+    // 13% tax on the ENTIRE subtotal (like a tax invoice)
+    const taxAmount = subtotal * 0.13;
+    return subtotal + taxAmount;
+  };
+
+  // Recalculate pickup remaining balance when tax mode changes
+  const recalcPickupBalance = (mode, order) => {
+    if (!order) return '0.00';
+    const paymentData = order.orderType === 'corporate' ? order.paymentDetails : order.paymentData;
+    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
+    let grandTotal;
+    if (mode === 'fullTax') {
+      grandTotal = calculateFullTaxTotal(order);
+    } else {
+      const totals = calculateInvoiceTotals(order);
+      grandTotal = totals.grandTotal;
+    }
+    return (grandTotal - amountPaid).toFixed(2);
+  };
+
   const handleOpenPickupEmailDialog = () => {
     if (!selectedOrder) {
       showError('Please select an order first');
       return;
     }
-    const totals = selectedOrder ? calculateInvoiceTotals(selectedOrder) : null;
-    const paymentData = selectedOrder?.orderType === 'corporate' ? selectedOrder.paymentDetails : selectedOrder?.paymentData;
-    const amountPaid = parseFloat(paymentData?.amountPaid) || 0;
-    const balanceDue = totals ? (totals.grandTotal - amountPaid).toFixed(2) : '0.00';
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const defaultMode = 'normal';
+    setPickupTaxMode(defaultMode);
+    const balanceDue = recalcPickupBalance(defaultMode, selectedOrder);
+    // Default to next nearest Saturday based on Toronto time (business timezone)
+    const torontoParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    const torontoYear = parseInt(torontoParts.find(p => p.type === 'year').value);
+    const torontoMonth = parseInt(torontoParts.find(p => p.type === 'month').value) - 1;
+    const torontoDay = parseInt(torontoParts.find(p => p.type === 'day').value);
+    const torontoToday = new Date(torontoYear, torontoMonth, torontoDay);
+    const dayOfWeek = torontoToday.getDay(); // 0=Sun, 6=Sat
+    const daysUntilSaturday = dayOfWeek === 6 ? 7 : (6 - dayOfWeek);
+    const nextSaturday = new Date(torontoToday);
+    nextSaturday.setDate(torontoToday.getDate() + daysUntilSaturday);
     setPickupRemainingBalance(balanceDue);
-    setPickupEmailDate(tomorrow.toISOString().split('T')[0]);
+    setPickupEmailDate(`${nextSaturday.getFullYear()}-${String(nextSaturday.getMonth() + 1).padStart(2, '0')}-${String(nextSaturday.getDate()).padStart(2, '0')}`);
     setPickupTimeStart('12:00 PM');
     setPickupTimeEnd('2:00 PM');
     setPickupPaymentMethod('etransfer');
     setPickupEmailDialogOpen(true);
+  };
+
+  const handlePickupTaxModeChange = (newMode) => {
+    setPickupTaxMode(newMode);
+    const balanceDue = recalcPickupBalance(newMode, selectedOrder);
+    setPickupRemainingBalance(balanceDue);
   };
 
   const formatPickupDateForEmail = (dateStr) => {
@@ -3895,14 +3947,40 @@ const WorkshopPage = () => {
                     }}
                     inputProps={{ sx: { color: '#fff' } }}
                   />
+                  {/* Tax Mode Toggle */}
+                  <Typography variant="subtitle2" sx={{ color: '#b98f33', fontWeight: 'bold', mt: 1 }}>Invoice Type for Total</Typography>
+                  <RadioGroup
+                    row
+                    value={pickupTaxMode}
+                    onChange={(e) => handlePickupTaxModeChange(e.target.value)}
+                    sx={{ gap: 2, mb: 1 }}
+                  >
+                    <FormControlLabel
+                      value="normal"
+                      control={<Radio sx={{ color: '#b98f33', '&.Mui-checked': { color: '#b98f33' } }} />}
+                      label={<Typography sx={{ color: '#fff', fontSize: '0.875rem' }}>Normal (tax on materials/foam)</Typography>}
+                    />
+                    <FormControlLabel
+                      value="fullTax"
+                      control={<Radio sx={{ color: '#4CAF50', '&.Mui-checked': { color: '#4CAF50' } }} />}
+                      label={<Typography sx={{ color: '#fff', fontSize: '0.875rem' }}>Full Tax Invoice (13% HST on all)</Typography>}
+                    />
+                  </RadioGroup>
+                  {pickupTaxMode === 'fullTax' && (
+                    <Alert severity="info" sx={{ mb: 1, backgroundColor: 'rgba(33,150,243,0.1)', color: '#90caf9', '& .MuiAlert-icon': { color: '#90caf9' } }}>
+                      Total is calculated with 13% HST on the entire invoice subtotal, just like a Tax Invoice.
+                    </Alert>
+                  )}
                   <Box sx={{
                     p: 2,
                     backgroundColor: '#2a2a2a',
                     borderRadius: 1,
-                    border: '1px solid #444',
-                    borderLeft: '4px solid #b98f33'
+                    border: pickupTaxMode === 'fullTax' ? '1px solid #4CAF50' : '1px solid #444',
+                    borderLeft: pickupTaxMode === 'fullTax' ? '4px solid #4CAF50' : '4px solid #b98f33'
                   }}>
-                    <Typography variant="caption" sx={{ color: '#b98f33', fontWeight: 'bold', display: 'block', mb: 0.5 }}>Remaining balance</Typography>
+                    <Typography variant="caption" sx={{ color: pickupTaxMode === 'fullTax' ? '#4CAF50' : '#b98f33', fontWeight: 'bold', display: 'block', mb: 0.5 }}>
+                      Remaining balance {pickupTaxMode === 'fullTax' ? '(Full Tax)' : ''}
+                    </Typography>
                     <Typography variant="body1" sx={{ color: '#fff', fontWeight: 600 }}>
                       ${(parseFloat(pickupRemainingBalance) || 0).toFixed(2)}
                     </Typography>
