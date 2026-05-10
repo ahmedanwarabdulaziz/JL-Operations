@@ -1157,7 +1157,7 @@ const CorporateInvoicesPage = () => {
   };
 
   return (
-    <Box sx={{ p: 3, width: '100%', backgroundColor: 'background.default', minHeight: 0, overflow: 'hidden' }}>
+    <Box sx={{ width: '100%', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', backgroundColor: 'background.default', overflow: 'hidden' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
@@ -1169,12 +1169,13 @@ const CorporateInvoicesPage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5', overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5', overflow: 'hidden', borderRadius: 1, boxShadow: 1 }}>
         {/* Left Column - Corporate Orders List */}
         <Paper 
           sx={{ 
-            width: '400px', 
-            minWidth: '400px',
+            width: { xs: '100%', md: '400px' }, 
+            minWidth: { xs: 'auto', md: '400px' },
+            flexShrink: 0,
             display: 'flex', 
             flexDirection: 'column',
             borderRadius: 0,

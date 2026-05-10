@@ -2618,13 +2618,19 @@ const WorkshopPage = () => {
       showError('No email address found for this customer');
       return;
     }
-    const balanceVal = parseFloat(pickupRemainingBalance) || 0;
+    let balanceVal = parseFloat(pickupRemainingBalance) || 0;
+    
+    // Round the balance to nearest integer if payment method is cash
+    if (pickupPaymentMethod === 'cash') {
+      balanceVal = Math.round(balanceVal);
+    }
+
     const pickupOptions = {
       customerName: selectedOrder.personalInfo?.customerName || selectedOrder.contactPerson?.name || 'Customer',
       pickupDate: formatPickupDateForEmail(pickupEmailDate),
       timeStart: pickupTimeStart || '12:00 PM',
       timeEnd: pickupTimeEnd || '2:00 PM',
-      remainingBalanceFormatted: `$${balanceVal.toFixed(2)}`,
+      remainingBalanceFormatted: `$${pickupPaymentMethod === 'cash' ? balanceVal : balanceVal.toFixed(2)}`,
       paymentMethod: pickupPaymentMethod,
       etransferEmail: 'jl@jlupholstery.com',
     };
