@@ -1173,13 +1173,17 @@ const CorporateInvoicesPage = () => {
         {/* Left Column - Corporate Orders List */}
         <Paper 
           sx={{ 
-            width: { xs: '100%', md: '400px' }, 
-            minWidth: { xs: 'auto', md: '400px' },
+            width: { xs: '100%', md: '380px' }, 
+            minWidth: { xs: 'auto', md: '300px' },
+            maxWidth: { xs: '100%', md: '400px' },
             flexShrink: 0,
             display: 'flex', 
             flexDirection: 'column',
             borderRadius: 0,
-            borderRight: '1px solid #e0e0e0'
+            borderRight: '1px solid #e0e0e0',
+            transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'width',
+            overflow: 'hidden',
           }}
         >
           {/* Header */}

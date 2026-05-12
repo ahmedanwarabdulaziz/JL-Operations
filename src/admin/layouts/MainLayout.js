@@ -35,7 +35,10 @@ const MainLayout = ({ children }) => {
           flexGrow: 1,
           backgroundColor: 'background.default',
           marginLeft: sidebarExpanded ? '280px' : '80px',
-          transition: 'margin-left 0.3s ease',
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          willChange: 'margin-left',
+          overflow: 'hidden',
+          minWidth: 0,
         }}
       >
         <Header />

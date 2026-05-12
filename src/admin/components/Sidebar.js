@@ -186,7 +186,7 @@ const Sidebar = ({ onToggle, onPin }) => {
           backgroundColor: '#b98f33', // Gold background as requested
           borderRight: '1px solid #333333',
           boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
-          transition: 'width 0.3s ease',
+          transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           overflow: 'auto',
           position: 'fixed',
           height: '100vh',
