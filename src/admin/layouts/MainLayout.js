@@ -37,8 +37,9 @@ const MainLayout = ({ children }) => {
           marginLeft: sidebarExpanded ? '280px' : '80px',
           transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           willChange: 'margin-left',
-          overflow: 'hidden',
+          overflow: 'auto',
           minWidth: 0,
+          width: sidebarExpanded ? 'calc(100vw - 280px)' : 'calc(100vw - 80px)',
         }}
       >
         <Header />

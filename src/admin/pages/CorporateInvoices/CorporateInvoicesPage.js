@@ -1157,7 +1157,7 @@ const CorporateInvoicesPage = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', backgroundColor: 'background.default', overflow: 'hidden' }}>
+    <Box sx={{ width: '100%', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', backgroundColor: 'background.default', overflow: 'auto' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
@@ -1169,20 +1169,19 @@ const CorporateInvoicesPage = () => {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5', overflow: 'hidden', borderRadius: 1, boxShadow: 1 }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, backgroundColor: '#f5f5f5', overflow: 'hidden', borderRadius: 1, boxShadow: 1, minWidth: 0 }}>
         {/* Left Column - Corporate Orders List */}
         <Paper 
           sx={{ 
-            width: { xs: '100%', md: '380px' }, 
-            minWidth: { xs: 'auto', md: '300px' },
-            maxWidth: { xs: '100%', md: '400px' },
+            flex: '0 0 340px',
+            width: '340px',
+            minWidth: '280px',
+            maxWidth: '340px',
             flexShrink: 0,
             display: 'flex', 
             flexDirection: 'column',
             borderRadius: 0,
             borderRight: '1px solid #e0e0e0',
-            transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            willChange: 'width',
             overflow: 'hidden',
           }}
         >
@@ -1330,16 +1329,17 @@ const CorporateInvoicesPage = () => {
       </Paper>
 
       {/* Right Column - Corporate Invoices Display */}
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: '600px', overflow: 'auto' }}>
         {selectedOrder ? (
           <>
             {/* Header with Credit Card Fee Toggle */}
             <Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0', backgroundColor: '#000000' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+              {/* Row 1: Title + Credit Card Toggle + Status */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33', flexShrink: 0 }}>
                   Corporate Invoice - #{selectedOrder.orderDetails?.billInvoice}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -1405,15 +1405,21 @@ const CorporateInvoicesPage = () => {
                         ))}
                     </Select>
                   </FormControl>
+                </Box>
+              </Box>
+
+              {/* Row 2: Action Buttons — wraps on narrow screens */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}>
                   <Button
                     variant="contained"
                     startIcon={<PrintIcon />}
                     onClick={handlePrintInvoice}
+                    size="small"
                     sx={{
                       backgroundColor: '#274290',
                       color: 'white',
                       px: 2,
-                      py: 1,
+                      py: 0.75,
                       '&:hover': {
                         backgroundColor: '#1e2f5c'
                       }
@@ -1426,6 +1432,7 @@ const CorporateInvoicesPage = () => {
                     startIcon={<PrintIcon sx={{ color: '#000000' }} />}
                     onClick={handlePrintWorkOrder}
                     disabled={!selectedOrder}
+                    size="small"
                     sx={{
                       background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
                       color: '#000000',
@@ -1462,11 +1469,12 @@ const CorporateInvoicesPage = () => {
                     variant="contained"
                     startIcon={<DownloadIcon />}
                     onClick={handleDownloadPdf}
+                    size="small"
                     sx={{
                       backgroundColor: '#274290',
                       color: 'white',
                       px: 2,
-                      py: 1,
+                      py: 0.75,
                       '&:hover': {
                         backgroundColor: '#1e2f5c'
                       }
@@ -1478,11 +1486,12 @@ const CorporateInvoicesPage = () => {
                     variant="contained"
                     startIcon={<ArchiveIcon />}
                     onClick={handleCloseCorporateInvoice}
+                    size="small"
                     sx={{
                       backgroundColor: '#274290',
                       color: 'white',
                       px: 2,
-                      py: 1,
+                      py: 0.75,
                       '&:hover': {
                         backgroundColor: '#1e2f5c'
                       }
@@ -1495,11 +1504,12 @@ const CorporateInvoicesPage = () => {
                     startIcon={<BuildIcon />}
                     onClick={() => selectedOrder && navigate(`/admin/workshop?orderId=${selectedOrder.id}`)}
                     disabled={!selectedOrder}
+                    size="small"
                     sx={{
                       backgroundColor: '#274290',
                       color: 'white',
                       px: 2,
-                      py: 1,
+                      py: 0.75,
                       '&:hover': {
                         backgroundColor: '#1e2f5c'
                       }
@@ -1507,7 +1517,6 @@ const CorporateInvoicesPage = () => {
                   >
                     Back to Workshop
                   </Button>
-                </Box>
               </Box>
               
               <Typography variant="body2" sx={{ color: '#b98f33', mb: 2 }}>

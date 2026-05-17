@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { calculateOrderTotal, calculateJLCostAnalysisBeforeTax, calculateOrderProfit } from '../../../shared/utils/orderCalculations';
 import { formatCurrency } from '../../../shared/utils/plCalculations';
 import { normalizeAllocation } from '../../../shared/utils/allocationUtils';
+import MonthlyTrackerSection from './MonthlyTrackerSection';
+
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -710,6 +712,9 @@ const DashboardPage = () => {
           </Typography>
         </Box>
       </Box>
+
+      {/* Monthly Financial Tracker — top of dashboard */}
+      <MonthlyTrackerSection />
 
       {/* Current Year Summary Card */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
