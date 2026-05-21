@@ -918,6 +918,25 @@ const OrdersPage = () => {
                         </Tooltip>
                         )}
                         {order.orderType === 'corporate' && (
+                        <Tooltip title="Edit Order">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              navigate('/admin/orders/corporate', {
+                                state: {
+                                  editMode: true,
+                                  orderData: order,
+                                  activeStep: 1 // Go directly to furniture step
+                                }
+                              });
+                            }}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </Tooltip>
+                        )}
+                        {order.orderType === 'corporate' && (
                         <Tooltip title="Duplicate Order">
                           <IconButton
                             size="small"

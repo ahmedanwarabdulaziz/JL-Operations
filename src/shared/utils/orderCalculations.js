@@ -93,18 +93,18 @@ export const calculateOrderTotal = (order) => {
       taxableAmount += materialTotal; // Materials are taxable
       
       // Labour costs (not taxable)
-      itemsSubtotal += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
+      itemsSubtotal += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1);
       
       // Foam costs (if enabled) - taxable
       if (group.foamEnabled || group.foamPrice > 0) {
-        const foamTotal = (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+        const foamTotal = (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1);
         itemsSubtotal += foamTotal;
         taxableAmount += foamTotal; // Foam is taxable
       }
       
       // Painting costs (if enabled) - not taxable (labour)
       if (group.paintingEnabled || group.paintingLabour > 0) {
-        const paintingTotal = (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 0);
+        const paintingTotal = (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1);
         itemsSubtotal += paintingTotal;
         // Painting is labour, so not taxable
       }
@@ -149,16 +149,16 @@ export const calculateOrderTotalWithoutTax = (order) => {
       total += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       
       // Labour costs  
-      total += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
+      total += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1);
       
       // Foam costs (if enabled)
       if (group.foamEnabled || group.foamPrice > 0) {
-        total += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+        total += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1);
       }
       
       // Painting costs (if enabled)
       if (group.paintingEnabled || group.paintingLabour > 0) {
-        total += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 0);
+        total += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1);
       }
       
       // Legacy support for old field names
@@ -196,7 +196,7 @@ export const calculateOrderTax = (order) => {
       
       // Foam is taxable
       if (group.foamEnabled || group.foamPrice > 0) {
-        taxableAmount += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+        taxableAmount += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1);
       }
     });
   }
@@ -226,16 +226,16 @@ export const getOrderCostBreakdown = (order) => {
       breakdown.material += (parseFloat(group.materialPrice) || 0) * (parseFloat(group.materialQnty) || 0);
       
       // Labour costs
-      breakdown.labour += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 0);
+      breakdown.labour += (parseFloat(group.labourPrice) || 0) * (parseFloat(group.labourQnty) || 1);
       
       // Foam costs
       if (group.foamEnabled || group.foamPrice > 0) {
-        breakdown.foam += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 0);
+        breakdown.foam += (parseFloat(group.foamPrice) || 0) * (parseFloat(group.foamQnty) || 1);
       }
       
       // Painting costs
       if (group.paintingEnabled || group.paintingLabour > 0) {
-        breakdown.painting += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 0);
+        breakdown.painting += (parseFloat(group.paintingLabour) || 0) * (parseFloat(group.paintingQnty) || 1);
       }
       
       // Legacy support

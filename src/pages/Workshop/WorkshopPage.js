@@ -973,6 +973,15 @@ const WorkshopPage = () => {
         allocation: allocationData
       };
 
+      // Capture next invoice to focus BEFORE any await — filteredOrders is fresh in this
+      // synchronous block. selectedOrderIdRef is used by fetchOrders to preserve selection;
+      // we update it to the next order so fetchOrders selects it instead of sortedOrders[0].
+      const completingId = selectedOrderForAllocation.id;
+      const completingIndex = filteredOrders.findIndex(o => o.id === completingId);
+      const nextOrderAfterCompletion = completingIndex !== -1
+        ? (filteredOrders[completingIndex + 1] || filteredOrders[completingIndex - 1] || null)
+        : null;
+
       // Close allocation dialog and save directly without confirmation
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
@@ -1062,6 +1071,12 @@ const WorkshopPage = () => {
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
       setSelectedOrderForAllocation(null);
+      // Update the ref to the next invoice BEFORE fetchOrders runs.
+      // fetchOrders uses selectedOrderIdRef to preserve selection; the completed order
+      // is no longer in the list, so without this it falls back to sortedOrders[0].
+      if (nextOrderAfterCompletion) {
+        selectedOrderIdRef.current = nextOrderAfterCompletion.id;
+      }
       fetchOrders();
     } catch (error) {
       console.error('Error applying allocation:', error);

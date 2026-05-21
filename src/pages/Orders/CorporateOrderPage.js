@@ -102,9 +102,11 @@ const CorporateOrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Duplicate mode: pre-fill from an existing order
+  // Edit / Duplicate mode: pre-fill from an existing order
+  const isEditMode = location.state?.editMode || false;
   const isDuplicateMode = location.state?.duplicateMode || false;
-  const duplicateOrderData = location.state?.orderData || null;
+  const sourceOrderData = location.state?.orderData || null;
+  const duplicateOrderData = sourceOrderData; // kept for legacy duplicate path
 
   // Fetch corporate customers
   const fetchCorporateCustomers = async () => {
@@ -119,8 +121,41 @@ const CorporateOrderPage = () => {
       setCorporateCustomers(customers);
       setFilteredCustomers(customers);
 
-      // If duplicating, pre-select the corporate customer and contact person
-      if (isDuplicateMode && duplicateOrderData) {
+      // If editing, pre-select the corporate customer and contact person
+      if (isEditMode && sourceOrderData) {
+        const srcCorp = sourceOrderData.corporateCustomer;
+        const srcContact = sourceOrderData.contactPerson;
+        const matched = customers.find(c => c.id === srcCorp?.id);
+        if (matched) {
+          setSelectedCustomer(matched);
+          // Find matching contact person inside the matched customer
+          const matchedContact = (matched.contactPersons || []).find(
+            cp => cp.id === srcContact?.id || cp.name === srcContact?.name
+          );
+          if (matchedContact) {
+            setSelectedContactPerson(matchedContact);
+          }
+        }
+        // Pre-fill invoice number (keep same)
+        if (sourceOrderData.orderDetails?.billInvoice) {
+          setInvoiceNumber(sourceOrderData.orderDetails.billInvoice);
+        }
+        // Pre-fill furniture and payment (keep paid amounts intact)
+        setOrderData(prev => ({
+          ...prev,
+          furnitureGroups: sourceOrderData.furnitureGroups || [],
+          paymentDetails: {
+            ...(sourceOrderData.paymentDetails || prev.paymentDetails)
+          }
+        }));
+        // Pre-fill note
+        const note = sourceOrderData.orderDetails?.note || {};
+        setOrderNote(note.value || '');
+        setOrderNoteCaption(note.caption || 'Note');
+        // Jump to step specified in location state (default 1 = Furniture)
+        const jumpStep = location.state?.activeStep ?? 1;
+        setActiveStep(jumpStep);
+      } else if (isDuplicateMode && duplicateOrderData) {
         const srcCorp = duplicateOrderData.corporateCustomer;
         const srcContact = duplicateOrderData.contactPerson;
         const matched = customers.find(c => c.id === srcCorp?.id);
@@ -388,11 +423,14 @@ const CorporateOrderPage = () => {
 
       const finalInvoiceNumber = `T-${finalNumberPart}`;
       
-      // Check for duplicates in both corporate-orders and customer-invoices
-      const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
-      if (!isValid) {
-        showError(`Invoice number ${finalInvoiceNumber} already exists in corporate orders or customer invoices. Please choose a different number.`);
-        return;
+      // In edit mode, skip duplicate check (same document keeps same number)
+      if (!isEditMode) {
+        // Check for duplicates in both corporate-orders and customer-invoices
+        const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
+        if (!isValid) {
+          showError(`Invoice number ${finalInvoiceNumber} already exists in corporate orders or customer invoices. Please choose a different number.`);
+          return;
+        }
       }
       
       // Update invoice number if it was padded
@@ -464,15 +502,8 @@ const CorporateOrderPage = () => {
       }
 
       const finalInvoiceNumber = `T-${finalNumberPart}`;
-      
-      // Only check for duplicates - allow manual number assignment
-      const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
-      if (!isValid) {
-        showError(`Invoice number ${finalInvoiceNumber} is already in use. Please choose a different number.`);
-        return;
-      }
 
-      // Create corporate order data
+      // Build the shared order payload
       const corporateOrderData = {
         // Corporate customer info
         corporateCustomer: {
@@ -499,23 +530,35 @@ const CorporateOrderPage = () => {
             value: orderNote || ''
           }
         },
-        // invoiceStatus will be set by status management system (no status field needed)
         // Order data (furniture, materials, payment, etc.)
         furnitureGroups: orderData.furnitureGroups,
         paymentDetails: orderData.paymentDetails,
-        // Timestamps
-        createdAt: new Date(),
         updatedAt: new Date()
       };
 
-      // Add to corporate-orders collection
-      await addDoc(collection(db, 'corporate-orders'), corporateOrderData);
+      if (isEditMode && sourceOrderData?.id) {
+        // --- EDIT MODE: update existing document ---
+        const orderRef = doc(db, 'corporate-orders', sourceOrderData.id);
+        await updateDoc(orderRef, corporateOrderData);
+        showSuccess('Corporate order updated successfully!');
+      } else {
+        // --- CREATE MODE: validate uniqueness then add ---
+        const isValid = await validateCorporateInvoiceNumber(finalInvoiceNumber);
+        if (!isValid) {
+          showError(`Invoice number ${finalInvoiceNumber} is already in use. Please choose a different number.`);
+          return;
+        }
+        await addDoc(collection(db, 'corporate-orders'), {
+          ...corporateOrderData,
+          createdAt: new Date()
+        });
+        showSuccess('Corporate order created successfully!');
+      }
 
-      showSuccess('Corporate order created successfully!');
       navigate('/admin/orders');
     } catch (error) {
-      console.error('Error creating corporate order:', error);
-      showError('Failed to create corporate order');
+      console.error('Error saving corporate order:', error);
+      showError('Failed to save corporate order');
     }
   };
 
@@ -685,7 +728,7 @@ const CorporateOrderPage = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
         <Typography variant="h4" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
-          {isDuplicateMode ? 'Duplicate Corporate Order' : 'Corporate Order'}
+          {isEditMode ? 'Edit Corporate Order' : isDuplicateMode ? 'Duplicate Corporate Order' : 'Corporate Order'}
         </Typography>
 
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
@@ -901,7 +944,10 @@ const CorporateOrderPage = () => {
             onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}
             disabled={activeStep === 0 && (!selectedCustomer || !selectedContactPerson)}
           >
-            {activeStep === steps.length - 1 ? 'Submit Order' : 'Next'}
+            {activeStep === steps.length - 1
+              ? (isEditMode ? 'Update Order' : 'Submit Order')
+              : 'Next'
+            }
           </Button>
         </Box>
       </Paper>

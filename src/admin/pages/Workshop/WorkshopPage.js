@@ -216,6 +216,8 @@ const WorkshopPage = () => {
   
   const navigate = useNavigate();
   const lastSavedFurnitureRef = useRef(null);
+  // Stores the ID of the order to focus after the current one is removed from the workshop
+  const pendingNextOrderIdRef = useRef(null);
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
 
   const { companies: materialCompanies, loading: companiesLoading } = useMaterialCompanies();
@@ -698,6 +700,20 @@ const WorkshopPage = () => {
         allocation: allocationData
       };
 
+      // Capture the next invoice to focus NOW — synchronously before any await.
+      // applyAllocation is a plain function (no useCallback), so filteredOrders here
+      // is the fresh closure from the current render. After any await it would be stale.
+      const removingId = selectedOrderForAllocation.id;
+      const removalIndex = filteredOrders.findIndex(o => o.id === removingId);
+      let nextOrderToSelect = null;
+      if (removalIndex !== -1) {
+        if (removalIndex + 1 < filteredOrders.length) {
+          nextOrderToSelect = filteredOrders[removalIndex + 1];
+        } else if (removalIndex - 1 >= 0) {
+          nextOrderToSelect = filteredOrders[removalIndex - 1];
+        }
+      }
+
       // Close allocation dialog and proceed directly without confirmation
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
@@ -707,12 +723,20 @@ const WorkshopPage = () => {
       const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
       const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
-      
+
+      // Immediately remove the completed order from local state and focus the next invoice.
+      // Using functional updates (prev =>) to always operate on the latest state.
+      setOrders(prev => prev.filter(o => o.id !== removingId));
+      setFilteredOrders(prev => prev.filter(o => o.id !== removingId));
+      setSelectedOrder(nextOrderToSelect);
+
       showSuccess('Order completed and allocated successfully');
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
       setSelectedOrderForAllocation(null);
-      fetchOrders();
+      // NOTE: No fetchOrders() here — local state is already correct (order removed,
+      // next invoice selected). A background re-fetch would reset filteredOrders and
+      // fight the setSelectedOrder we just made, jumping to the first record.
     } catch (error) {
       console.error('Error applying allocation:', error);
       showError('Failed to apply allocation');
@@ -912,34 +936,55 @@ const WorkshopPage = () => {
         }
       }
 
+      // Capture the next invoice to focus BEFORE the await — fresh closure, no staleness.
+      let nextOrderToSelect = null;
+      if (newStatusObj.isEndState) {
+        const currentIndex = filteredOrders.findIndex(o => o.id === orderId);
+        if (currentIndex !== -1) {
+          if (currentIndex + 1 < filteredOrders.length) {
+            nextOrderToSelect = filteredOrders[currentIndex + 1];
+          } else if (currentIndex - 1 >= 0) {
+            nextOrderToSelect = filteredOrders[currentIndex - 1];
+          }
+        }
+      }
+
       // Update in Firebase (EXACTLY like finance page)
       const orderRef = doc(db, collectionName, orderId);
       await updateDoc(orderRef, {
         invoiceStatus: newStatus,
         statusUpdatedAt: new Date()
       });
-      
-      // Update local state (EXACTLY like finance page)
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order.id === orderId 
-            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
-            : order
-        )
-      );
-      
-      // Update filtered orders as well (EXACTLY like finance page)
-      setFilteredOrders(prevOrders => 
-        prevOrders.map(order => 
-          order.id === orderId 
-            ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
-            : order
-        )
-      );
-      
-      // Update selected order if it's the one being updated
-      if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus, statusUpdatedAt: new Date() });
+
+      // If this is an end state, remove the order from the workshop list and
+      // focus the pre-computed next invoice
+      if (newStatusObj.isEndState) {
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+        setFilteredOrders(prev => prev.filter(o => o.id !== orderId));
+        setSelectedOrder(nextOrderToSelect);
+      } else {
+        // Update local state (EXACTLY like finance page)
+        setOrders(prevOrders =>
+          prevOrders.map(order =>
+            order.id === orderId
+              ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+              : order
+          )
+        );
+
+        // Update filtered orders as well (EXACTLY like finance page)
+        setFilteredOrders(prevOrders =>
+          prevOrders.map(order =>
+            order.id === orderId
+              ? { ...order, invoiceStatus: newStatus, statusUpdatedAt: new Date() }
+              : order
+          )
+        );
+
+        // Update selected order if it's the one being updated
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder({ ...selectedOrder, invoiceStatus: newStatus, statusUpdatedAt: new Date() });
+        }
       }
       
       showSuccess('Invoice status updated successfully');
@@ -1021,7 +1066,9 @@ const WorkshopPage = () => {
       setOrders(sortedOrders);
       setFilteredOrders(sortedOrders);
       
-      // Select first order by default if available
+      // On initial load only: select the first order if nothing is selected yet.
+      // Focusing after order removal is handled by the useEffect below,
+      // which avoids the stale-closure issue of reading selectedOrder inside useCallback.
       if (sortedOrders.length > 0 && !selectedOrder) {
         setSelectedOrder(sortedOrders[0]);
       }
@@ -1041,6 +1088,25 @@ const WorkshopPage = () => {
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  // After fetchOrders updates filteredOrders (removing a completed/cancelled invoice),
+  // select the invoice that was directly below the removed one in the sorted list.
+  // Using a useEffect here (instead of logic inside fetchOrders' useCallback) guarantees
+  // we always read the freshest filteredOrders state — no stale-closure problem.
+  useEffect(() => {
+    if (pendingNextOrderIdRef.current !== null && pendingNextOrderIdRef.current !== 0) {
+      const completedBill = pendingNextOrderIdRef.current;
+      pendingNextOrderIdRef.current = null;
+      // filteredOrders is DESC by bill number. The first order with bill < completedBill
+      // is the one that was sitting directly below the removed invoice.
+      const nextOrder =
+        filteredOrders.find(
+          o => parseInt(o.orderDetails?.billInvoice || '0', 10) < completedBill
+        ) || (filteredOrders.length > 0 ? filteredOrders[0] : null);
+      setSelectedOrder(nextOrder || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredOrders]);
 
   // Search function
   const handleSearch = (searchValue) => {
