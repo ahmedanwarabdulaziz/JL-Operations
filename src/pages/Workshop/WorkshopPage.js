@@ -222,6 +222,8 @@ const WorkshopPage = () => {
   // Email completion state variables
   const [includeReviewRequest, setIncludeReviewRequest] = useState(true);
   const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
+  // Stores the completed order while the email dialog is shown (selectedOrder may have changed by then)
+  const [completedOrderForEmail, setCompletedOrderForEmail] = useState(null);
   
   const { showError, showSuccess, showConfirm, confirmDialogOpen } = useNotification();
 
@@ -982,7 +984,7 @@ const WorkshopPage = () => {
         ? (filteredOrders[completingIndex + 1] || filteredOrders[completingIndex - 1] || null)
         : null;
 
-      // Close allocation dialog and save directly without confirmation
+      // Close allocation dialog
       setAllocationDialogOpen(false);
       setAllocationDialogHidden(false);
 
@@ -991,6 +993,10 @@ const WorkshopPage = () => {
       const targetCollection = isCorporateOrder ? 'corporate-orders' : 'orders';
       const orderRef = doc(db, targetCollection, selectedOrderForAllocation.id);
       await updateDoc(orderRef, updateData);
+
+      // Save the completed order NOW (before selectedOrder changes) so the email dialog can use it
+      const completedOrder = selectedOrderForAllocation;
+      setCompletedOrderForEmail(completedOrder);
 
       // Preserve existing dates from order or use state dates
       const orderStartDate = selectedOrderForAllocation.orderDetails?.startDate || startDate;
@@ -1077,6 +1083,17 @@ const WorkshopPage = () => {
       if (nextOrderAfterCompletion) {
         selectedOrderIdRef.current = nextOrderAfterCompletion.id;
       }
+
+      // Open completion email dialog if the completed order has a valid customer email
+      const completedIsCorporate = completedOrder.orderType === 'corporate';
+      const completedCustomerEmail = completedIsCorporate
+        ? (completedOrder.contactPerson?.email || completedOrder.corporateCustomer?.email)
+        : completedOrder.personalInfo?.email;
+
+      if (completedCustomerEmail && completedCustomerEmail.includes('@')) {
+        setCompletionEmailDialog({ open: true, sendEmail: true, includeReview: true });
+      }
+
       fetchOrders();
     } catch (error) {
       console.error('Error applying allocation:', error);
@@ -3162,32 +3179,38 @@ const WorkshopPage = () => {
   };
 
   const handleCompletionEmailConfirm = async () => {
+    // Use completedOrderForEmail (set during applyAllocation) if available,
+    // otherwise fall back to selectedOrder (for the manual "Send Completion Email" button)
+    const orderToEmail = completedOrderForEmail || selectedOrder;
+    const includeReview = completionEmailDialog.includeReview;
+
     try {
       setSendingCompletionEmail(true);
       setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+      setCompletedOrderForEmail(null);
       
-      // Prepare order data for email
-      const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
-        corporateCustomer: selectedOrder.corporateCustomer,
-        contactPerson: selectedOrder.contactPerson,
-        orderDetails: selectedOrder.orderDetails,
+      // Prepare order data for email — handle both corporate and regular orders
+      const orderDataForEmail = orderToEmail.orderType === 'corporate' ? {
+        corporateCustomer: orderToEmail.corporateCustomer,
+        contactPerson: orderToEmail.contactPerson,
+        orderDetails: orderToEmail.orderDetails,
         furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
+          groups: orderToEmail.furnitureData?.groups || orderToEmail.furnitureGroups || []
         },
-        paymentData: selectedOrder.paymentData
+        paymentDetails: orderToEmail.paymentDetails
       } : {
-        personalInfo: selectedOrder.personalInfo,
-        orderDetails: selectedOrder.orderDetails,
+        personalInfo: orderToEmail.personalInfo,
+        orderDetails: orderToEmail.orderDetails,
         furnitureData: {
-          groups: selectedOrder.furnitureData?.groups || selectedOrder.furnitureGroups || []
+          groups: orderToEmail.furnitureData?.groups || orderToEmail.furnitureGroups || []
         },
-        paymentData: selectedOrder.paymentData
+        paymentData: orderToEmail.paymentData
       };
 
       // Get customer email
-      const customerEmail = selectedOrder.orderType === 'corporate' 
-        ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
-        : selectedOrder.personalInfo?.email;
+      const customerEmail = orderToEmail.orderType === 'corporate' 
+        ? orderToEmail.contactPerson?.email || orderToEmail.corporateCustomer?.email
+        : orderToEmail.personalInfo?.email;
 
       // Progress callback for email sending
       const onEmailProgress = (message) => {
@@ -3199,7 +3222,7 @@ const WorkshopPage = () => {
       const emailResult = await sendCompletionEmailWithGmail(
         orderDataForEmail, 
         customerEmail, 
-        completionEmailDialog.includeReview, // includeReviewRequest
+        includeReview,
         onEmailProgress
       );
       
@@ -3218,6 +3241,7 @@ const WorkshopPage = () => {
 
   const handleCompletionEmailCancel = () => {
     setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
+    setCompletedOrderForEmail(null);
   };
 
   if (loading) {
@@ -7922,14 +7946,14 @@ const WorkshopPage = () => {
               fontWeight: 'bold',
               fontSize: '2rem'
             }}>
-              Order: {selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A'}
+              Order: {(completedOrderForEmail || selectedOrder)?.orderDetails?.billInvoice || (completedOrderForEmail || selectedOrder)?.id || 'N/A'}
             </Typography>
             <Typography variant="h4" sx={{ 
               color: '#ffffff', 
               fontWeight: 'bold',
               fontSize: '2rem'
             }}>
-              Customer: {selectedOrder?.personalInfo?.customerName || 'N/A'}
+              Customer: {(completedOrderForEmail || selectedOrder)?.personalInfo?.customerName || (completedOrderForEmail || selectedOrder)?.corporateCustomer?.companyName || 'N/A'}
             </Typography>
           </Box>
 

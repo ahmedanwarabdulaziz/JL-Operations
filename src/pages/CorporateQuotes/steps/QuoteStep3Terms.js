@@ -14,17 +14,21 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Gavel as GavelIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
 } from '@mui/icons-material';
 import {
   collection,
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
   query,
   orderBy,
@@ -52,6 +56,7 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
   const [newTermText, setNewTermText] = useState('');
   const [addingTerm, setAddingTerm] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
+  const [togglingDefault, setTogglingDefault] = useState(null); // termId being toggled
 
   useEffect(() => {
     const fetchOrSeedTerms = async () => {
@@ -105,6 +110,36 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
     }
   };
 
+  // ── Toggle default status in Firestore ──────────────────────────────────────
+  const handleToggleDefault = async (term) => {
+    try {
+      setTogglingDefault(term.id);
+      const newIsDefault = !term.isDefault;
+      await updateDoc(doc(db, 'quote-terms', term.id), { isDefault: newIsDefault });
+
+      // Update local state
+      setAllTerms(prev =>
+        prev.map(t => t.id === term.id ? { ...t, isDefault: newIsDefault } : t)
+      );
+
+      // If marking as default, also select it in current quote
+      if (newIsDefault && !isSelected(term.id)) {
+        onTermsChange([...selectedTerms, { id: term.id, text: term.text }]);
+      }
+
+      showSuccess(
+        newIsDefault
+          ? `Term set as default — it will be pre-checked on all new quotes`
+          : `Term removed from defaults — it won't auto-check on new quotes`
+      );
+    } catch (e) {
+      console.error(e);
+      showError('Failed to update default status');
+    } finally {
+      setTogglingDefault(null);
+    }
+  };
+
   const handleAddTerm = async () => {
     if (!newTermText.trim()) return;
     try {
@@ -152,6 +187,8 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
     );
   }
 
+  const defaultCount = allTerms.filter(t => t.isDefault).length;
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
@@ -163,9 +200,28 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
           sx={{ bgcolor: '#b98f33', color: '#000', fontWeight: 'bold' }}
         />
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Check the terms to include in this quote. You can add new terms — they'll be saved for all future quotes.
       </Typography>
+
+      {/* Default explanation callout */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          mb: 3,
+          p: 1.5,
+          borderRadius: 2,
+          bgcolor: 'rgba(185,143,51,0.08)',
+          border: '1px solid rgba(185,143,51,0.3)',
+        }}
+      >
+        <StarIcon sx={{ color: '#b98f33', fontSize: 20, flexShrink: 0 }} />
+        <Typography variant="body2" color="text.secondary">
+          Click the <strong style={{ color: '#b98f33' }}>⭐ star</strong> next to any term to mark it as a <strong>default</strong> — it will be <strong>automatically pre-checked</strong> on every new quote ({defaultCount} default{defaultCount !== 1 ? 's' : ''} set).
+        </Typography>
+      </Box>
 
       <List disablePadding>
         {allTerms.map((term, i) => (
@@ -173,23 +229,64 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
             <ListItem
               disablePadding
               secondaryAction={
-                <IconButton
-                  size="small"
-                  onClick={() => handleDeleteTerm(term)}
-                  sx={{
-                    color: '#666',
-                    '&:hover': { color: '#f44336', bgcolor: 'rgba(244,67,54,0.08)' },
-                  }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {/* Star / Default toggle */}
+                  <Tooltip
+                    title={
+                      term.isDefault
+                        ? "Remove from defaults — won't auto-check on new quotes"
+                        : 'Set as default — auto-checks on every new quote'
+                    }
+                    placement="top"
+                    arrow
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleToggleDefault(term)}
+                        disabled={togglingDefault === term.id}
+                        sx={{
+                          color: term.isDefault ? '#b98f33' : '#555',
+                          '&:hover': {
+                            color: '#b98f33',
+                            bgcolor: 'rgba(185,143,51,0.12)',
+                          },
+                          transition: 'color 0.2s',
+                        }}
+                      >
+                        {togglingDefault === term.id
+                          ? <CircularProgress size={16} sx={{ color: '#b98f33' }} />
+                          : term.isDefault
+                            ? <StarIcon fontSize="small" />
+                            : <StarBorderIcon fontSize="small" />
+                        }
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+
+                  {/* Delete */}
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDeleteTerm(term)}
+                    sx={{
+                      color: '#666',
+                      '&:hover': { color: '#f44336', bgcolor: 'rgba(244,67,54,0.08)' },
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
               }
               sx={{
                 bgcolor: isSelected(term.id) ? 'rgba(185,143,51,0.06)' : 'transparent',
                 borderRadius: 1,
                 mb: 0.5,
-                pr: 5,
+                pr: 10,
                 transition: 'background 0.2s',
+                borderLeft: term.isDefault
+                  ? `3px solid ${isSelected(term.id) ? '#b98f33' : 'rgba(185,143,51,0.35)'}`
+                  : '3px solid transparent',
+                pl: 0.5,
               }}
             >
               <ListItemIcon sx={{ minWidth: 40 }}>
@@ -218,9 +315,17 @@ const QuoteStep3Terms = ({ selectedTerms, onTermsChange }) => {
               />
               {term.isDefault && (
                 <Chip
+                  icon={<StarIcon sx={{ fontSize: '0.75rem !important', color: '#b98f33 !important' }} />}
                   label="Default"
                   size="small"
-                  sx={{ mr: 1, fontSize: '0.7rem', bgcolor: '#333', color: '#888', border: '1px solid #444' }}
+                  sx={{
+                    mr: 1,
+                    fontSize: '0.7rem',
+                    bgcolor: 'rgba(185,143,51,0.15)',
+                    color: '#b98f33',
+                    border: '1px solid rgba(185,143,51,0.4)',
+                    fontWeight: 'bold',
+                  }}
                 />
               )}
             </ListItem>

@@ -2,17 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, CircularProgress, IconButton, Tooltip,
-  Collapse
+  Collapse, Select, MenuItem, FormControl, TextField, InputAdornment
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import TableChartIcon from '@mui/icons-material/TableChart';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HomeIcon from '@mui/icons-material/Home';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
-import { toDateObject } from '../../../utils/dateUtils';
+import { toDateObject, formatDateOnly } from '../../../utils/dateUtils';
 import { calculateOrderTotal } from '../../../shared/utils/orderCalculations';
 
 const MONTH_NAMES = [
@@ -63,16 +64,8 @@ export default function MonthlyTrackerSection() {
   const [homeExpenses, setHomeExpenses] = useState([]);
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [expanded, setExpanded]   = useState(true);
-
-  // ── Navigate months ─────────────────────────────────────────────────────────
-  const prevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(y => y - 1); }
-    else              setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(y => y + 1); }
-    else               setMonth(m => m + 1);
-  };
+  const [editingStatusId, setEditingStatusId] = useState(null);
+  const [editingNote, setEditingNote] = useState({ id: null, value: '' });
 
   // ── Fetch invoice statuses once ─────────────────────────────────────────────
   useEffect(() => {
@@ -97,21 +90,26 @@ export default function MonthlyTrackerSection() {
         const [regularSnap, corpSnap, customerInvSnap, homeExpSnap] = await Promise.all([
           getDocs(query(collection(db, 'orders'),            orderBy('createdAt', 'desc'))),
           getDocs(query(collection(db, 'corporate-orders'),  orderBy('createdAt', 'desc'))),
-          getDocs(query(collection(db, 'customer-invoices'), orderBy('createdAt', 'desc'))),
+          getDocs(collection(db, 'customer-invoices')),
           getDocs(query(collection(db, 'businessExpenses'),  orderBy('date',      'desc'))),
         ]);
 
-        // ── Is this doc in the selected year/month? ───────────────────────────
+        // ── Is this doc in the CURRENT month? Returns reason string or null ───
         const inMonth = (order) => {
           if (order.allocation?.allocations?.length) {
-            return order.allocation.allocations.some(a =>
-              Number(a.year) === year && Number(a.month) === month
+            const hit = order.allocation.allocations.some(a =>
+              Number(a.year) === year &&
+              Number(a.month) === month &&
+              (a.percentage || 0) > 0          // ← must have a real value this month
             );
+            if (hit) return `allocation(${order.allocation.allocations.map(a=>`${a.year}-${a.month}:${a.percentage}%`).join(',')})`;
+            return null;
           }
-          const raw = order.orderDetails?.startDate || order.createdAt;
-          const d = toDateObject(raw);
-          if (!d) return false;
-          return d.getFullYear() === year && d.getMonth() + 1 === month;
+          // Use createdAt only — matches the sort field so what you see is always this month
+          const d = toDateObject(order.createdAt);
+          if (!d) return null;
+          const passes = d.getFullYear() === year && d.getMonth() + 1 === month;
+          return passes ? `createdAt(${d.toISOString().slice(0,10)})` : null;
         };
 
         // ── Turn a Firestore doc + type into a table row ──────────────────────
@@ -120,7 +118,8 @@ export default function MonthlyTrackerSection() {
           const order = { id: firestoreDoc.id, ...firestoreDoc.data(), orderType: type };
           // Merge any extra fields (e.g. furnitureData from original order)
           Object.assign(order, overrides);
-          if (!inMonth(order)) return null;
+          const passedVia = inMonth(order);
+          if (!passedVia) return null;
 
           const isCorp     = type === 'corporate';
           const invoiceNo  = order.invoiceNumber || order.orderDetails?.billInvoice || order.id.slice(-6);
@@ -138,7 +137,7 @@ export default function MonthlyTrackerSection() {
           const status       = resolveStatus(order);
           const dueRaw       = order.orderDetails?.deadline || order.paymentDetails?.dueDate || null;
           const dueDate      = dueRaw ? (toDateObject(dueRaw)?.toLocaleDateString('en-CA') || '—') : '—';
-          const note         = order.orderDetails?.note?.value || order.notes || '';
+          const internalNote = order.trackerInternalNote || '';
           const customer     = isCorp
             ? (order.corporateCustomer?.corporateName || 'Corporate')
             : (order.personalInfo?.customerName || order.personalInfo?.name || 'Customer');
@@ -146,6 +145,8 @@ export default function MonthlyTrackerSection() {
           return {
             id: order.id,
             invoiceNo,
+            createdAt: order.createdAt || null,
+            _passedVia: passedVia,          // debug: why this row passed the month filter
             // T-invoice specific
             isTInvoice:       overrides.isTInvoice       || false,
             originalInvoiceNo: overrides.originalInvoiceNo || null,
@@ -157,7 +158,7 @@ export default function MonthlyTrackerSection() {
             clearIncome,
             dueDate,
             status,
-            note,
+            internalNote,
           };
         };
 
@@ -198,6 +199,7 @@ export default function MonthlyTrackerSection() {
                   tData.furnitureData  = orig.furnitureData;
                   tData.furnitureGroups = orig.furnitureGroups;
                   tData.extraExpenses  = orig.extraExpenses;
+                  tData.originalCreatedAt  = orig.createdAt || null; // for grouping sort
                 }
               } catch (e) {
                 console.error('T-invoice original fetch error', e);
@@ -206,12 +208,39 @@ export default function MonthlyTrackerSection() {
 
             // Synthetic doc-like object so buildRow can read .id and .data()
             const syntheticDoc = { id: tDoc.id, data: () => tData };
-            return buildRow(syntheticDoc, 'regular', { isTInvoice: true, originalInvoiceNo });
+            const row = buildRow(syntheticDoc, 'regular', { isTInvoice: true, originalInvoiceNo });
+            // Store original's createdAt so we can sort T-invoice alongside its original
+            if (row && tData.originalCreatedAt) row.originalCreatedAt = tData.originalCreatedAt;
+            return row;
           })
         );
 
         const built = [...regularRows, ...corpRows, ...tRows.filter(Boolean)];
-        built.sort((a, b) => String(a.invoiceNo).localeCompare(String(b.invoiceNo)));
+
+        // Sort: group T-invoices right after their original, newest-original first
+        built.sort((a, b) => {
+          // Each row gets a sort date: T-invoices use their original's createdAt
+          const getSortDate = (r) => {
+            if (r.isTInvoice) return toDateObject(r.originalCreatedAt) || toDateObject(r.createdAt);
+            return toDateObject(r.createdAt);
+          };
+          const dA = getSortDate(a);
+          const dB = getSortDate(b);
+
+          if (dA && dB) {
+            const diff = dB.getTime() - dA.getTime();
+            if (diff !== 0) return diff; // different groups → sort by date
+          } else if (dA) return -1;
+          else if (dB) return 1;
+
+          // Same sort date = same group → original before T-invoice
+          if (!a.isTInvoice && b.isTInvoice) return -1;
+          if (a.isTInvoice && !b.isTInvoice) return 1;
+          return 0;
+        });
+
+
+
         setRows(built);
 
         // ── 5. Home expenses for selected month ───────────────────────────────
@@ -233,6 +262,51 @@ export default function MonthlyTrackerSection() {
     load();
   }, [year, month, resolveStatus]);
 
+  // ── Update status in Firestore and local state ──────────────────────────────
+  const handleStatusChange = async (row, newStatusValue) => {
+    if (!newStatusValue || newStatusValue === row.status) {
+      setEditingStatusId(null);
+      return;
+    }
+    try {
+      // Determine the correct Firestore collection
+      let collectionName;
+      if (row.isTInvoice) {
+        collectionName = 'customer-invoices';
+      } else if (row.isCorp) {
+        collectionName = 'corporate-orders';
+      } else {
+        collectionName = 'orders';
+      }
+      const ref = doc(db, collectionName, row.id);
+      await updateDoc(ref, { invoiceStatus: newStatusValue, statusUpdatedAt: new Date() });
+      // Update local rows immediately
+      const newLabel = invoiceStatuses.find(s => s.value === newStatusValue)?.label || newStatusValue;
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: newLabel } : r));
+    } catch (err) {
+      console.error('Status update error', err);
+    } finally {
+      setEditingStatusId(null);
+    }
+  };
+
+  // ── Save internal note to Firestore ────────────────────────────────────────
+  const handleNoteSave = async (row) => {
+    const newNote = editingNote.value;
+    try {
+      let collectionName;
+      if (row.isTInvoice)    collectionName = 'customer-invoices';
+      else if (row.isCorp)   collectionName = 'corporate-orders';
+      else                   collectionName = 'orders';
+      await updateDoc(doc(db, collectionName, row.id), { trackerInternalNote: newNote });
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, internalNote: newNote } : r));
+    } catch (err) {
+      console.error('Note save error', err);
+    } finally {
+      setEditingNote({ id: null, value: '' });
+    }
+  };
+
   // ── Totals ──────────────────────────────────────────────────────────────────
   const totalExpenses     = rows.reduce((s, r) => s + r.expenses,     0);
   const totalInvoice      = rows.reduce((s, r) => s + r.totalInvoice, 0);
@@ -253,19 +327,9 @@ export default function MonthlyTrackerSection() {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Tooltip title="Previous month">
-            <IconButton size="small" onClick={prevMonth} sx={{ color: '#b98f33' }}>
-              <ChevronLeftIcon />
-            </IconButton>
-          </Tooltip>
           <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 'bold', minWidth: 140, textAlign: 'center' }}>
             {MONTH_NAMES[month - 1]} {year}
           </Typography>
-          <Tooltip title="Next month">
-            <IconButton size="small" onClick={nextMonth} sx={{ color: '#b98f33' }}>
-              <ChevronRightIcon />
-            </IconButton>
-          </Tooltip>
           <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
             <IconButton size="small" onClick={() => setExpanded(v => !v)} sx={{ color: '#b98f33', ml: 1 }}>
               {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -288,22 +352,20 @@ export default function MonthlyTrackerSection() {
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={headCell}>#</TableCell>
                       <TableCell sx={headCell}>Invoice No.</TableCell>
-                      <TableCell sx={headCell}>Customer</TableCell>
                       <TableCell sx={{ ...headCell, textAlign: 'right' }}>Expenses</TableCell>
                       <TableCell sx={{ ...headCell, textAlign: 'right' }}>Total Invoice Income</TableCell>
                       <TableCell sx={{ ...headCell, textAlign: 'right' }}>TAX (corporate)</TableCell>
                       <TableCell sx={{ ...headCell, textAlign: 'right' }}>Total Clear Income</TableCell>
                       <TableCell sx={headCell}>Due Date</TableCell>
                       <TableCell sx={headCell}>Status</TableCell>
-                      <TableCell sx={headCell}>Note</TableCell>
+                      <TableCell sx={headCell}>Internal Note</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {rows.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} sx={{ ...bodyCell(true), textAlign: 'center', py: 4, color: '#666' }}>
+                        <TableCell colSpan={8} sx={{ ...bodyCell(true), textAlign: 'center', py: 4, color: '#666' }}>
                           No invoices found for {MONTH_NAMES[month - 1]} {year}
                         </TableCell>
                       </TableRow>
@@ -311,45 +373,63 @@ export default function MonthlyTrackerSection() {
                       rows.map((row, i) => {
                         const even = i % 2 === 0;
                         const sc   = statusColor(row.status);
-                        return (
+                         return (
                           <TableRow key={row.id} hover sx={{ cursor: 'default' }}>
-                            <TableCell sx={bodyCell(even)}>{i + 1}</TableCell>
 
-                            {/* Invoice No. — T-invoice shows T-number + ref to original */}
+                            {/* Invoice No. — tooltip shows customer + created date */}
                             <TableCell sx={{ ...bodyCell(even) }}>
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 'bold',
-                                    color: row.isTInvoice ? '#4fc3f7' : '#b98f33',
-                                    fontSize: '0.8rem',
-                                  }}
-                                >
-                                  {row.invoiceNo}
-                                </Typography>
-                                {row.isTInvoice && (
-                                  <Chip
-                                    label={`T-Invoice`}
-                                    size="small"
-                                    sx={{ fontSize: '0.58rem', height: 15, backgroundColor: '#01579b', color: '#fff', width: 'fit-content' }}
-                                  />
-                                )}
-                                {row.originalInvoiceNo && (
-                                  <Typography variant="caption" sx={{ color: '#666', fontSize: '0.68rem' }}>
-                                    Ref: #{row.originalInvoiceNo}
+                              <Tooltip
+                                placement="top"
+                                arrow
+                                title={
+                                  <Box sx={{ p: 0.5 }}>
+                                    <Typography variant="caption" sx={{ display: 'block', fontWeight: 'bold', color: '#b98f33', fontSize: '0.8rem' }}>
+                                      {row.customer}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ display: 'block', color: '#ccc', fontSize: '0.75rem', mt: 0.25 }}>
+                                      Created: {row.createdAt ? formatDateOnly(row.createdAt) : 'No date'}
+                                    </Typography>
+                                  </Box>
+                                }
+                                componentsProps={{
+                                  tooltip: {
+                                    sx: {
+                                      backgroundColor: '#1a1a1a',
+                                      border: '1px solid #b98f33',
+                                      borderRadius: 1,
+                                      px: 1.5,
+                                      py: 1,
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                                    }
+                                  },
+                                  arrow: { sx: { color: '#b98f33' } }
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, cursor: 'pointer' }}>
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      fontWeight: 'bold',
+                                      color: row.isTInvoice ? '#4fc3f7' : '#b98f33',
+                                      fontSize: '0.8rem',
+                                    }}
+                                  >
+                                    {row.invoiceNo}
                                   </Typography>
-                                )}
-                              </Box>
-                            </TableCell>
-
-                            <TableCell sx={bodyCell(even)}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                                {row.isCorp && (
-                                  <Chip label="Corp" size="small" sx={{ fontSize: '0.6rem', height: 16, backgroundColor: '#1a237e', color: '#fff' }} />
-                                )}
-                                {row.customer}
-                              </Box>
+                                  {row.isTInvoice && (
+                                    <Chip
+                                      label={`T-Invoice`}
+                                      size="small"
+                                      sx={{ fontSize: '0.58rem', height: 15, backgroundColor: '#01579b', color: '#fff', width: 'fit-content' }}
+                                    />
+                                  )}
+                                  {row.originalInvoiceNo && (
+                                    <Typography variant="caption" sx={{ color: '#666', fontSize: '0.68rem' }}>
+                                      Ref: #{row.originalInvoiceNo}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </Tooltip>
                             </TableCell>
 
                             <TableCell sx={{ ...bodyCell(even), textAlign: 'right' }}>
@@ -368,14 +448,101 @@ export default function MonthlyTrackerSection() {
                               {row.dueDate}
                             </TableCell>
                             <TableCell sx={bodyCell(even)}>
-                              <Chip
-                                label={row.status}
-                                size="small"
-                                sx={{ backgroundColor: sc.bg, color: sc.color, fontSize: '0.65rem', height: 20, fontWeight: 'bold' }}
-                              />
+                              {editingStatusId === row.id ? (
+                                <FormControl size="small" variant="outlined" sx={{ minWidth: 130 }}>
+                                  <Select
+                                    autoFocus
+                                    open
+                                    value={invoiceStatuses.find(s => s.label === row.status)?.value || ''}
+                                    onChange={(e) => handleStatusChange(row, e.target.value)}
+                                    onClose={() => setEditingStatusId(null)}
+                                    sx={{
+                                      fontSize: '0.72rem',
+                                      color: '#fff',
+                                      backgroundColor: '#1a1a1a',
+                                      '.MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                                      '.MuiSvgIcon-root': { color: '#b98f33' },
+                                    }}
+                                    MenuProps={{ PaperProps: { sx: { backgroundColor: '#1a1a1a', border: '1px solid #b98f33' } } }}
+                                  >
+                                    {invoiceStatuses.map(s => (
+                                      <MenuItem key={s.value} value={s.value} sx={{ fontSize: '0.75rem', color: '#e0e0e0', '&:hover': { backgroundColor: '#2a2a2a' } }}>
+                                        {s.label}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                              ) : (
+                                <Tooltip title="Click to change status">
+                                  <Chip
+                                    label={row.status}
+                                    size="small"
+                                    onClick={() => setEditingStatusId(row.id)}
+                                    sx={{
+                                      backgroundColor: sc.bg,
+                                      color: sc.color,
+                                      fontSize: '0.65rem',
+                                      height: 20,
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer',
+                                      '&:hover': { opacity: 0.85, transform: 'scale(1.05)' },
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
                             </TableCell>
-                            <TableCell sx={{ ...bodyCell(even), color: '#aaa', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {row.note || ''}
+                            <TableCell sx={{ ...bodyCell(even), minWidth: 160 }}>
+                              {editingNote.id === row.id ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <TextField
+                                    autoFocus
+                                    size="small"
+                                    value={editingNote.value}
+                                    onChange={e => setEditingNote({ id: row.id, value: e.target.value })}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleNoteSave(row);
+                                      if (e.key === 'Escape') setEditingNote({ id: null, value: '' });
+                                    }}
+                                    placeholder="Internal note…"
+                                    sx={{
+                                      '& .MuiInputBase-input': { color: '#fff', fontSize: '0.75rem', py: 0.5, px: 1 },
+                                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#b98f33' },
+                                      '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#d4a843' },
+                                      backgroundColor: '#1a1a1a',
+                                      borderRadius: 1,
+                                    }}
+                                  />
+                                  <Tooltip title="Save (Enter)">
+                                    <IconButton size="small" onClick={() => handleNoteSave(row)} sx={{ color: '#4caf50', p: 0.3 }}>
+                                      <CheckIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Cancel (Esc)">
+                                    <IconButton size="small" onClick={() => setEditingNote({ id: null, value: '' })} sx={{ color: '#f44336', p: 0.3 }}>
+                                      <CloseIcon sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              ) : (
+                                <Box
+                                  onClick={() => setEditingNote({ id: row.id, value: row.internalNote || '' })}
+                                  sx={{
+                                    display: 'flex', alignItems: 'center', gap: 0.5,
+                                    cursor: 'pointer', minHeight: 28, px: 0.5, borderRadius: 1,
+                                    '&:hover': { backgroundColor: '#1e1e1e' },
+                                  }}
+                                >
+                                  {row.internalNote ? (
+                                    <Typography sx={{ fontSize: '0.72rem', color: '#ccc', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {row.internalNote}
+                                    </Typography>
+                                  ) : (
+                                    <Typography sx={{ fontSize: '0.68rem', color: '#444', fontStyle: 'italic', flex: 1 }}>Add note…</Typography>
+                                  )}
+                                  <EditIcon sx={{ fontSize: 12, color: '#555', flexShrink: 0 }} />
+                                </Box>
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -385,7 +552,7 @@ export default function MonthlyTrackerSection() {
                     {/* ── Totals row ───────────────────────────────────────── */}
                     {rows.length > 0 && (
                       <TableRow sx={{ backgroundColor: '#000' }}>
-                        <TableCell colSpan={3} sx={{ ...bodyCell(false), fontWeight: 'bold', color: '#b98f33', borderTop: '2px solid #b98f33' }}>
+                        <TableCell colSpan={1} sx={{ ...bodyCell(false), fontWeight: 'bold', color: '#b98f33', borderTop: '2px solid #b98f33' }}>
                           TOTAL ({rows.length} invoice{rows.length !== 1 ? 's' : ''})
                         </TableCell>
                         <TableCell sx={{ ...bodyCell(false), textAlign: 'right', fontWeight: 'bold', color: '#fff', borderTop: '2px solid #b98f33' }}>

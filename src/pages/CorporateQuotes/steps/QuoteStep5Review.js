@@ -30,7 +30,13 @@ import {
 const formatCurrency = (v) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
 
-const calcTotals = (furnitureGroups, tax) => {
+const calcPickupDeliveryTotal = (pd) => {
+  if (!pd?.enabled) return 0;
+  const cost = parseFloat(pd.cost) || 0;
+  return pd.serviceType === 'both' ? cost * 2 : cost;
+};
+
+const calcTotals = (furnitureGroups, tax, pickupDelivery) => {
   let subtotal = 0;
   (furnitureGroups || []).forEach((g) => {
     const mat = (parseFloat(g.materialPrice) || 0) * (parseFloat(g.materialQnty) || 0);
@@ -43,9 +49,10 @@ const calcTotals = (furnitureGroups, tax) => {
       : 0;
     subtotal += mat + lab + foam + paint;
   });
+  const pickupCost = calcPickupDeliveryTotal(pickupDelivery);
   const pct = parseFloat(tax?.percentage) || 0;
-  const taxAmt = tax?.enabled ? subtotal * (pct / 100) : 0;
-  return { subtotal, taxAmt, total: subtotal + taxAmt };
+  const taxAmt = tax?.enabled ? (subtotal + pickupCost) * (pct / 100) : 0;
+  return { subtotal, pickupCost, taxAmt, total: subtotal + pickupCost + taxAmt };
 };
 
 const SectionTitle = ({ icon, label }) => (
@@ -63,9 +70,18 @@ const QuoteStep5Review = ({
   furnitureGroups,
   selectedTerms,
   tax,
+  pickupDelivery,
   notes,
 }) => {
-  const { subtotal, taxAmt, total } = calcTotals(furnitureGroups, tax);
+  const { subtotal, pickupCost, taxAmt, total } = calcTotals(furnitureGroups, tax, pickupDelivery);
+
+  const pickupDeliveryLabel = !pickupDelivery?.enabled
+    ? ''
+    : pickupDelivery.serviceType === 'pickup'
+      ? 'Pickup Only'
+      : pickupDelivery.serviceType === 'delivery'
+        ? 'Delivery Only'
+        : 'Pickup & Delivery (2x)';
 
   return (
     <Box>
@@ -155,6 +171,12 @@ const QuoteStep5Review = ({
             <Typography color="text.secondary">Subtotal</Typography>
             <Typography fontWeight="bold">{formatCurrency(subtotal)}</Typography>
           </Box>
+          {pickupDelivery?.enabled && pickupCost > 0 && (
+            <Box sx={{ display: 'flex', gap: 4 }}>
+              <Typography color="text.secondary">{pickupDeliveryLabel}</Typography>
+              <Typography fontWeight="bold">{formatCurrency(pickupCost)}</Typography>
+            </Box>
+          )}
           {tax.enabled && (
             <Box sx={{ display: 'flex', gap: 4 }}>
               <Typography color="text.secondary">Tax ({tax.percentage}%)</Typography>

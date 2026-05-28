@@ -43,6 +43,7 @@ import { collection, getDocs, query, orderBy, where, deleteDoc, doc, getDoc, upd
 import { db } from '../../../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderTax, getOrderCostBreakdown, formatFurnitureDetails, isRapidOrder, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates, getMaterialCompanyTaxRate } from '../../../shared/utils/materialTaxRates';
 import { formatCorporateInvoiceForInvoice } from '../../../utils/invoiceNumberUtils';
@@ -476,6 +477,87 @@ const TaxedInvoicesPage = () => {
       showNotification('Error printing invoice', 'error');
     }
   };
+
+  // ── Direct PDF download — no new window ──────────────────────────────────
+  const handleDownloadPdfInvoice = async (invoice) => {
+    const invoiceNum = invoice.invoiceNumber || invoice.orderDetails?.billInvoice || 'N/A';
+    const fileName = `Invoice ${invoiceNum}.pdf`;
+    const iframeId = 'taxed-invoice-pdf-iframe';
+    try {
+      showNotification('Generating PDF…', 'info');
+
+      // Build the same HTML used for printing
+      let htmlContent;
+      if (invoice.orderType === 'corporate' || invoice.source === 'corporate-orders') {
+        const totals = calculateCorporateInvoiceTotals(invoice);
+        const creditCardFeeEnabled = invoice.creditCardFeeEnabled || invoice.headerSettings?.creditCardFeeEnabled || false;
+        htmlContent = generateCorporateInvoiceHTML(invoice, totals, creditCardFeeEnabled);
+      } else {
+        const totals = calculateInvoiceTotals(invoice);
+        htmlContent = generateCustomerInvoiceHTML(invoice, totals);
+      }
+
+      // ── Fix relative paths → absolute URLs so html2canvas can load images ──
+      const origin = window.location.origin;
+      htmlContent = htmlContent
+        .replace(/src="\/assets\//g, `src="${origin}/assets/`)
+        .replace(/url\(\/assets\//g, `url(${origin}/assets/`);
+
+      // Render in a hidden off-screen iframe
+      const iframe = document.createElement('iframe');
+      iframe.id = iframeId;
+      iframe.style.cssText = 'position:fixed;left:-9999px;width:900px;height:1300px;border:none;visibility:hidden;';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(htmlContent);
+      iframeDoc.close();
+
+      // Wait for all images inside iframe to load
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      const body = iframeDoc.body;
+      const canvas = await html2canvas(body, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: body.scrollWidth,
+        windowHeight: body.scrollHeight,
+        width: body.scrollWidth,
+        height: body.scrollHeight,
+      });
+
+      const imgData   = canvas.toDataURL('image/jpeg', 0.92);
+      const pdf       = new jsPDF('p', 'mm', 'a4');
+      const margin    = 10;
+      const imgWidth  = 210 - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position   = margin;
+      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (297 - margin * 2);
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = -(imgHeight - heightLeft) + margin;
+        pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (297 - margin * 2);
+      }
+
+      pdf.save(fileName);
+      document.body.removeChild(iframe);
+      showNotification('PDF downloaded successfully!', 'success');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showNotification('Failed to download PDF: ' + err.message, 'error');
+      const el = document.getElementById(iframeId);
+      if (el?.parentNode) el.parentNode.removeChild(el);
+    }
+  };
+
 
   // Parse invoice number to extract numeric value
   const parseInvoiceNumberValue = (value) => {
@@ -2355,6 +2437,15 @@ const TaxedInvoicesPage = () => {
                             sx={{ color: '#b98f33' }}
                           >
                             <PrintIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Download PDF">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDownloadPdfInvoice(invoice)}
+                            sx={{ color: '#e53935' }}
+                          >
+                            <DownloadIcon />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete Invoice">

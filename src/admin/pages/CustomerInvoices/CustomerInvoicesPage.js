@@ -37,7 +37,8 @@ import {
   Receipt as ReceiptIcon,
   CalendarToday as CalendarIcon,
   Print as PrintIcon,
-  Archive as ArchiveIcon
+  Archive as ArchiveIcon,
+  FileDownload as DownloadIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
@@ -45,8 +46,31 @@ import { collection, getDocs, deleteDoc, doc, query, orderBy, addDoc, getDoc, up
 import { validateCustomerInvoiceNumber, getNextCustomerInvoiceNumber } from '../../../utils/invoiceNumberUtils';
 import { db } from '../../../firebase/config';
 import { buttonStyles } from '../../../styles/buttonStyles';
-import { formatDate, formatDateOnly } from '../../../utils/dateUtils';
+import { formatDate, formatDateOnly, toDateObject } from '../../../utils/dateUtils';
 import { calculateOrderTotal } from '../../../utils/orderCalculations';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+
+// ─── Module-level sort (no stale-closure risk) ────────────────────────────────
+// Sort invoices by createdAt newest-first. Uses the same toDateObject helper
+// as the Date column so sort order always matches what is displayed.
+// Falls back to invoice number descending for records without a date.
+const _getInvoiceNumberValue = (inv) => {
+  const num = inv.invoiceNumber ? String(inv.invoiceNumber) : '';
+  if (num.startsWith('T-')) return parseInt(num.substring(2), 10) || 0;
+  return parseInt(num, 10) || 0;
+};
+
+const sortInvoicesByDate = (invoicesList) =>
+  [...invoicesList].sort((a, b) => {
+    const dA = toDateObject(a.createdAt);
+    const dB = toDateObject(b.createdAt);
+    if (dA && dB) return dB.getTime() - dA.getTime(); // both dated: newest first
+    if (dA) return -1;                                 // only a has date: a first
+    if (dB) return 1;                                  // only b has date: b first
+    return _getInvoiceNumberValue(b) - _getInvoiceNumberValue(a); // fallback
+  });
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CustomerInvoicesPage = () => {
   const [invoices, setInvoices] = useState([]);
@@ -67,26 +91,6 @@ const CustomerInvoicesPage = () => {
 
   const { showSuccess, showError, showConfirm } = useNotification();
   const navigate = useNavigate();
-
-  // Parse invoice number for sorting (handles both T- format and old format)
-  const parseInvoiceNumberForSort = (invoiceNumber) => {
-    if (!invoiceNumber) return 0;
-    const str = String(invoiceNumber);
-    if (str.startsWith('T-')) {
-      const numPart = str.substring(2);
-      return parseInt(numPart, 10) || 0;
-    }
-    return parseInt(str, 10) || 0;
-  };
-
-  // Sort invoices by invoice number (highest to lowest)
-  const sortInvoicesByNumber = (invoicesList) => {
-    return invoicesList.sort((a, b) => {
-      const invoiceA = parseInvoiceNumberForSort(a.invoiceNumber);
-      const invoiceB = parseInvoiceNumberForSort(b.invoiceNumber);
-      return invoiceB - invoiceA; // Descending order (highest first)
-    });
-  };
 
   // Fetch orders from Firebase for invoice creation (ALL orders without T-invoicing)
   const fetchOrders = useCallback(async () => {
@@ -116,7 +120,7 @@ const CustomerInvoicesPage = () => {
       setLoading(true);
       
       const invoicesCollection = collection(db, 'customer-invoices');
-      const invoicesQuery = query(invoicesCollection, orderBy('invoiceNumber', 'desc'));
+      const invoicesQuery = query(invoicesCollection);
       const invoicesSnapshot = await getDocs(invoicesQuery);
       const invoicesData = invoicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -150,8 +154,8 @@ const CustomerInvoicesPage = () => {
         })
       );
       
-      // Sort by invoice number (highest to lowest)
-      const sortedInvoices = sortInvoicesByNumber(invoicesWithOrderNumbers);
+      // Sort by creation date (newest first)
+      const sortedInvoices = sortInvoicesByDate(invoicesWithOrderNumbers);
       console.log('Sorted invoices with order numbers:', sortedInvoices);
       
       setInvoices(sortedInvoices);
@@ -230,7 +234,7 @@ const CustomerInvoicesPage = () => {
     setSearchTerm(searchValue);
     
     if (!searchValue.trim()) {
-      setFilteredInvoices(sortInvoicesByNumber([...invoices]));
+      setFilteredInvoices(sortInvoicesByDate([...invoices]));
       return;
     }
 
@@ -264,8 +268,8 @@ const CustomerInvoicesPage = () => {
       return false;
     });
 
-    // Sort filtered results by invoice number (highest to lowest)
-    const sortedFiltered = sortInvoicesByNumber(filtered);
+    // Sort filtered results by creation date (newest first)
+    const sortedFiltered = sortInvoicesByDate(filtered);
     setFilteredInvoices(sortedFiltered);
   };
 
@@ -562,6 +566,206 @@ const CustomerInvoicesPage = () => {
     });
   };
 
+  // ── Direct PDF download — no navigation ────────────────────────────────────
+  const handleDownloadPdfInvoice = async (invoice) => {
+    const fileName = `Invoice ${invoice.invoiceNumber || 'N/A'}.pdf`;
+    try {
+      showSuccess('Generating PDF…');
+
+      // ── Build items rows HTML ────────────────────────────────────────────
+      const furnitureGroups = invoice.furnitureGroups || [];
+      const items = invoice.items || [];
+      let itemRows = '';
+
+      if (furnitureGroups.length === 0 && items.length === 0) {
+        itemRows = '<tr><td colspan="4" style="padding:16px;text-align:center;color:#666;font-style:italic;">No items found</td></tr>';
+      } else {
+        // Map items to their group
+        const byGroup = {};
+        items.forEach(item => {
+          const m = item.id?.match(/item-(\d+)-/);
+          const gi = m ? parseInt(m[1]) : 0;
+          if (!byGroup[gi]) byGroup[gi] = [];
+          byGroup[gi].push(item);
+        });
+
+        furnitureGroups.forEach((group, gi) => {
+          itemRows += `<tr style="background:#f8f9fa"><td colspan="4" style="font-weight:bold;color:#274290;padding:10px 16px;text-transform:uppercase;border:none;border-bottom:1px solid #ddd;font-size:14px;">${group.name || ''}</td></tr>`;
+          (byGroup[gi] || []).forEach(item => {
+            const amt = (parseFloat(item.quantity || 0) * parseFloat(item.price || 0)).toFixed(2);
+            itemRows += `<tr><td style="padding:8px 16px;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">${item.name || ''}</td><td style="padding:8px 16px;text-align:center;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">$${parseFloat(item.price || 0).toFixed(2)}</td><td style="padding:8px 16px;text-align:center;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">${item.quantity || 0}</td><td style="padding:8px 16px;text-align:right;font-weight:bold;color:#333;border:none;border-bottom:1px solid #ddd;font-size:14px;">$${amt}</td></tr>`;
+          });
+        });
+
+        // Ungrouped items fallback
+        items.filter(item => {
+          const m = item.id?.match(/item-(\d+)-/);
+          return m ? parseInt(m[1]) >= furnitureGroups.length : false;
+        }).forEach(item => {
+          const amt = (parseFloat(item.quantity || 0) * parseFloat(item.price || 0)).toFixed(2);
+          itemRows += `<tr><td style="padding:8px 16px;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">${item.name || ''}</td><td style="padding:8px 16px;text-align:center;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">$${parseFloat(item.price || 0).toFixed(2)}</td><td style="padding:8px 16px;text-align:center;border:none;border-bottom:1px solid #ddd;color:#333;font-size:14px;">${item.quantity || 0}</td><td style="padding:8px 16px;text-align:right;font-weight:bold;color:#333;border:none;border-bottom:1px solid #ddd;font-size:14px;">$${amt}</td></tr>`;
+        });
+      }
+
+      // ── Calculations ────────────────────────────────────────────────────
+      const calc = invoice.calculations || {};
+      const subtotal   = parseFloat(calc.subtotal || 0).toFixed(2);
+      const taxPct     = invoice.headerSettings?.taxPercentage || 0;
+      const taxAmt     = parseFloat(calc.taxAmount || 0).toFixed(2);
+      const ccEnabled  = invoice.headerSettings?.creditCardFeeEnabled;
+      const ccAmt      = parseFloat(calc.creditCardFeeAmount || 0).toFixed(2);
+      const paidAmt    = parseFloat(invoice.paidAmount || calc.paidAmount || 0).toFixed(2);
+      const total      = parseFloat(calc.total || 0).toFixed(2);
+      const balance    = (parseFloat(total) - parseFloat(paidAmt)).toFixed(2);
+      const balColor   = parseFloat(balance) >= 0 ? '#cc820d' : '#4CAF50';
+
+      const createdDate = invoice.createdAt
+        ? (invoice.createdAt.toDate ? invoice.createdAt.toDate() : new Date(invoice.createdAt)).toLocaleDateString('en-CA')
+        : new Date().toLocaleDateString('en-CA');
+
+      const cust = invoice.customerInfo || invoice.originalCustomerInfo || {};
+
+      // ── HTML Template ────────────────────────────────────────────────────
+      const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Invoice ${invoice.invoiceNumber || 'N/A'}</title>
+  <style>
+    body { -webkit-print-color-adjust:exact; print-color-adjust:exact; background:white; margin:0; padding:0; font-family:Arial,sans-serif; }
+    .header img,.footer img { max-height:100px!important; width:100%!important; object-fit:contain!important; display:block!important; }
+    .terms-hd { background-color:#cc820d!important; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    .terms-hd * { color:white!important; }
+    .paid-box  { background-color:#4CAF50!important; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    .bal-box   { background-color:${balColor}!important; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    .tot-box   { background-color:#2c2c2c!important; -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    .paid-box *,.bal-box *,.tot-box * { color:white!important; }
+  </style>
+</head>
+<body>
+<div style="width:100%;min-height:100%;display:flex;flex-direction:column;">
+  <div class="header" style="margin-bottom:16px;width:100%;display:flex;justify-content:center;">
+    <img src="${window.location.origin}/assets/images/invoice-headers/Invoice Header.png" alt="Header" style="width:100%;height:auto;" />
+  </div>
+  <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;">
+    <div style="flex:1;margin-right:16px;">
+      <h6 style="font-weight:bold;color:black;margin-bottom:8px;font-size:18px;">Invoice to:</h6>
+      <h5 style="font-weight:bold;margin-bottom:8px;color:black;font-size:20px;">${cust.customerName || 'N/A'}</h5>
+      ${cust.phone ? `<div style="margin-bottom:4px;color:black;">📞 ${cust.phone}</div>` : ''}
+      ${cust.email ? `<div style="margin-bottom:4px;color:black;">✉️ ${cust.email}</div>` : ''}
+      ${cust.address ? `<div style="margin-bottom:4px;color:black;white-space:pre-line;">📍 ${cust.address}</div>` : ''}
+    </div>
+    <div style="min-width:250px;flex-shrink:0;">
+      <div style="color:black;margin-bottom:4px;"><strong>Date:</strong> ${createdDate}</div>
+      <div style="color:black;margin-bottom:4px;"><strong>Invoice #</strong> ${invoice.invoiceNumber || 'N/A'}</div>
+      <div style="color:black;margin-bottom:4px;"><strong>Tax #</strong> 798633319-RT0001</div>
+    </div>
+  </div>
+  <div style="margin-bottom:16px;border:2px solid #333;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;background:white;table-layout:fixed;">
+      <thead>
+        <tr style="background:#f5f5f5;">
+          <th style="width:66.67%;padding:8px 16px;text-align:left;font-weight:bold;color:#333;background:#f5f5f5;border:none;border-bottom:2px solid #333;border-right:1px solid #ddd;font-size:14px;">Description</th>
+          <th style="width:11.11%;padding:8px 16px;text-align:center;font-weight:bold;color:#333;background:#f5f5f5;border:none;border-bottom:2px solid #333;border-right:1px solid #ddd;font-size:14px;">Price</th>
+          <th style="width:11.11%;padding:8px 16px;text-align:center;font-weight:bold;color:#333;background:#f5f5f5;border:none;border-bottom:2px solid #333;border-right:1px solid #ddd;font-size:14px;">Unit</th>
+          <th style="width:11.11%;padding:8px 16px;text-align:right;font-weight:bold;color:#333;background:#f5f5f5;border:none;border-bottom:2px solid #333;font-size:14px;">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+  </div>
+  <div style="margin-top:4px;">
+    <div style="display:flex;width:100%;gap:16px;">
+      <div style="flex:0 0 50%;max-width:50%;">
+        <div class="terms-hd" style="background:#cc820d;color:white;padding:8px;margin-bottom:8px;">
+          <h6 style="font-weight:bold;color:white;text-align:center;text-transform:uppercase;margin:0;font-size:16px;">Terms and Conditions</h6>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div><p style="font-weight:bold;color:black;margin:0 0 4px 0;font-size:14px;">Payment by Cheque: <span style="font-size:10px;font-weight:normal;color:#666;">(for corporates only)</span></p><p style="color:black;margin:0;font-size:12px;">Mail to: 322 Etheridge ave, Milton, ON CANADA L9E 1H7</p></div>
+          <div><p style="font-weight:bold;color:black;margin:0 0 4px 0;font-size:14px;">Payment by direct deposit:</p><p style="color:black;margin:0;font-size:12px;">Transit Number: 07232</p><p style="color:black;margin:0;font-size:12px;">Institution Number: 010</p><p style="color:black;margin:0;font-size:12px;">Account Number: 1090712</p></div>
+          <div><p style="font-weight:bold;color:black;margin:0 0 4px 0;font-size:14px;">Payment by e-transfer:</p><p style="color:black;margin:0;font-size:12px;">JL@JLupholstery.com</p></div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;justify-content:flex-end;align-items:flex-start;">
+        <div style="min-width:300px;max-width:400px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:black;font-size:14px;">Subtotal:</span><span style="font-weight:bold;color:black;font-size:14px;">$${subtotal}</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:black;font-size:14px;">Tax Rate:</span><span style="font-weight:bold;color:black;font-size:14px;">${taxPct}%</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:black;font-size:14px;">Tax Due:</span><span style="font-weight:bold;color:black;font-size:14px;">$${taxAmt}</span></div>
+          ${ccEnabled ? `<div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:black;font-size:14px;">Credit Card Fee:</span><span style="font-weight:bold;color:black;font-size:14px;">$${ccAmt}</span></div>` : ''}
+          <div class="paid-box" style="display:flex;justify-content:space-between;margin-bottom:4px;background:#4CAF50;color:white;padding:8px;border-radius:4px;"><span style="font-weight:bold;color:white;font-size:14px;">Paid:</span><span style="font-weight:bold;color:white;font-size:14px;">$${paidAmt}</span></div>
+          <div class="bal-box" style="display:flex;justify-content:space-between;margin-bottom:4px;background:${balColor};color:white;padding:8px;border-radius:4px;"><span style="font-weight:bold;color:white;font-size:14px;">Balance:</span><span style="font-weight:bold;color:white;font-size:14px;">$${balance}</span></div>
+          <div class="tot-box" style="display:flex;justify-content:space-between;background:#2c2c2c;color:white;padding:8px;border-radius:4px;"><span style="font-weight:bold;color:white;font-size:14px;">Total:</span><span style="font-weight:bold;color:white;font-size:14px;">$${total}</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="footer" style="margin-top:24px;width:100%;display:flex;justify-content:center;">
+    <img src="${window.location.origin}/assets/images/invoice-headers/invoice Footer.png" alt="Footer" style="width:100%;height:auto;" />
+  </div>
+</div>
+</body>
+</html>`;
+
+      // ── Fix relative paths → absolute URLs so html2canvas can load images ──
+      const origin = window.location.origin;
+      htmlContent = htmlContent
+        .replace(/src="\/assets\//g, `src="${origin}/assets/`)
+        .replace(/url\(\/assets\//g, `url(${origin}/assets/`);
+
+      // ── Render in hidden iframe ───────────────────────────────────────────
+      const iframe = document.createElement('iframe');
+      iframe.id = 'customer-invoice-pdf-iframe';
+      iframe.style.cssText = 'position:fixed;left:-9999px;width:800px;height:1200px;border:none;visibility:hidden;';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      iframeDoc.open();
+      iframeDoc.write(htmlContent);
+      iframeDoc.close();
+
+      // Wait for images to fully load
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      const body = iframeDoc.body;
+      const canvas = await html2canvas(body, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: body.scrollWidth,
+        windowHeight: body.scrollHeight,
+        width: body.scrollWidth,
+        height: body.scrollHeight,
+      });
+
+      const imgData  = canvas.toDataURL('image/jpeg', 0.92);
+      const pdf      = new jsPDF('p', 'mm', 'a4');
+      const margin   = 10;
+      const imgWidth = 210 - margin * 2;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position   = margin;
+      pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+      heightLeft -= (297 - margin * 2);
+      while (heightLeft > 0) {
+        pdf.addPage();
+        position = -(imgHeight - heightLeft) + margin;
+        pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
+        heightLeft -= (297 - margin * 2);
+      }
+
+      pdf.save(fileName);
+      document.body.removeChild(iframe);
+      showSuccess('PDF downloaded successfully!');
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showError('Failed to download PDF');
+      const el = document.getElementById('customer-invoice-pdf-iframe');
+      if (el?.parentNode) el.parentNode.removeChild(el);
+    }
+  };
+
   if (loading) {
     console.log('Customer Invoices page is in loading state');
     return (
@@ -686,14 +890,19 @@ const CustomerInvoicesPage = () => {
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Balance</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Tax</TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>CC Fee</TableCell>
-              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Date</TableCell>
+              <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                  <CalendarIcon sx={{ fontSize: 16 }} />
+                  Created Date
+                </Box>
+              </TableCell>
               <TableCell sx={{ color: 'white', fontWeight: 'bold', textAlign: 'center', verticalAlign: 'middle' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredInvoices.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
                   <Typography variant="h6" color="text.secondary">
                     {searchTerm ? 'No invoices found matching your search' : 'No invoices found'}
                   </Typography>
@@ -800,11 +1009,24 @@ const CustomerInvoicesPage = () => {
                     />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CalendarIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      <Typography variant="body2">
-                        {formatDateOnly(invoice.createdAt)}
-                      </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{
+                        backgroundColor: invoice.createdAt ? '#e8f5e9' : '#fce4ec',
+                        border: `1px solid ${invoice.createdAt ? '#4CAF50' : '#e91e63'}`,
+                        borderRadius: 1,
+                        px: 1.5,
+                        py: 0.5,
+                        minWidth: 110
+                      }}>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: invoice.createdAt ? '#2e7d32' : '#c62828', fontSize: '0.8rem' }}>
+                          {invoice.createdAt ? formatDateOnly(invoice.createdAt) : '⚠ No Date'}
+                        </Typography>
+                      </Box>
+                      {invoice.createdAt && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem' }}>
+                          {formatDate(invoice.createdAt, { hour: '2-digit', minute: '2-digit', second: undefined, year: undefined, month: undefined, day: undefined })}
+                        </Typography>
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center', verticalAlign: 'middle' }}>
@@ -832,6 +1054,15 @@ const CustomerInvoicesPage = () => {
                           }}
                         >
                           <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Download PDF">
+                        <IconButton
+                          size="small"
+                          sx={{ color: '#e53935' }}
+                          onClick={() => handleDownloadPdfInvoice(invoice)}
+                        >
+                          <DownloadIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Print Invoice">

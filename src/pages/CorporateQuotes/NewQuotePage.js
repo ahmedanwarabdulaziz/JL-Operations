@@ -110,8 +110,9 @@ const NewQuotePage = () => {
   const [selectedTerms, setSelectedTerms] = useState([]);
 
   // Step 4 — Tax + Notes
-  const [tax, setTax]     = useState({ enabled: true, percentage: 13 });
-  const [notes, setNotes] = useState('');
+  const [tax, setTax]                       = useState({ enabled: true, percentage: 13 });
+  const [notes, setNotes]                   = useState('');
+  const [pickupDelivery, setPickupDelivery] = useState({ enabled: false, serviceType: 'both', cost: '' });
 
   // Step 6 — Submit
   const [quoteStatus, setQuoteStatus] = useState('draft');
@@ -141,6 +142,7 @@ const NewQuotePage = () => {
           setSelectedTerms(sourceQuote.selectedTerms || []);
           setTax(sourceQuote.tax || { enabled: true, percentage: 13 });
           setNotes(sourceQuote.notes || '');
+          setPickupDelivery(sourceQuote.pickupDelivery || { enabled: false, serviceType: 'both', cost: '' });
         } else {
           const num = await getNextQuoteNumber();
           setQuoteNumber(num);
@@ -240,6 +242,11 @@ const NewQuotePage = () => {
         furnitureGroups,
         selectedTerms,
         tax: { enabled: tax.enabled, percentage: parseFloat(tax.percentage) || 0 },
+        pickupDelivery: {
+          enabled: pickupDelivery.enabled,
+          serviceType: pickupDelivery.serviceType || 'both',
+          cost: parseFloat(pickupDelivery.cost) || 0,
+        },
         notes,
         status: quoteStatus,
         createdAt: new Date(),
@@ -308,6 +315,8 @@ const NewQuotePage = () => {
             onTaxChange={setTax}
             notes={notes}
             onNotesChange={setNotes}
+            pickupDelivery={pickupDelivery}
+            onPickupDeliveryChange={setPickupDelivery}
           />
         );
       case 4:
@@ -320,6 +329,7 @@ const NewQuotePage = () => {
             furnitureGroups={furnitureGroups}
             selectedTerms={selectedTerms}
             tax={tax}
+            pickupDelivery={pickupDelivery}
             notes={notes}
           />
         );

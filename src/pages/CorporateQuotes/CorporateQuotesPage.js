@@ -60,6 +60,12 @@ const StatusChip = ({ status }) => {
 const formatCurrency = (v) =>
   new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(v || 0);
 
+const calcPickupDelivery = (pd) => {
+  if (!pd?.enabled) return 0;
+  const cost = parseFloat(pd.cost) || 0;
+  return pd.serviceType === 'both' ? cost * 2 : cost;
+};
+
 const calcTotal = (quote) => {
   let subtotal = 0;
   (quote.furnitureGroups || []).forEach((g) => {
@@ -69,9 +75,10 @@ const calcTotal = (quote) => {
       (g.foamEnabled ? (parseFloat(g.foamPrice) || 0) * (parseFloat(g.foamQnty) || 0) : 0) +
       (g.paintingEnabled ? (parseFloat(g.paintingLabour) || 0) * (parseFloat(g.paintingQnty) || 0) : 0);
   });
+  const pickupCost = calcPickupDelivery(quote.pickupDelivery);
   const pct = parseFloat(quote.tax?.percentage) || 0;
-  const taxAmt = quote.tax?.enabled ? subtotal * (pct / 100) : 0;
-  return subtotal + taxAmt;
+  const taxAmt = quote.tax?.enabled ? (subtotal + pickupCost) * (pct / 100) : 0;
+  return subtotal + pickupCost + taxAmt;
 };
 
 const formatDate = (ts) => {
@@ -265,13 +272,23 @@ const calculateCorporateQuoteTotals = (quote) => {
       (g.foamEnabled ? (parseFloat(g.foamPrice) || 0) * (parseFloat(g.foamQnty) || 0) : 0) +
       (g.paintingEnabled ? (parseFloat(g.paintingLabour) || 0) * (parseFloat(g.paintingQnty) || 0) : 0);
   });
+  const pickupCost = calcPickupDelivery(quote.pickupDelivery);
+  const pickupLabel = !quote.pickupDelivery?.enabled
+    ? ''
+    : quote.pickupDelivery.serviceType === 'pickup'
+      ? 'Pickup Only'
+      : quote.pickupDelivery.serviceType === 'delivery'
+        ? 'Delivery Only'
+        : 'Pickup & Delivery';
   const pct = parseFloat(quote.tax?.percentage) || 13;
-  const taxAmt = quote.tax?.enabled ? subtotal * (pct / 100) : 0;
-  
+  const taxAmt = quote.tax?.enabled ? (subtotal + pickupCost) * (pct / 100) : 0;
+
   return {
-    subtotal: subtotal,
+    subtotal,
+    pickupCost,
+    pickupLabel,
     tax: taxAmt,
-    total: subtotal + taxAmt,
+    total: subtotal + pickupCost + taxAmt,
     taxPercentage: pct
   };
 };
@@ -388,6 +405,7 @@ const getCorporateQuotePrintHtml = (quote, totals) => {
             <div style="flex: 1; display: flex; justify-content: flex-end; align-items: flex-start;">
               <div style="min-width: 300px; max-width: 400px;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: black; font-size: 14px;">Subtotal:</span><span style="font-weight: bold; color: black; font-size: 14px;">$${totals.subtotal.toFixed(2)}</span></div>
+                ${totals.pickupCost > 0 ? `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: black; font-size: 14px;">${totals.pickupLabel}:</span><span style="font-weight: bold; color: black; font-size: 14px;">$${totals.pickupCost.toFixed(2)}</span></div>` : ''}
                 ${quote.tax?.enabled ? `<div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: black; font-size: 14px;">Tax Rate:</span><span style="font-weight: bold; color: black; font-size: 14px;">${totals.taxPercentage}%</span></div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span style="color: black; font-size: 14px;">Tax Due:</span><span style="font-weight: bold; color: black; font-size: 14px;">$${totals.tax.toFixed(2)}</span></div>` : ''}
                 <div class="total-box" style="display: flex; justify-content: space-between; background-color: #b98f33; color: white; padding: 8px; border-radius: 4px; margin-top: 8px;"><span style="font-weight: bold; color: white; font-size: 14px;">Total Estimated:</span><span style="font-weight: bold; color: white; font-size: 14px;">$${totals.total.toFixed(2)}</span></div>
@@ -760,6 +778,7 @@ const CorporateQuotesPage = () => {
               furnitureGroups={selectedQuote.furnitureGroups}
               selectedTerms={selectedQuote.selectedTerms || []}
               tax={selectedQuote.tax || { enabled: false, percentage: 0 }}
+              pickupDelivery={selectedQuote.pickupDelivery || { enabled: false, serviceType: 'both', cost: 0 }}
               notes={selectedQuote.notes}
             />
           )}

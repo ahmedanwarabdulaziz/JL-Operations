@@ -403,6 +403,8 @@ const EditInvoicePage = () => {
           paidAmount: parseFloat(paidAmount) || 0,
           balance: calculateBalance()
         },
+        // Preserve original creation timestamp — never overwrite it on edit
+        ...(invoiceData.createdAt && { createdAt: invoiceData.createdAt }),
         updatedAt: new Date()
       };
       
