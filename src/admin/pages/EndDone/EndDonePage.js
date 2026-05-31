@@ -53,12 +53,13 @@ import {
   Close as CloseIcon,
   LocationOn as LocationIcon,
   Send as SendIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Replay as ReplayIcon
 } from '@mui/icons-material';
 
 import { useNavigate } from 'react-router-dom';
 import { useNotification } from '../../../shared/components/Common/NotificationSystem';
-import { collection, getDocs, query, orderBy, where, getDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, getDoc, doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { calculateOrderProfit, calculateOrderTotal, calculateOrderTax, getOrderCostBreakdown, calculatePickupDeliveryCost } from '../../../shared/utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../../shared/utils/materialTaxRates';
@@ -97,6 +98,7 @@ const EndDonePage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [revertingOrderId, setRevertingOrderId] = useState(null);
 
   const navigate = useNavigate();
   const { showSuccess, showError } = useNotification();
@@ -876,6 +878,72 @@ const EndDonePage = () => {
     setDeleteDialogOpen(true);
   };
 
+  // Handle revert order status to in-progress
+  const handleRevertToInProgress = async (order) => {
+    // T-invoices (customer-invoices) cannot be reverted via this action
+    if (order.source === 'customer-invoices') {
+      showError('T-Invoices cannot be reverted to in-progress from this view.');
+      return;
+    }
+
+    try {
+      setRevertingOrderId(order.id);
+
+      // Determine the default/in-progress status value
+      const defaultStatus = invoiceStatuses.find(s => s.isDefault) ||
+        invoiceStatuses.find(s => !s.isEndState);
+      const inProgressValue = defaultStatus?.value || 'in_progress';
+
+      if (order.status === 'done' && order.orderType !== 'individual' && order.orderType !== 'corporate') {
+        // Order is in the done-orders collection — move it back to orders collection
+        const doneOrderRef = doc(db, 'done-orders', order.id);
+        const doneOrderSnap = await getDoc(doneOrderRef);
+
+        if (doneOrderSnap.exists()) {
+          const orderData = doneOrderSnap.data();
+          // Write to orders collection with the same ID
+          const ordersRef = doc(db, 'orders', order.id);
+          await setDoc(ordersRef, {
+            ...orderData,
+            status: 'active',
+            invoiceStatus: inProgressValue,
+            statusUpdatedAt: new Date(),
+            completedAt: null
+          });
+          // Delete from done-orders collection
+          await deleteDoc(doneOrderRef);
+        }
+      } else if (order.orderType === 'corporate') {
+        // Corporate order — update invoiceStatus in corporate-orders collection
+        const corporateOrderRef = doc(db, 'corporate-orders', order.id);
+        await updateDoc(corporateOrderRef, {
+          invoiceStatus: inProgressValue,
+          statusUpdatedAt: new Date(),
+          completedAt: null
+        });
+      } else {
+        // Regular order in orders collection — update invoiceStatus
+        const orderRef = doc(db, 'orders', order.id);
+        await updateDoc(orderRef, {
+          invoiceStatus: inProgressValue,
+          statusUpdatedAt: new Date(),
+          completedAt: null
+        });
+      }
+
+      // Remove from local state
+      setOrders(prev => prev.filter(o => o.id !== order.id));
+      setFilteredOrders(prev => prev.filter(o => o.id !== order.id));
+
+      showSuccess(`Order #${order.invoiceNumber || order.orderDetails?.billInvoice || order.id} returned to In Progress`);
+    } catch (error) {
+      console.error('Error reverting order status:', error);
+      showError('Failed to revert order status: ' + error.message);
+    } finally {
+      setRevertingOrderId(null);
+    }
+  };
+
   // Handle completion email confirm
   const handleCompletionEmailConfirm = async () => {
     if (!selectedOrderForEmail) return;
@@ -1265,6 +1333,31 @@ const EndDonePage = () => {
                             >
                               <SendIcon />
                             </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Return to In Progress">
+                            <span style={{ display: order.source === 'customer-invoices' ? 'none' : 'inline-flex' }}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRevertToInProgress(order)}
+                                disabled={revertingOrderId === order.id}
+                                sx={{ 
+                                  color: '#2196f3',
+                                  backgroundColor: 'rgba(33, 150, 243, 0.15)',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(33, 150, 243, 0.3)',
+                                    color: '#42a5f5'
+                                  },
+                                  '&:disabled': {
+                                    color: '#555',
+                                    backgroundColor: 'rgba(255,255,255,0.05)'
+                                  }
+                                }}
+                              >
+                                {revertingOrderId === order.id
+                                  ? <CircularProgress size={16} sx={{ color: '#2196f3' }} />
+                                  : <ReplayIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           <Tooltip title="Delete Invoice">
                             <IconButton

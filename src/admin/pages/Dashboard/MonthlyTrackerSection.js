@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, CircularProgress, IconButton, Tooltip,
-  Collapse, Select, MenuItem, FormControl, TextField, InputAdornment
+  Collapse, Select, MenuItem, FormControl, TextField,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, Alert,
+  Checkbox, FormControlLabel
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
@@ -11,10 +13,13 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HomeIcon from '@mui/icons-material/Home';
-import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { toDateObject, formatDateOnly } from '../../../utils/dateUtils';
-import { calculateOrderTotal } from '../../../shared/utils/orderCalculations';
+import { calculateOrderTotal, calculateOrderProfit } from '../../../shared/utils/orderCalculations';
+import { normalizePaymentData } from '../../../utils/orderCalculations';
+import { createAllocation, normalizeAllocation } from '../../../shared/utils/allocationUtils';
+import { sendCompletionEmailWithGmail } from '../../../services/emailService';
 
 const MONTH_NAMES = [
   'January','February','March','April','May','June',
@@ -67,6 +72,26 @@ export default function MonthlyTrackerSection() {
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [editingNote, setEditingNote] = useState({ id: null, value: '' });
 
+  // ── Done-flow state: payment validation ────────────────────────────────────
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+  const [validationError, setValidationError] = useState({
+    type: '', message: '', row: null, newStatusObj: null, pendingAmount: 0, currentAmount: 0
+  });
+
+  // ── Done-flow state: allocation dialog ─────────────────────────────────────
+  const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [allocationRow, setAllocationRow] = useState(null);       // row being completed
+  const [allocationNewStatus, setAllocationNewStatus] = useState(null); // newStatusObj
+  const [monthlyAllocations, setMonthlyAllocations] = useState([]);
+  const [allocationProcessing, setAllocationProcessing] = useState(false);
+
+  // ── Done-flow state: completion email ──────────────────────────────────────
+  const [completionEmailDialog, setCompletionEmailDialog] = useState({ open: false });
+  const [completedRowForEmail, setCompletedRowForEmail] = useState(null);
+  const [includeReviewEmail, setIncludeReviewEmail] = useState(true);
+  const [sendEmailChecked, setSendEmailChecked] = useState(true);
+  const [sendingCompletionEmail, setSendingCompletionEmail] = useState(false);
+
   // ── Fetch invoice statuses once ─────────────────────────────────────────────
   useEffect(() => {
     getDocs(collection(db, 'invoiceStatuses')).then(snap => {
@@ -81,6 +106,291 @@ export default function MonthlyTrackerSection() {
     const found = invoiceStatuses.find(s => s.value === raw);
     return found ? found.label : raw;
   }, [invoiceStatuses]);
+
+  // ── Allocation helpers ──────────────────────────────────────────────────────
+  const generateMonthlyAllocations = useCallback(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const currentYear = now.getFullYear();
+    const months = [];
+    for (let i = -2; i <= 2; i++) {
+      const monthIndex = (currentMonth + i + 12) % 12;
+      const yr = currentYear + Math.floor((currentMonth + i) / 12);
+      months.push({
+        month: monthIndex + 1,
+        year: yr,
+        label: new Date(yr, monthIndex).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        percentage: i === 0 ? 100 : 0
+      });
+    }
+    return months;
+  }, []);
+
+  const allocationTotal = monthlyAllocations.reduce((s, a) => s + (a.percentage || 0), 0);
+
+  const updateAllocationPercentage = (index, val) => {
+    const newAllocations = [...monthlyAllocations];
+    let pct = parseFloat(val) || 0;
+    pct = Math.max(0, Math.min(100, pct));
+    const currentTotal = newAllocations.reduce((s, a, i) => i !== index ? s + (a.percentage || 0) : s, 0);
+    if (currentTotal + pct > 100) pct = Math.max(0, 100 - currentTotal);
+    newAllocations[index].percentage = pct;
+    setMonthlyAllocations(newAllocations);
+  };
+
+  // ── Open the allocation dialog for a row ──────────────────────────────────
+  const openAllocationDialog = useCallback((row, newStatusObj, fullOrderData) => {
+    setAllocationRow({ ...row, _fullOrder: fullOrderData });
+    setAllocationNewStatus(newStatusObj);
+    setAllocationDialogOpen(true);
+    // Pre-load existing allocation if present
+    if (fullOrderData.allocation?.allocations?.length > 0) {
+      const monthNames = ['January','February','March','April','May','June',
+                          'July','August','September','October','November','December'];
+      setMonthlyAllocations(
+        fullOrderData.allocation.allocations.map(a => ({
+          month: Number(a.month),
+          year: Number(a.year),
+          label: `${monthNames[Number(a.month) - 1]} ${a.year}`,
+          percentage: a.percentage
+        })).filter(a => a.month >= 1 && a.month <= 12)
+      );
+    } else {
+      setMonthlyAllocations(generateMonthlyAllocations());
+    }
+  }, [generateMonthlyAllocations]);
+
+  // ── Fetch full order data from Firestore ──────────────────────────────────
+  const fetchFullOrder = async (row) => {
+    let collName;
+    if (row.isTInvoice)  collName = 'customer-invoices';
+    else if (row.isCorp) collName = 'corporate-orders';
+    else                 collName = 'orders';
+    const snap = await getDoc(doc(db, collName, row.id));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data(), orderType: row.isCorp ? 'corporate' : 'regular' };
+  };
+
+  // ── handleStatusChange — full Done flow ────────────────────────────────────
+  const handleStatusChange = async (row, newStatusValue) => {
+    if (!newStatusValue || newStatusValue === invoiceStatuses.find(s => s.label === row.status)?.value) {
+      setEditingStatusId(null);
+      return;
+    }
+
+    const newStatusObj = invoiceStatuses.find(s => s.value === newStatusValue);
+    if (!newStatusObj) { setEditingStatusId(null); return; }
+    setEditingStatusId(null);
+
+    // ── End-state: "Done" ──────────────────────────────────────────────────
+    if (newStatusObj.isEndState && newStatusObj.endStateType === 'done') {
+      try {
+        const fullOrder = await fetchFullOrder(row);
+        if (!fullOrder) { console.error('Order not found'); return; }
+
+        // Normalise for calculation
+        const normalised = row.isCorp
+          ? { ...fullOrder, furnitureData: { groups: fullOrder.furnitureGroups || [] }, paymentData: fullOrder.paymentDetails || {} }
+          : { ...fullOrder, furnitureData: fullOrder.furnitureData || { groups: [] }, paymentData: fullOrder.paymentData || {} };
+
+        const profitData = calculateOrderProfit(normalised);
+        const totalAmount = profitData.revenue || 0;
+        const paymentData = row.isCorp ? fullOrder.paymentDetails : fullOrder.paymentData;
+        const normPayment = normalizePaymentData(paymentData);
+
+        // Payment validation
+        if (normPayment.amountPaid < totalAmount) {
+          setValidationError({
+            type: 'done',
+            message: `Cannot complete order: Payment not fully received. Required: $${totalAmount.toFixed(2)}, Paid: $${normPayment.amountPaid.toFixed(2)}`,
+            row,
+            newStatusObj,
+            pendingAmount: totalAmount - normPayment.amountPaid,
+            currentAmount: normPayment.amountPaid,
+            fullOrder,
+            normalised,
+          });
+          setValidationDialogOpen(true);
+          return;
+        }
+
+        // Fully paid → open allocation dialog
+        openAllocationDialog(row, newStatusObj, fullOrder);
+      } catch (err) {
+        console.error('Error fetching order for Done flow:', err);
+      }
+      return;
+    }
+
+    // ── Non-done end-state or regular status — direct update ─────────────
+    try {
+      let collectionName;
+      if (row.isTInvoice)  collectionName = 'customer-invoices';
+      else if (row.isCorp) collectionName = 'corporate-orders';
+      else                 collectionName = 'orders';
+      const ref = doc(db, collectionName, row.id);
+      await updateDoc(ref, { invoiceStatus: newStatusValue, statusUpdatedAt: new Date() });
+      const newLabel = newStatusObj.label || newStatusValue;
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: newLabel } : r));
+    } catch (err) {
+      console.error('Status update error', err);
+    }
+  };
+
+  // ── Make fully paid (payment bypass) ──────────────────────────────────────
+  const handleMakeFullyPaid = async () => {
+    const { row, newStatusObj, pendingAmount, currentAmount, fullOrder, normalised } = validationError;
+    try {
+      const paymentField = row.isCorp ? 'paymentDetails' : 'paymentData';
+      const currentPayment = row.isCorp ? fullOrder.paymentDetails : fullOrder.paymentData;
+      const totalAmount = currentAmount + pendingAmount;
+      const collName = row.isCorp ? 'corporate-orders' : 'orders';
+      await updateDoc(doc(db, collName, row.id), {
+        [`${paymentField}.amountPaid`]: totalAmount,
+        [`${paymentField}.paymentHistory`]: [
+          ...(currentPayment?.paymentHistory || []),
+          { amount: pendingAmount, date: new Date(), notes: 'Auto-paid to complete order' }
+        ]
+      });
+      // Open allocation dialog with updated order
+      const updatedOrder = {
+        ...fullOrder,
+        [paymentField]: { ...currentPayment, amountPaid: totalAmount }
+      };
+      setValidationDialogOpen(false);
+      openAllocationDialog(row, newStatusObj, updatedOrder);
+    } catch (err) {
+      console.error('Error making fully paid:', err);
+    }
+  };
+
+  // ── Apply allocation & complete the order ─────────────────────────────────
+  const handleApplyAllocation = async () => {
+    if (Math.abs(allocationTotal - 100) > 0.01) {
+      alert('Total allocation percentage must equal 100%');
+      return;
+    }
+    setAllocationProcessing(true);
+    try {
+      const row = allocationRow;
+      const fullOrder = allocationRow._fullOrder;
+      const newStatusObj = allocationNewStatus;
+
+      const normalised = row.isCorp
+        ? { ...fullOrder, furnitureData: { groups: fullOrder.furnitureGroups || [] }, paymentData: fullOrder.paymentDetails || {} }
+        : { ...fullOrder, furnitureData: fullOrder.furnitureData || { groups: [] }, paymentData: fullOrder.paymentData || {} };
+
+      const profitData = calculateOrderProfit(normalised);
+      const allocationData = createAllocation(monthlyAllocations, profitData);
+
+      const updateData = {
+        invoiceStatus: newStatusObj.value,
+        allocation: allocationData,
+        statusUpdatedAt: new Date()
+      };
+
+      const collName = row.isCorp ? 'corporate-orders' : 'orders';
+      const orderRef = doc(db, collName, row.id);
+
+      if (row.isCorp) {
+        const closedAtDate = new Date();
+        await updateDoc(orderRef, {
+          ...updateData,
+          closedAt: closedAtDate,
+          updatedAt: new Date()
+        });
+
+        // Sanitise — remove _fullOrder and any non-serialisable fields
+        const { _fullOrder, ...sanitizedRow } = row;
+        const doneOrderData = {
+          ...fullOrder,
+          allocation: allocationData,
+          invoiceStatus: newStatusObj.value,
+          orderType: 'corporate',
+          source: 'corporate_order',
+          closedAt: closedAtDate,
+          status: 'done'
+        };
+        const taxedInvoiceData = {
+          ...fullOrder,
+          allocation: allocationData,
+          invoiceStatus: newStatusObj.value,
+          orderType: 'corporate',
+          source: 'corporate_order',
+          closedAt: closedAtDate,
+          originalInvoiceId: fullOrder.id
+        };
+
+        await addDoc(collection(db, 'done-orders'), doneOrderData);
+        await addDoc(collection(db, 'taxedInvoices'), taxedInvoiceData);
+
+        // Remove from table (corporate done orders disappear)
+        setRows(prev => prev.filter(r => r.id !== row.id));
+      } else {
+        await updateDoc(orderRef, updateData);
+        // Update status label in table
+        setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: newStatusObj.label } : r));
+      }
+
+      // Save the completed row for email
+      setCompletedRowForEmail({ ...row, _fullOrder: fullOrder });
+
+      setAllocationDialogOpen(false);
+      setAllocationRow(null);
+      setAllocationNewStatus(null);
+
+      // Trigger email dialog if customer has email
+      const customerEmail = row.isCorp
+        ? (fullOrder.contactPerson?.email || fullOrder.corporateCustomer?.email)
+        : fullOrder.personalInfo?.email;
+
+      if (customerEmail && customerEmail.includes('@')) {
+        setCompletionEmailDialog({ open: true });
+        setSendEmailChecked(true);
+        setIncludeReviewEmail(true);
+      }
+    } catch (err) {
+      console.error('Error applying allocation:', err);
+    } finally {
+      setAllocationProcessing(false);
+    }
+  };
+
+  // ── Send completion email ──────────────────────────────────────────────────
+  const handleSendCompletionEmail = async () => {
+    if (!sendEmailChecked || !completedRowForEmail) {
+      setCompletionEmailDialog({ open: false });
+      return;
+    }
+    setSendingCompletionEmail(true);
+    try {
+      const { _fullOrder: fullOrder, isCorp } = completedRowForEmail;
+      const customerEmail = isCorp
+        ? (fullOrder.contactPerson?.email || fullOrder.corporateCustomer?.email)
+        : fullOrder.personalInfo?.email;
+
+      if (customerEmail) {
+        const orderDataForEmail = isCorp
+          ? {
+              corporateCustomer: fullOrder.corporateCustomer,
+              contactPerson: fullOrder.contactPerson,
+              orderDetails: fullOrder.orderDetails,
+              furnitureData: { groups: fullOrder.furnitureGroups || [] },
+              paymentData: fullOrder.paymentDetails || {}
+            }
+          : fullOrder;
+
+        await sendCompletionEmailWithGmail(orderDataForEmail, customerEmail, includeReviewEmail, () => {});
+      }
+    } catch (err) {
+      console.error('Completion email error:', err);
+    } finally {
+      setSendingCompletionEmail(false);
+      setCompletionEmailDialog({ open: false });
+      setCompletedRowForEmail(null);
+    }
+  };
+
 
   // ── Fetch invoices + home expenses for selected month ──────────────────────
   useEffect(() => {
@@ -158,6 +468,7 @@ export default function MonthlyTrackerSection() {
             clearIncome,
             dueDate,
             status,
+            rawStatus: order.invoiceStatus || order.orderStatus || order.status || '',
             internalNote,
           };
         };
@@ -241,7 +552,14 @@ export default function MonthlyTrackerSection() {
 
 
 
-        setRows(built);
+        // ── Filter out Cancelled & Pending end-state orders ───────────────────
+        const activeRows = built.filter(row => {
+          const statusObj = invoiceStatuses.find(s => s.value === row.rawStatus);
+          if (!statusObj) return true; // unknown status — show it
+          return statusObj.endStateType !== 'cancelled' && statusObj.endStateType !== 'pending';
+        });
+
+        setRows(activeRows);
 
         // ── 5. Home expenses for selected month ───────────────────────────────
         const homeForMonth = homeExpSnap.docs
@@ -262,35 +580,6 @@ export default function MonthlyTrackerSection() {
     load();
   }, [year, month, resolveStatus]);
 
-  // ── Update status in Firestore and local state ──────────────────────────────
-  const handleStatusChange = async (row, newStatusValue) => {
-    if (!newStatusValue || newStatusValue === row.status) {
-      setEditingStatusId(null);
-      return;
-    }
-    try {
-      // Determine the correct Firestore collection
-      let collectionName;
-      if (row.isTInvoice) {
-        collectionName = 'customer-invoices';
-      } else if (row.isCorp) {
-        collectionName = 'corporate-orders';
-      } else {
-        collectionName = 'orders';
-      }
-      const ref = doc(db, collectionName, row.id);
-      await updateDoc(ref, { invoiceStatus: newStatusValue, statusUpdatedAt: new Date() });
-      // Update local rows immediately
-      const newLabel = invoiceStatuses.find(s => s.value === newStatusValue)?.label || newStatusValue;
-      setRows(prev => prev.map(r => r.id === row.id ? { ...r, status: newLabel } : r));
-    } catch (err) {
-      console.error('Status update error', err);
-    } finally {
-      setEditingStatusId(null);
-    }
-  };
-
-  // ── Save internal note to Firestore ────────────────────────────────────────
   const handleNoteSave = async (row) => {
     const newNote = editingNote.value;
     try {
@@ -316,6 +605,7 @@ export default function MonthlyTrackerSection() {
   const clearTotal        = totalClear - totalHomeExpenses;
 
   return (
+    <>
     <Box sx={{ mb: 4 }}>
       {/* ── Section Header ─────────────────────────────────────────────────── */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, px: 0.5 }}>
@@ -654,5 +944,290 @@ export default function MonthlyTrackerSection() {
         )}
       </Collapse>
     </Box>
+
+    {/* ── Payment Validation Dialog ───────────────────────────────────────── */}
+    <Dialog open={validationDialogOpen} onClose={() => setValidationDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{
+        background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+        color: '#000000',
+        fontWeight: 'bold',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1
+      }}>
+        ⚠️ Payment Validation Required
+      </DialogTitle>
+      <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
+        <Box sx={{ p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33', mb: 2 }}>
+          <Typography variant="body1" sx={{ color: '#ffffff' }}>
+            {validationError.message}
+          </Typography>
+        </Box>
+        <Typography variant="body2" sx={{ color: '#b98f33' }}>
+          Click the button below to mark the remaining amount as paid and proceed to allocation.
+        </Typography>
+      </DialogContent>
+      <DialogContent sx={{ backgroundColor: '#3a3a3a', pt: 0, pb: 1 }}>
+        {validationError.type === 'done' && (
+          <Button
+            variant="contained"
+            onClick={handleMakeFullyPaid}
+            fullWidth
+            sx={{
+              background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+              color: '#000000',
+              fontWeight: 'bold',
+              border: '3px solid #4CAF50',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
+              '&:hover': {
+                background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+                border: '3px solid #45a049',
+              },
+            }}
+          >
+            ✓ Mark ${validationError.pendingAmount?.toFixed(2)} as Paid & Continue
+          </Button>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ backgroundColor: '#3a3a3a', pb: 2, px: 2 }}>
+        <Button
+          onClick={() => setValidationDialogOpen(false)}
+          sx={{ color: '#aaaaaa', '&:hover': { color: '#ffffff', backgroundColor: 'rgba(255,255,255,0.05)' } }}
+        >
+          Cancel
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* ── Allocation Dialog ───────────────────────────────────────────────── */}
+    <Dialog open={allocationDialogOpen} onClose={() => !allocationProcessing && setAllocationDialogOpen(false)} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{
+        background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+        color: '#000000',
+        fontWeight: 'bold',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1
+      }}>
+        📊 Order Completion & Financial Allocation
+      </DialogTitle>
+      <DialogContent sx={{ backgroundColor: '#3a3a3a', p: 3 }}>
+        {/* Order info */}
+        {allocationRow && (
+          <Box sx={{ mb: 3, p: 2, backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #b98f33' }}>
+            <Typography variant="subtitle2" sx={{ color: '#b98f33', fontWeight: 'bold', mb: 0.5 }}>
+              Order
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#ffffff' }}>
+              <strong style={{ color: '#b98f33' }}>Invoice:</strong> {allocationRow.invoiceNo}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#ffffff' }}>
+              <strong style={{ color: '#b98f33' }}>Customer:</strong> {allocationRow.customer}
+            </Typography>
+          </Box>
+        )}
+
+        {/* Instruction */}
+        <Typography variant="body2" sx={{ color: '#b98f33', mb: 2, fontStyle: 'italic' }}>
+          Distribute the order's revenue across months. Total must equal exactly 100%.
+        </Typography>
+
+        {/* Allocation rows */}
+        <Box sx={{ backgroundColor: '#2a2a2a', borderRadius: 1, border: '1px solid #333', overflow: 'hidden', mb: 2 }}>
+          {monthlyAllocations.map((alloc, i) => (
+            <Box
+              key={`${alloc.year}-${alloc.month}`}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                px: 2,
+                py: 1,
+                borderBottom: i < monthlyAllocations.length - 1 ? '1px solid #333' : 'none',
+                '&:hover': { backgroundColor: '#333' }
+              }}
+            >
+              <Typography sx={{ color: '#ffffff', fontSize: '0.85rem', flex: 1, fontWeight: 500 }}>
+                {alloc.label}
+              </Typography>
+              <TextField
+                size="small"
+                type="number"
+                value={alloc.percentage}
+                onChange={e => updateAllocationPercentage(i, e.target.value)}
+                inputProps={{ min: 0, max: 100, step: 1 }}
+                sx={{
+                  width: 85,
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': { borderColor: '#444' },
+                    '&:hover fieldset': { borderColor: '#b98f33' },
+                    '&.Mui-focused fieldset': { borderColor: '#b98f33' },
+                  },
+                  '& .MuiInputBase-input': { color: '#ffffff', textAlign: 'right', fontSize: '0.85rem', py: 0.75 },
+                  backgroundColor: '#1a1a1a',
+                }}
+              />
+              <Typography sx={{ color: '#b98f33', fontSize: '0.85rem', fontWeight: 'bold', width: 18 }}>%</Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Total status */}
+        <Box sx={{
+          p: 1.5,
+          borderRadius: 1,
+          border: `1px solid ${Math.abs(allocationTotal - 100) < 0.01 ? '#4CAF50' : '#f44336'}`,
+          backgroundColor: Math.abs(allocationTotal - 100) < 0.01 ? 'rgba(76,175,80,0.1)' : 'rgba(244,67,54,0.1)',
+        }}>
+          <Typography variant="body2" sx={{
+            color: Math.abs(allocationTotal - 100) < 0.01 ? '#4caf50' : '#f44336',
+            fontWeight: 'bold',
+            textAlign: 'center'
+          }}>
+            {Math.abs(allocationTotal - 100) < 0.01
+              ? `✓ Total: ${allocationTotal.toFixed(1)}% — Ready to complete`
+              : `Total: ${allocationTotal.toFixed(1)}% — ${(100 - allocationTotal).toFixed(1)}% remaining`
+            }
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
+        <Button
+          onClick={() => setAllocationDialogOpen(false)}
+          disabled={allocationProcessing}
+          sx={{ color: '#aaaaaa', '&:hover': { color: '#ffffff', backgroundColor: 'rgba(255,255,255,0.05)' } }}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleApplyAllocation}
+          disabled={allocationProcessing || Math.abs(allocationTotal - 100) > 0.01}
+          sx={{ backgroundColor: '#4caf50', '&:hover': { backgroundColor: '#388e3c' }, '&:disabled': { backgroundColor: '#333' } }}
+        >
+          {allocationProcessing ? <CircularProgress size={18} sx={{ color: '#fff' }} /> : 'Complete Order & Apply Allocation'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+
+    {/* ── Completion Email Dialog ─────────────────────────────────────────── */}
+    <Dialog
+      open={completionEmailDialog.open}
+      onClose={() => setCompletionEmailDialog({ open: false })}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{
+        sx: {
+          backgroundColor: '#3a3a3a',
+          borderRadius: 2,
+          border: '2px solid #b98f33',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        }
+      }}
+    >
+      <DialogTitle sx={{
+        background: 'linear-gradient(135deg, #b98f33 0%, #8b6b1f 100%)',
+        color: '#000000',
+        fontWeight: 'bold',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1
+      }}>
+        <span style={{ fontSize: '22px' }}>📧</span>
+        Send Completion Email
+      </DialogTitle>
+      <DialogContent sx={{ mt: 2, backgroundColor: '#3a3a3a' }}>
+        {/* Order info banner */}
+        {completedRowForEmail && (
+          <Box sx={{
+            p: 2,
+            backgroundColor: '#2a2a2a',
+            borderRadius: 1,
+            borderLeft: '4px solid #b98f33',
+            mb: 3,
+            textAlign: 'center'
+          }}>
+            <Typography variant="h6" sx={{ color: '#b98f33', fontWeight: 'bold' }}>
+              Invoice: {completedRowForEmail.invoiceNo}
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#ffffff', fontWeight: 500 }}>
+              Customer: {completedRowForEmail.customer}
+            </Typography>
+          </Box>
+        )}
+        {/* Email options */}
+        <Box sx={{
+          p: 2,
+          backgroundColor: '#2a2a2a',
+          borderRadius: 1,
+          borderLeft: '4px solid #b98f33',
+          mb: 2
+        }}>
+          <Typography variant="subtitle1" sx={{ color: '#b98f33', mb: 1.5, fontWeight: 'bold' }}>
+            📧 Email Options
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={sendEmailChecked}
+                onChange={e => setSendEmailChecked(e.target.checked)}
+                sx={{ color: '#b98f33', '&.Mui-checked': { color: '#b98f33' } }}
+              />
+            }
+            label="Send completion email to customer"
+            sx={{ color: '#ffffff', display: 'block', mb: 0.5, '& .MuiFormControlLabel-label': { fontWeight: 500 } }}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeReviewEmail}
+                onChange={e => setIncludeReviewEmail(e.target.checked)}
+                sx={{ color: '#b98f33', '&.Mui-checked': { color: '#b98f33' } }}
+              />
+            }
+            label="Include Google review request"
+            sx={{ color: '#ffffff', display: 'block', ml: 1, '& .MuiFormControlLabel-label': { fontWeight: 500 } }}
+          />
+          <Typography variant="body2" sx={{ mt: 1.5, color: '#cccccc', fontStyle: 'italic', fontSize: '13px' }}>
+            The email will include a warm thank you message, care instructions, and optionally a review request.
+          </Typography>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ backgroundColor: '#3a3a3a', p: 2, gap: 1 }}>
+        <Button
+          onClick={() => setCompletionEmailDialog({ open: false })}
+          sx={{ color: '#aaaaaa', '&:hover': { color: '#ffffff', backgroundColor: 'rgba(255,255,255,0.05)' } }}
+        >
+          Skip
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleSendCompletionEmail}
+          disabled={sendingCompletionEmail || !sendEmailChecked}
+          sx={{
+            background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
+            color: '#000000',
+            fontWeight: 'bold',
+            border: '2px solid #b98f33',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 4px 8px rgba(0,0,0,0.3)',
+            '&:hover': {
+              background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
+            },
+            '&.Mui-disabled': {
+              background: '#333',
+              color: '#666',
+              border: '2px solid #444',
+              boxShadow: 'none',
+            },
+          }}
+        >
+          {sendingCompletionEmail
+            ? <><CircularProgress size={16} sx={{ color: '#000', mr: 1 }} /> Sending…</>
+            : 'Send Email'
+          }
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }
