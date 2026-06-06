@@ -79,6 +79,7 @@ export default function MonthlyTrackerSection() {
   const [editingNote, setEditingNote] = useState({ id: null, value: '' });
   const [radialMenu, setRadialMenu] = useState({ open: false, x: 0, y: 0, row: null });
   const [workshopDialog, setWorkshopDialog] = useState({ open: false, orderId: null });
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // ── Done-flow state: payment validation ────────────────────────────────────
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -603,7 +604,7 @@ export default function MonthlyTrackerSection() {
       }
     };
     load();
-  }, [year, month, resolveStatus]);
+  }, [year, month, resolveStatus, refreshTrigger]);
 
   const handleNoteSave = async (row) => {
     const newNote = editingNote.value;
@@ -1421,7 +1422,10 @@ export default function MonthlyTrackerSection() {
     {/* ── Workshop Iframe Dialog ──────────────────────────────────────── */}
     <Dialog
       open={workshopDialog.open}
-      onClose={() => setWorkshopDialog({ open: false, orderId: null })}
+      onClose={() => {
+        setWorkshopDialog({ open: false, orderId: null });
+        setRefreshTrigger(prev => prev + 1);
+      }}
       maxWidth="xl"
       fullWidth
       PaperProps={{
@@ -1436,7 +1440,10 @@ export default function MonthlyTrackerSection() {
     >
       <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <IconButton
-          onClick={() => setWorkshopDialog({ open: false, orderId: null })}
+          onClick={() => {
+            setWorkshopDialog({ open: false, orderId: null });
+            setRefreshTrigger(prev => prev + 1);
+          }}
           sx={{
             position: 'absolute',
             right: 16,
