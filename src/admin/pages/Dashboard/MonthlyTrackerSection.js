@@ -1425,7 +1425,13 @@ export default function MonthlyTrackerSection() {
       maxWidth="xl"
       fullWidth
       PaperProps={{
-        sx: { height: '90vh', backgroundColor: '#121212', borderRadius: 2 }
+        sx: { 
+          height: '90vh', 
+          backgroundColor: '#121212', 
+          borderRadius: 3,
+          border: '2px solid #b98f33',
+          boxShadow: '0 8px 32px rgba(185, 143, 51, 0.25)'
+        }
       }}
     >
       <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -1436,12 +1442,19 @@ export default function MonthlyTrackerSection() {
             right: 16,
             top: 16,
             zIndex: 10,
-            color: '#fff',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' }
+            color: '#b98f33',
+            backgroundColor: '#111',
+            border: '1px solid #b98f33',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            '&:hover': { 
+              backgroundColor: '#b98f33', 
+              color: '#000',
+              transform: 'scale(1.1)' 
+            },
+            transition: 'all 0.2s ease-in-out'
           }}
         >
-          <CloseIcon />
+          <CloseIcon fontSize="large" />
         </IconButton>
         {workshopDialog.orderId && (
           <iframe
