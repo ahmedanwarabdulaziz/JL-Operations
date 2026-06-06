@@ -22,7 +22,6 @@ import BuildIcon from '@mui/icons-material/Build';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import UpdateIcon from '@mui/icons-material/Update';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { toDateObject, formatDateOnly } from '../../../utils/dateUtils';
@@ -77,7 +76,6 @@ export default function MonthlyTrackerSection() {
   const [loading, setLoading]     = useState(true);
   const [rows, setRows]           = useState([]);
   const [homeExpenses, setHomeExpenses] = useState([]);
-  const [homeIncome, setHomeIncome] = useState([]);
   const [invoiceStatuses, setInvoiceStatuses] = useState([]);
   const [expanded, setExpanded]   = useState(true);
   const [editingStatusId, setEditingStatusId] = useState(null);
@@ -87,14 +85,8 @@ export default function MonthlyTrackerSection() {
   const [extraExpDialog, setExtraExpDialog] = useState({ open: false, type: 'business' });
   const [extraExpForm, setExtraExpForm] = useState({ date: new Date().toISOString().split('T')[0], description: '', quantity: '', price: '', taxType: 'percent', tax: '' });
   const [savingExtraExp, setSavingExtraExp] = useState(false);
-  const [extraIncMenu, setExtraIncMenu] = useState({ open: false, x: 0, y: 0 });
-  const [extraIncDialog, setExtraIncDialog] = useState({ open: false, type: 'home' });
-  const [extraIncForm, setExtraIncForm] = useState({ date: new Date().toISOString().split('T')[0], description: '', quantity: '', price: '', taxType: 'percent', tax: '' });
-  const [savingExtraInc, setSavingExtraInc] = useState(false);
   const [regularMonthlyTemplates, setRegularMonthlyTemplates] = useState([]);
   const [loadingRegular, setLoadingRegular] = useState(false);
-  const [regularMonthlyIncTemplates, setRegularMonthlyIncTemplates] = useState([]);
-  const [loadingRegularInc, setLoadingRegularInc] = useState(false);
   const [workshopDialog, setWorkshopDialog] = useState({ open: false, orderId: null });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [closingWorkshop, setClosingWorkshop] = useState(false);
@@ -549,13 +541,12 @@ export default function MonthlyTrackerSection() {
     const load = async () => {
       setLoading(true);
       try {
-        const [regularSnap, corpSnap, customerInvSnap, businessExpSnap, generalExpSnap, businessIncSnap] = await Promise.all([
+        const [regularSnap, corpSnap, customerInvSnap, businessExpSnap, generalExpSnap] = await Promise.all([
           getDocs(query(collection(db, 'orders'),            orderBy('createdAt', 'desc'))),
           getDocs(query(collection(db, 'corporate-orders'),  orderBy('createdAt', 'desc'))),
           getDocs(collection(db, 'customer-invoices')),
           getDocs(query(collection(db, 'businessExpenses'),  orderBy('createdAt', 'desc'))),
           getDocs(query(collection(db, 'generalExpenses'),   orderBy('createdAt', 'desc'))),
-          getDocs(query(collection(db, 'businessIncome'),    orderBy('createdAt', 'desc'))),
         ]);
 
         // ── Is this doc in the CURRENT month? Returns reason string or null ───
@@ -743,14 +734,6 @@ export default function MonthlyTrackerSection() {
 
         setHomeExpenses(allExtraForMonth);
 
-        const businessIncDocs = businessIncSnap.docs.map(d => ({ id: d.id, ...d.data(), _sourceType: d.data().type || 'business' }));
-        const allIncomeForMonth = businessIncDocs.filter(e => {
-          const d = toDateObject(e.date || e.createdAt);
-          return d && d.getFullYear() === year && d.getMonth() + 1 === month;
-        });
-
-        setHomeIncome(allIncomeForMonth);
-
       } catch (err) {
         console.error('MonthlyTracker fetch error', err);
       } finally {
@@ -834,72 +817,13 @@ export default function MonthlyTrackerSection() {
     }
   };
 
-  const handleSaveExtraInc = async () => {
-    setSavingExtraInc(true);
-    try {
-      const collectionName = 'businessIncome';
-      const data = {
-        date: extraIncForm.date,
-        description: extraIncForm.description || '',
-        quantity: parseFloat(extraIncForm.quantity) || 1,
-        price: parseFloat(extraIncForm.price) || 0,
-        taxType: extraIncForm.taxType,
-        tax: parseFloat(extraIncForm.tax) || 0,
-        type: extraIncDialog.type,
-        createdAt: new Date(),
-      };
-      const subtotal = data.price * data.quantity;
-      if (data.taxType === 'percent') {
-        data.total = subtotal + (subtotal * data.tax / 100);
-      } else {
-        data.total = subtotal + data.tax;
-      }
-
-      await addDoc(collection(db, collectionName), data);
-      setExtraIncDialog({ open: false, type: 'home' });
-      setExtraIncForm({ date: new Date().toISOString().split('T')[0], description: '', quantity: '', price: '', taxType: 'percent', tax: '' });
-      setRefreshTrigger(v => v + 1);
-    } catch(err) {
-      console.error(err);
-    } finally {
-      setSavingExtraInc(false);
-    }
-  };
-
-  const handleOpenRegularInc = async () => {
-    setExtraIncMenu({ open: false, x: 0, y: 0 });
-    setExtraIncDialog({ open: true, type: 'regular' });
-    setLoadingRegularInc(true);
-    try {
-      const snap = await getDocs(query(collection(db, 'regularMonthlyIncomes'), orderBy('createdAt', 'desc')));
-      setRegularMonthlyIncTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch(e) {
-      console.error(e);
-    } finally {
-      setLoadingRegularInc(false);
-    }
-  };
-
-  const handleAddRegularIncome = async (template) => {
-    try {
-      const data = { ...template, date: new Date().toISOString().split('T')[0], createdAt: new Date() };
-      delete data.id;
-      await addDoc(collection(db, 'businessIncome'), data);
-      setExtraIncDialog({ open: false, type: 'regular' });
-      setRefreshTrigger(v => v + 1);
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
   // ── Totals ──────────────────────────────────────────────────────────────────
   const totalExpenses     = rows.reduce((s, r) => s + r.expenses,     0);
   const totalInvoice      = rows.reduce((s, r) => s + r.totalInvoice, 0);
   const totalTax          = rows.reduce((s, r) => s + r.tax,          0);
   const totalClear        = rows.reduce((s, r) => s + r.clearIncome,  0);
   const totalHomeExpenses = homeExpenses.reduce((s, e) => s + (parseFloat(e.total) || 0), 0);
-  const totalHomeIncome   = homeIncome.reduce((s, e) => s + (parseFloat(e.total) || 0), 0);
-  const clearTotal        = totalClear - totalHomeExpenses + totalHomeIncome;
+  const clearTotal        = totalClear - totalHomeExpenses;
 
   return (
     <>
@@ -1280,74 +1204,7 @@ export default function MonthlyTrackerSection() {
                   <Typography variant="caption" sx={{ color: '#555', display: 'block' }}>
                     − Extra Expenses: {fmt(totalHomeExpenses)}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#555', display: 'block' }}>
-                    + Extra Income: {fmt(totalHomeIncome)}
-                  </Typography>
                 </Box>
-              </Paper>
-
-              {/* ⭐ Extra Income Summary Panel ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐ */}
-              <Paper sx={{ backgroundColor: '#111', border: '1px solid #333', p: 0, overflow: 'hidden', mt: 2 }}>
-                <Box sx={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #333', px: 2, py: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton 
-                    size="small" 
-                    onClick={(e) => setExtraIncMenu({ open: true, x: e.clientX, y: e.clientY })}
-                    sx={{ color: '#4caf50', '&:hover': { backgroundColor: 'rgba(76, 175, 80, 0.1)' }, ml: -1 }}
-                  >
-                    <AddIcon fontSize="small" />
-                  </IconButton>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#4caf50', flex: 1, whiteSpace: 'nowrap' }}>
-                    Extra Income
-                  </Typography>
-                </Box>
-
-                <Box sx={{ px: 0 }}>
-                  {homeIncome.length === 0 ? (
-                    <Box sx={{ px: 2, py: 3, textAlign: 'center' }}>
-                      <Typography variant="body2" sx={{ color: '#555' }}>
-                        No extra income for this month
-                      </Typography>
-                    </Box>
-                  ) : (
-                    homeIncome.map((e, i) => (
-                      <Box
-                        key={e.id}
-                        sx={{
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          px: 2, py: 0.75,
-                          backgroundColor: i % 2 === 0 ? '#1a1a1a' : '#212121',
-                          borderBottom: '1px solid #2a2a2a',
-                        }}
-                      >
-                        <Box sx={{ flex: 1, pr: 1 }}>
-                          <Tooltip 
-                            title={toDateObject(e.date || e.createdAt) ? toDateObject(e.date || e.createdAt).toLocaleDateString('en-CA') : ''} 
-                            placement="left" 
-                            arrow
-                          >
-                            <Typography variant="caption" sx={{ color: '#ccc', display: 'block', wordBreak: 'break-word', lineHeight: 1.2, cursor: 'pointer' }}>
-                              {e.description || 'Extra Income'}
-                            </Typography>
-                          </Tooltip>
-                        </Box>
-                        <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold', flexShrink: 0 }}>
-                          {fmt(e.total)}
-                        </Typography>
-                      </Box>
-                    ))
-                  )}
-                </Box>
-
-                {homeIncome.length > 0 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderTop: '1px solid #444', backgroundColor: '#1a1a1a' }}>
-                    <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
-                      Extra Income Total
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
-                      {fmt(totalHomeIncome)}
-                    </Typography>
-                  </Box>
-                )}
               </Paper>
             </Box>
 
@@ -2220,107 +2077,6 @@ export default function MonthlyTrackerSection() {
         </DialogContent>
         <DialogActions sx={{ borderTop: '1px solid #333', p: 2 }}>
           <Button onClick={() => setExtraExpDialog({ open: false, type: 'regular' })} sx={{ color: '#888' }}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* ── Extra Income Menu ─────────────────────────────────────────────────────────── */}
-      {extraIncMenu.open && (
-        <Box
-          onClick={() => setExtraIncMenu({ open: false, x: 0, y: 0 })}
-          onContextMenu={(e) => { e.preventDefault(); setExtraIncMenu({ open: false, x: 0, y: 0 }); }}
-          sx={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
-        >
-          <Box sx={{ position: 'absolute', top: extraIncMenu.y, left: extraIncMenu.x, width: 0, height: 0 }}>
-            {/* Center Close */}
-            <IconButton onClick={(e) => { e.stopPropagation(); setExtraIncMenu({ open: false, x: 0, y: 0 }); }} sx={{ position: 'absolute', top: -24, left: -24, width: 48, height: 48, backgroundColor: '#111', color: '#e0e0e0', border: '1px solid #333', '&:hover': { backgroundColor: '#333' }, zIndex: 2 }}>
-              <CloseIcon />
-            </IconButton>
-
-            {/* Left: Add Home Income */}
-            <Tooltip title="Add Home Income" placement="left" arrow PopperProps={{ sx: { zIndex: 10000 } }} componentsProps={{ tooltip: { sx: { backgroundColor: '#4caf50', color: '#000', fontWeight: 'bold' } }, arrow: { sx: { color: '#4caf50' } } }}>
-              <IconButton onClick={(e) => { e.stopPropagation(); setExtraIncMenu({ open: false, x: 0, y: 0 }); setExtraIncDialog({ open: true, type: 'home' }); }} sx={{ position: 'absolute', top: -24, left: -88, width: 48, height: 48, backgroundColor: '#01579b', color: '#fff', border: '1px solid #4fc3f7', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', '&:hover': { backgroundColor: '#0277bd', transform: 'scale(1.1)' }, transition: 'all 0.2s', animation: 'popLeft 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', '@keyframes popLeft': { '0%': { left: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { left: -88, opacity: 1, transform: 'scale(1)' } } }}>
-                <HomeIcon />
-              </IconButton>
-            </Tooltip>
-
-            {/* Top: Add Business Income */}
-            <Tooltip title="Add Business Income" placement="top" arrow PopperProps={{ sx: { zIndex: 10000 } }} componentsProps={{ tooltip: { sx: { backgroundColor: '#4caf50', color: '#000', fontWeight: 'bold' } }, arrow: { sx: { color: '#4caf50' } } }}>
-              <IconButton onClick={(e) => { e.stopPropagation(); setExtraIncMenu({ open: false, x: 0, y: 0 }); setExtraIncDialog({ open: true, type: 'business' }); }} sx={{ position: 'absolute', top: -88, left: -24, width: 48, height: 48, backgroundColor: '#4caf50', color: '#000', border: '1px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', '&:hover': { backgroundColor: '#66bb6a', transform: 'scale(1.1)' }, transition: 'all 0.2s', animation: 'popTop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', '@keyframes popTop': { '0%': { top: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { top: -88, opacity: 1, transform: 'scale(1)' } } }}>
-                <AttachMoneyIcon />
-              </IconButton>
-            </Tooltip>
-
-            {/* Right: Regular Monthly Incomes */}
-            <Tooltip title="Regular Monthly Incomes" placement="right" arrow PopperProps={{ sx: { zIndex: 10000 } }} componentsProps={{ tooltip: { sx: { backgroundColor: '#4caf50', color: '#000', fontWeight: 'bold' } }, arrow: { sx: { color: '#4caf50' } } }}>
-              <IconButton onClick={(e) => { e.stopPropagation(); handleOpenRegularInc(); }} sx={{ position: 'absolute', top: -24, left: 40, width: 48, height: 48, backgroundColor: '#2e7d32', color: '#fff', border: '1px solid #81c784', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', '&:hover': { backgroundColor: '#388e3c', transform: 'scale(1.1)' }, transition: 'all 0.2s', animation: 'popRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', '@keyframes popRight': { '0%': { left: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { left: 40, opacity: 1, transform: 'scale(1)' } } }}>
-                <TableChartIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-      )}
-
-      {/* ── Dialogs for Extra Income ──────────────────────────────────────────────────────── */}
-      <Dialog open={extraIncDialog.open && (extraIncDialog.type === 'business' || extraIncDialog.type === 'home')} onClose={() => setExtraIncDialog({ open: false, type: 'business' })} maxWidth="sm" fullWidth PaperProps={{ sx: { backgroundColor: '#1e1e1e', color: '#fff', border: '1px solid #333' } }}>
-        <DialogTitle sx={{ color: '#4caf50', borderBottom: '1px solid #333' }}>
-          {extraIncDialog.type === 'business' ? 'Add Business Income' : 'Add Home Income'}
-        </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-            <TextField fullWidth size="small" type="date" label="Date" InputLabelProps={{ shrink: true }} value={extraIncForm.date} onChange={(e) => setExtraIncForm({ ...extraIncForm, date: e.target.value })} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, color: '#fff' }, '& .MuiInputLabel-root': { color: '#888' } }} />
-            <TextField fullWidth size="small" label="Description" value={extraIncForm.description} onChange={(e) => setExtraIncForm({ ...extraIncForm, description: e.target.value })} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, color: '#fff' }, '& .MuiInputLabel-root': { color: '#888' } }} />
-            <TextField fullWidth size="small" type="number" label="Quantity" value={extraIncForm.quantity} onChange={(e) => setExtraIncForm({ ...extraIncForm, quantity: e.target.value })} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, color: '#fff' }, '& .MuiInputLabel-root': { color: '#888' } }} />
-            <TextField fullWidth size="small" type="number" label="Price" value={extraIncForm.price} onChange={(e) => setExtraIncForm({ ...extraIncForm, price: e.target.value })} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, color: '#fff' }, '& .MuiInputLabel-root': { color: '#888' } }} />
-            <FormControl fullWidth size="small" sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: '#444' }, color: '#fff' }}>
-              <Typography variant="caption" sx={{ color: '#888', mb: 0.5, px: 0.5 }}>Tax Type</Typography>
-              <Select value={extraIncForm.taxType} onChange={(e) => setExtraIncForm({ ...extraIncForm, taxType: e.target.value })} sx={{ color: '#fff', '& fieldset': { borderColor: '#444' } }}>
-                <MenuItem value="percent">%</MenuItem>
-                <MenuItem value="fixed">$</MenuItem>
-              </Select>
-            </FormControl>
-            <Box>
-              <Typography variant="caption" sx={{ color: '#1e1e1e', mb: 0.5, px: 0.5, display: 'block' }}>&nbsp;</Typography>
-              <TextField fullWidth size="small" type="number" label="Tax Amount" value={extraIncForm.tax} onChange={(e) => setExtraIncForm({ ...extraIncForm, tax: e.target.value })} sx={{ '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, color: '#fff' }, '& .MuiInputLabel-root': { color: '#888' } }} />
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid #333', p: 2 }}>
-          <Button onClick={() => setExtraIncDialog({ open: false, type: 'business' })} sx={{ color: '#888' }}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveExtraInc} disabled={savingExtraInc} sx={{ backgroundColor: '#4caf50', color: '#fff', '&:hover': { backgroundColor: '#66bb6a' } }}>
-            {savingExtraInc ? <CircularProgress size={24} sx={{color:'#fff'}} /> : 'Save & Add'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={extraIncDialog.open && extraIncDialog.type === 'regular'} onClose={() => setExtraIncDialog({ open: false, type: 'regular' })} maxWidth="md" fullWidth PaperProps={{ sx: { backgroundColor: '#1e1e1e', color: '#fff', border: '1px solid #333', minHeight: '50vh' } }}>
-        <DialogTitle sx={{ color: '#4caf50', borderBottom: '1px solid #333' }}>
-          Select Regular Monthly Income
-        </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          {loadingRegularInc ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress sx={{ color: '#4caf50' }} /></Box>
-          ) : regularMonthlyIncTemplates.length === 0 ? (
-            <Box sx={{ textAlign: 'center', p: 4, color: '#888' }}>No regular monthly incomes configured. Add them in the Extra Income page.</Box>
-          ) : (
-            <Box sx={{ p: 0 }}>
-              {regularMonthlyIncTemplates.map((template, idx) => (
-                <Box key={template.id} sx={{ borderBottom: '1px solid #333', backgroundColor: idx % 2 === 0 ? '#1a1a1a' : '#1e1e1e', display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 3, py: 2 }}>
-                  <Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{template.description || 'Unnamed Income'}</Typography>
-                    <Typography variant="caption" sx={{ color: '#888' }}>
-                      {template.type} | {template.quantity} x {fmt(template.price)} | Tax: {template.tax}{template.taxType === 'percent' ? '%' : '$'}
-                    </Typography>
-                  </Box>
-                  <Button variant="outlined" size="small" onClick={() => handleAddRegularIncome(template)} sx={{ color: '#4caf50', borderColor: '#4caf50', '&:hover': { backgroundColor: 'rgba(76, 175, 80, 0.1)' } }}>
-                    Add to Month
-                  </Button>
-                </Box>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid #333', p: 2 }}>
-          <Button onClick={() => setExtraIncDialog({ open: false, type: 'regular' })} sx={{ color: '#888' }}>Close</Button>
         </DialogActions>
       </Dialog>
 

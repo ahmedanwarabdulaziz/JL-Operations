@@ -45,6 +45,7 @@ import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
 import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
+import ExtraIncomePage from './pages/ExtraIncome/ExtraIncomePage';
 import ControlPage from './admin/pages/Control/ControlPage';
 import MigrationUtilityPage from './admin/pages/Migration/MigrationUtilityPage';
 import CorporateQuotesPage from './pages/CorporateQuotes/CorporateQuotesPage';
@@ -246,6 +247,7 @@ const AppContent = () => {
           <Route path="/admin/leads" element={<LeadsManagement />} />
           <Route path="/extra-expenses" element={<Navigate to="/admin/extra-expenses" replace />} />
           <Route path="/admin/extra-expenses" element={<ExtraExpensesPage />} />
+          <Route path="/admin/extra-income" element={<ExtraIncomePage />} />
           <Route path="/admin/testing-financial" element={<TestingFinancialPage />} />
           <Route path="/admin/corporate-quotes" element={<CorporateQuotesPage />} />
           <Route path="/admin/corporate-quotes/new" element={<NewQuotePage />} />

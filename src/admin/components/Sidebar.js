@@ -63,6 +63,7 @@ const menuItems = [
   { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <ReceiptLongIcon /> },
   { text: 'Taxed Invoices', path: '/admin/taxed-invoices', icon: <ArchiveIcon /> },
   { text: 'Extra Expenses', path: '/admin/extra-expenses', icon: <AttachMoneyIcon /> },
+  { text: 'Extra Income', path: '/admin/extra-income', icon: <TrendingUpIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },
   { text: 'Customers', path: '/admin/customers', icon: <PeopleIcon /> },
   { text: 'Allocation Orders', path: '/admin/allocation-orders', icon: <TimelineIcon /> },
