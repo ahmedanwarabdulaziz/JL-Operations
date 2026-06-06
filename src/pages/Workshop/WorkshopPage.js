@@ -87,12 +87,13 @@ import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
 import { calculateTimeBasedAllocation, formatCurrency, formatPercentage } from '../../utils/plCalculations';
 import { createAllocation, normalizeAllocation } from '../../shared/utils/allocationUtils';
 import { useAutoSelect } from '../../hooks/useAutoSelect';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { buttonStyles } from '../../styles/buttonStyles';
 import { formatDate, formatDateOnly, formatDateRange } from '../../utils/dateUtils';
 
 const WorkshopPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -3252,7 +3253,7 @@ const WorkshopPage = () => {
     );
   }
 
-  const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'true';
+  const isPopupMode = new URLSearchParams(location.search).get('popup') === 'true';
 
   return (
     <>
