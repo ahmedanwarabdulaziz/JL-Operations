@@ -28,7 +28,7 @@ const MainLayout = ({ children }) => {
 
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const isPopup = searchParams.get('popup') === 'true';
+  const isPopup = window.self !== window.top || searchParams.get('popup') === 'true';
 
   if (isPopup) {
     return (

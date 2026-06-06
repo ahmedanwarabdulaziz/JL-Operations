@@ -3253,7 +3253,7 @@ const WorkshopPage = () => {
     );
   }
 
-  const isPopupMode = new URLSearchParams(location.search).get('popup') === 'true';
+  const isPopupMode = window.self !== window.top || new URLSearchParams(location.search).get('popup') === 'true';
 
   return (
     <>
