@@ -3244,13 +3244,15 @@ const WorkshopPage = () => {
     setCompletedOrderForEmail(null);
   };
 
-  if (loading) {
+  if (loading && !orders.length) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
         <CircularProgress size={60} />
       </Box>
     );
   }
+
+  const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'true';
 
   return (
     <>
@@ -3335,11 +3337,12 @@ const WorkshopPage = () => {
       )}
       
       <Box sx={{ 
-        height: 'calc(100vh - 100px)', 
+        height: isPopupMode ? '100vh' : 'calc(100vh - 100px)', 
         display: 'flex'
       }}>
         {/* Left Sidebar - Orders List */}
-      <Paper 
+        {!isPopupMode && (
+        <Paper 
         sx={{ 
           width: 350, 
           height: '100%', 
@@ -3600,6 +3603,7 @@ const WorkshopPage = () => {
           </List>
         )}
       </Paper>
+        )}
 
       {/* Right Panel - Order Details */}
       <Box sx={{ flex: 1, p: 3, overflow: 'auto' }}>
