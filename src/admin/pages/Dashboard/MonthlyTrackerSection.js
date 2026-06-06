@@ -80,6 +80,39 @@ export default function MonthlyTrackerSection() {
   const [radialMenu, setRadialMenu] = useState({ open: false, x: 0, y: 0, row: null });
   const [workshopDialog, setWorkshopDialog] = useState({ open: false, orderId: null });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [closingWorkshop, setClosingWorkshop] = useState(false);
+
+  // Listen for Workshop save completion
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.type === 'WORKSHOP_SAVED_AND_READY_TO_CLOSE') {
+        setWorkshopDialog({ open: false, orderId: null });
+        setClosingWorkshop(false);
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleCloseWorkshop = () => {
+    setClosingWorkshop(true);
+    const iframe = document.getElementById('workshop-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'REQUEST_SAVE_AND_CLOSE' }, '*');
+      
+      // Fallback in case iframe doesn't respond
+      setTimeout(() => {
+        setWorkshopDialog({ open: false, orderId: null });
+        setClosingWorkshop(false);
+        setRefreshTrigger(prev => prev + 1);
+      }, 3000); 
+    } else {
+      setWorkshopDialog({ open: false, orderId: null });
+      setClosingWorkshop(false);
+      setRefreshTrigger(prev => prev + 1);
+    }
+  };
 
   // ── Done-flow state: payment validation ────────────────────────────────────
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -1422,10 +1455,7 @@ export default function MonthlyTrackerSection() {
     {/* ── Workshop Iframe Dialog ──────────────────────────────────────── */}
     <Dialog
       open={workshopDialog.open}
-      onClose={() => {
-        setWorkshopDialog({ open: false, orderId: null });
-        setRefreshTrigger(prev => prev + 1);
-      }}
+      onClose={handleCloseWorkshop}
       maxWidth="xl"
       fullWidth
       PaperProps={{
@@ -1440,10 +1470,8 @@ export default function MonthlyTrackerSection() {
     >
       <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <IconButton
-          onClick={() => {
-            setWorkshopDialog({ open: false, orderId: null });
-            setRefreshTrigger(prev => prev + 1);
-          }}
+          onClick={handleCloseWorkshop}
+          disabled={closingWorkshop}
           sx={{
             position: 'absolute',
             right: 16,
@@ -1461,10 +1489,11 @@ export default function MonthlyTrackerSection() {
             transition: 'all 0.2s ease-in-out'
           }}
         >
-          <CloseIcon fontSize="large" />
+          {closingWorkshop ? <CircularProgress size={24} sx={{ color: '#b98f33' }} /> : <CloseIcon fontSize="large" />}
         </IconButton>
         {workshopDialog.orderId && (
           <iframe
+            id="workshop-iframe"
             src={`/admin/workshop?orderId=${workshopDialog.orderId}&popup=true`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             title="Workshop Popup"

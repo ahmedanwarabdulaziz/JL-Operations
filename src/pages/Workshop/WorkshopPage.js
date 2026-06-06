@@ -2353,6 +2353,23 @@ const WorkshopPage = () => {
   // Auto-save when leaving the page (e.g. Sidebar link)
   const saveRef = useRef(saveCurrentEdits);
   saveRef.current = saveCurrentEdits;
+
+  // Listen for save-and-close requests from parent window (Monthly Tracker)
+  useEffect(() => {
+    const handleMessage = async (event) => {
+      if (event.data?.type === 'REQUEST_SAVE_AND_CLOSE') {
+        if (saveRef.current) {
+          await saveRef.current();
+        }
+        if (window.parent) {
+          window.parent.postMessage({ type: 'WORKSHOP_SAVED_AND_READY_TO_CLOSE' }, '*');
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   const editingRef = useRef({ selectedOrder, editingFurnitureData });
   editingRef.current = { selectedOrder, editingFurnitureData };
   useEffect(() => {
