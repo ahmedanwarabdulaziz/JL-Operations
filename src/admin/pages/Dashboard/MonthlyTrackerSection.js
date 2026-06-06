@@ -440,12 +440,28 @@ export default function MonthlyTrackerSection() {
             ? { ...order, furnitureData: { groups: order.furnitureGroups || [] }, paymentData: order.paymentDetails || {} }
             : { ...order, furnitureData: order.furnitureData || { groups: [] }, paymentData: order.paymentData || {} };
 
-          const totalInvoice = calculateOrderTotal(normalised) || 0;
+          let totalInvoice = calculateOrderTotal(normalised) || 0;
           // TAX: 13% HST for corporate orders AND T-invoices (both are taxed)
           const isTaxed      = isCorp || order.isTInvoice === true;
-          const tax          = isTaxed ? totalInvoice - totalInvoice / 1.13 : 0;
-          const expenses     = (order.extraExpenses || []).reduce((s, e) => s + (parseFloat(e.total) || 0), 0);
-          const clearIncome  = totalInvoice - tax;
+          let tax          = isTaxed ? totalInvoice - totalInvoice / 1.13 : 0;
+          let expenses     = (order.extraExpenses || []).reduce((s, e) => s + (parseFloat(e.total) || 0), 0);
+          let clearIncome  = totalInvoice - tax;
+
+          let allocationPct = null;
+          if (passedVia.startsWith('allocation')) {
+            const alloc = order.allocation?.allocations?.find(a => 
+              Number(a.year) === year && Number(a.month) === month
+            );
+            if (alloc && alloc.percentage !== undefined) {
+              allocationPct = parseFloat(alloc.percentage);
+              const scale = allocationPct / 100;
+              totalInvoice *= scale;
+              tax *= scale;
+              expenses *= scale;
+              clearIncome *= scale;
+            }
+          }
+
           const status       = resolveStatus(order);
           const dueRaw       = order.orderDetails?.deadline || order.paymentDetails?.dueDate || null;
           const dueDate      = dueRaw ? (toDateObject(dueRaw)?.toLocaleDateString('en-CA') || '—') : '—';
@@ -468,6 +484,7 @@ export default function MonthlyTrackerSection() {
             totalInvoice,
             tax,
             clearIncome,
+            allocationPct,
             dueDate,
             status,
             rawStatus: order.invoiceStatus || order.orderStatus || order.status || '',
@@ -731,6 +748,13 @@ export default function MonthlyTrackerSection() {
                                       label={`T-Invoice`}
                                       size="small"
                                       sx={{ fontSize: '0.58rem', height: 15, backgroundColor: '#01579b', color: '#fff', width: 'fit-content' }}
+                                    />
+                                  )}
+                                  {row.allocationPct != null && (
+                                    <Chip
+                                      label={`Allocated ${row.allocationPct}%`}
+                                      size="small"
+                                      sx={{ fontSize: '0.58rem', height: 15, backgroundColor: '#b98f33', color: '#000', width: 'fit-content', mt: 0.25 }}
                                     />
                                   )}
                                   {row.originalInvoiceNo && (
