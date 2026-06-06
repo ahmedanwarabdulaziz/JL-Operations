@@ -13,6 +13,8 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HomeIcon from '@mui/icons-material/Home';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { toDateObject, formatDateOnly } from '../../../utils/dateUtils';
@@ -617,9 +619,27 @@ export default function MonthlyTrackerSection() {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton size="small" onClick={() => {
+            setMonth(prev => {
+              if (prev === 1) { setYear(y => y - 1); return 12; }
+              return prev - 1;
+            });
+          }} sx={{ color: '#b98f33' }}>
+            <ChevronLeftIcon />
+          </IconButton>
+          
           <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 'bold', minWidth: 140, textAlign: 'center' }}>
             {MONTH_NAMES[month - 1]} {year}
           </Typography>
+
+          <IconButton size="small" onClick={() => {
+            setMonth(prev => {
+              if (prev === 12) { setYear(y => y + 1); return 1; }
+              return prev + 1;
+            });
+          }} sx={{ color: '#b98f33' }}>
+            <ChevronRightIcon />
+          </IconButton>
           <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
             <IconButton size="small" onClick={() => setExpanded(v => !v)} sx={{ color: '#b98f33', ml: 1 }}>
               {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
