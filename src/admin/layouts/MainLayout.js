@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import { Box } from '@mui/material';
 import { useAuth } from '../../components/Auth/AuthContext';
+import { useLocation } from 'react-router-dom';
 
 const MainLayout = ({ children }) => {
   const { user } = useAuth();
@@ -24,6 +25,28 @@ const MainLayout = ({ children }) => {
       setSidebarExpanded(true);
     }
   };
+
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isPopup = searchParams.get('popup') === 'true';
+
+  if (isPopup) {
+    return (
+      <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default', width: '100%' }}>
+        <Box 
+          component="main" 
+          sx={{ 
+            flexGrow: 1, 
+            backgroundColor: 'background.default',
+            overflow: 'auto', 
+            p: 1,
+          }}
+        >
+          {children}
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: 'background.default' }}>

@@ -78,6 +78,7 @@ export default function MonthlyTrackerSection() {
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [editingNote, setEditingNote] = useState({ id: null, value: '' });
   const [radialMenu, setRadialMenu] = useState({ open: false, x: 0, y: 0, row: null });
+  const [workshopDialog, setWorkshopDialog] = useState({ open: false, orderId: null });
 
   // ── Done-flow state: payment validation ────────────────────────────────────
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -1326,7 +1327,7 @@ export default function MonthlyTrackerSection() {
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
-                window.open(`/admin/workshop?orderId=${radialMenu.row.id}`, 'WorkshopPopup', 'width=1200,height=800');
+                setWorkshopDialog({ open: true, orderId: radialMenu.row.id });
                 setRadialMenu({ open: false, x: 0, y: 0, row: null });
               }}
               sx={{
@@ -1416,6 +1417,42 @@ export default function MonthlyTrackerSection() {
         </Box>
       </Box>
     )}
+
+    {/* ── Workshop Iframe Dialog ──────────────────────────────────────── */}
+    <Dialog
+      open={workshopDialog.open}
+      onClose={() => setWorkshopDialog({ open: false, orderId: null })}
+      maxWidth="xl"
+      fullWidth
+      PaperProps={{
+        sx: { height: '90vh', backgroundColor: '#121212', borderRadius: 2 }
+      }}
+    >
+      <Box sx={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+        <IconButton
+          onClick={() => setWorkshopDialog({ open: false, orderId: null })}
+          sx={{
+            position: 'absolute',
+            right: 16,
+            top: 16,
+            zIndex: 10,
+            color: '#fff',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' }
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        {workshopDialog.orderId && (
+          <iframe
+            src={`/admin/workshop?orderId=${workshopDialog.orderId}&popup=true`}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            title="Workshop Popup"
+          />
+        )}
+      </Box>
+    </Dialog>
+
     </>
   );
 }
