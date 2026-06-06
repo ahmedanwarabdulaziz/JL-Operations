@@ -15,6 +15,10 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import HomeIcon from '@mui/icons-material/Home';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import BuildIcon from '@mui/icons-material/Build';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import UpdateIcon from '@mui/icons-material/Update';
 import { collection, getDocs, query, orderBy, doc, getDoc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../../../shared/firebase/config';
 import { toDateObject, formatDateOnly } from '../../../utils/dateUtils';
@@ -73,6 +77,7 @@ export default function MonthlyTrackerSection() {
   const [expanded, setExpanded]   = useState(true);
   const [editingStatusId, setEditingStatusId] = useState(null);
   const [editingNote, setEditingNote] = useState({ id: null, value: '' });
+  const [radialMenu, setRadialMenu] = useState({ open: false, x: 0, y: 0, row: null });
 
   // ── Done-flow state: payment validation ────────────────────────────────────
   const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -701,7 +706,15 @@ export default function MonthlyTrackerSection() {
                         const even = i % 2 === 0;
                         const sc   = statusColor(row.status);
                          return (
-                          <TableRow key={row.id} hover sx={{ cursor: 'default' }}>
+                          <TableRow 
+                            key={row.id} 
+                            hover 
+                            sx={{ cursor: 'default' }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setRadialMenu({ open: true, x: e.clientX, y: e.clientY, row });
+                            }}
+                          >
 
                             {/* Invoice No. — tooltip shows customer + created date */}
                             <TableCell sx={{ ...bodyCell(even) }}>
@@ -1272,6 +1285,137 @@ export default function MonthlyTrackerSection() {
         </Button>
       </DialogActions>
     </Dialog>
+
+    {/* ── Radial Menu Overlay ──────────────────────────────────────── */}
+    {radialMenu.open && radialMenu.row && (
+      <Box
+        onClick={() => setRadialMenu({ open: false, x: 0, y: 0, row: null })}
+        onContextMenu={(e) => { e.preventDefault(); setRadialMenu({ open: false, x: 0, y: 0, row: null }); }}
+        sx={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 9999,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(2px)',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: radialMenu.y,
+            left: radialMenu.x,
+            width: 0, height: 0,
+          }}
+        >
+          {/* Center Close Button */}
+          <IconButton
+            onClick={(e) => { e.stopPropagation(); setRadialMenu({ open: false, x: 0, y: 0, row: null }); }}
+            sx={{
+              position: 'absolute',
+              top: -24, left: -24, width: 48, height: 48,
+              backgroundColor: '#111', color: '#e0e0e0', border: '1px solid #333',
+              '&:hover': { backgroundColor: '#333' },
+              zIndex: 2,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+
+          {/* Top: Workshop */}
+          <Tooltip title="Open Workshop" placement="top">
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`/admin/workshop?orderId=${radialMenu.row.id}`, 'WorkshopPopup', 'width=1200,height=800');
+                setRadialMenu({ open: false, x: 0, y: 0, row: null });
+              }}
+              sx={{
+                position: 'absolute',
+                top: -80, left: -24, width: 48, height: 48,
+                backgroundColor: '#01579b', color: '#fff', border: '1px solid #4fc3f7',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                '&:hover': { backgroundColor: '#0277bd', transform: 'scale(1.1)' },
+                transition: 'all 0.2s',
+                animation: 'popTop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                '@keyframes popTop': { '0%': { top: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { top: -80, opacity: 1, transform: 'scale(1)' } }
+              }}
+            >
+              <BuildIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Right: Change Status */}
+          <Tooltip title="Change Status" placement="right">
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingStatusId(radialMenu.row.id);
+                setRadialMenu({ open: false, x: 0, y: 0, row: null });
+              }}
+              sx={{
+                position: 'absolute',
+                top: -24, left: 32, width: 48, height: 48,
+                backgroundColor: '#b98f33', color: '#000', border: '1px solid #fff',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                '&:hover': { backgroundColor: '#d4af37', transform: 'scale(1.1)' },
+                transition: 'all 0.2s',
+                animation: 'popRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                '@keyframes popRight': { '0%': { left: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { left: 32, opacity: 1, transform: 'scale(1)' } }
+              }}
+            >
+              <UpdateIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Bottom: Edit Note */}
+          <Tooltip title="Edit Internal Note" placement="bottom">
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingNote({ id: radialMenu.row.id, value: radialMenu.row.internalNote });
+                setRadialMenu({ open: false, x: 0, y: 0, row: null });
+              }}
+              sx={{
+                position: 'absolute',
+                top: 32, left: -24, width: 48, height: 48,
+                backgroundColor: '#4caf50', color: '#fff', border: '1px solid #81c784',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                '&:hover': { backgroundColor: '#66bb6a', transform: 'scale(1.1)' },
+                transition: 'all 0.2s',
+                animation: 'popBottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                '@keyframes popBottom': { '0%': { top: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { top: 32, opacity: 1, transform: 'scale(1)' } }
+              }}
+            >
+              <EditNoteIcon />
+            </IconButton>
+          </Tooltip>
+
+          {/* Left: Copy Invoice ID */}
+          <Tooltip title="Copy Invoice ID" placement="left">
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(radialMenu.row.invoiceNo);
+                setRadialMenu({ open: false, x: 0, y: 0, row: null });
+              }}
+              sx={{
+                position: 'absolute',
+                top: -24, left: -80, width: 48, height: 48,
+                backgroundColor: '#5e35b1', color: '#fff', border: '1px solid #b39ddb',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                '&:hover': { backgroundColor: '#7e57c2', transform: 'scale(1.1)' },
+                transition: 'all 0.2s',
+                animation: 'popLeft 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                '@keyframes popLeft': { '0%': { left: -24, opacity: 0, transform: 'scale(0.5)' }, '100%': { left: -80, opacity: 1, transform: 'scale(1)' } }
+              }}
+            >
+              <ContentCopyIcon />
+            </IconButton>
+          </Tooltip>
+
+        </Box>
+      </Box>
+    )}
     </>
   );
 }
