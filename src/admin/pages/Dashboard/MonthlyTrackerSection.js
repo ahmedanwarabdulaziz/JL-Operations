@@ -1357,7 +1357,16 @@ export default function MonthlyTrackerSection() {
           </IconButton>
 
           {/* Top: Workshop */}
-          <Tooltip title="Open Workshop" placement="top">
+          <Tooltip 
+            title="Open Workshop" 
+            placement="top" 
+            arrow
+            PopperProps={{ sx: { zIndex: 10000 } }}
+            componentsProps={{
+              tooltip: { sx: { backgroundColor: '#b98f33', color: '#000', fontSize: '0.85rem', fontWeight: 'bold' } },
+              arrow: { sx: { color: '#b98f33' } }
+            }}
+          >
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -1380,7 +1389,16 @@ export default function MonthlyTrackerSection() {
           </Tooltip>
 
           {/* Right: Change Status */}
-          <Tooltip title="Change Status" placement="right">
+          <Tooltip 
+            title="Change Status" 
+            placement="right" 
+            arrow
+            PopperProps={{ sx: { zIndex: 10000 } }}
+            componentsProps={{
+              tooltip: { sx: { backgroundColor: '#b98f33', color: '#000', fontSize: '0.85rem', fontWeight: 'bold' } },
+              arrow: { sx: { color: '#b98f33' } }
+            }}
+          >
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -1402,8 +1420,17 @@ export default function MonthlyTrackerSection() {
             </IconButton>
           </Tooltip>
 
-          {/* Bottom: Edit Note */}
-          <Tooltip title="Edit Internal Note" placement="bottom">
+          {/* Bottom: Internal Note */}
+          <Tooltip 
+            title="Edit Internal Note" 
+            placement="bottom" 
+            arrow
+            PopperProps={{ sx: { zIndex: 10000 } }}
+            componentsProps={{
+              tooltip: { sx: { backgroundColor: '#b98f33', color: '#000', fontSize: '0.85rem', fontWeight: 'bold' } },
+              arrow: { sx: { color: '#b98f33' } }
+            }}
+          >
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -1426,7 +1453,16 @@ export default function MonthlyTrackerSection() {
           </Tooltip>
 
           {/* Left: Copy Invoice ID */}
-          <Tooltip title="Copy Invoice ID" placement="left">
+          <Tooltip 
+            title="Copy Invoice ID" 
+            placement="left" 
+            arrow
+            PopperProps={{ sx: { zIndex: 10000 } }}
+            componentsProps={{
+              tooltip: { sx: { backgroundColor: '#b98f33', color: '#000', fontSize: '0.85rem', fontWeight: 'bold' } },
+              arrow: { sx: { color: '#b98f33' } }
+            }}
+          >
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
