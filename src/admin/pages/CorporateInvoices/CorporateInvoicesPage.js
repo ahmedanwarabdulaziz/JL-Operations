@@ -803,264 +803,728 @@ const CorporateInvoicesPage = () => {
               font-family: 'Arial', sans-serif;
               margin: 0;
               padding: 0;
-              background-color: #f5f5f5;
+              background-color: #ffffff;
+              color: #000000;
+              zoom: 0.8;
             }
-            .page {
+            
+            .work-order-page {
               width: 100%;
               min-height: 100vh;
-              padding: 20px;
-              box-sizing: border-box;
-              background-color: white;
+              margin: 0;
+              padding: 10mm;
+              background-color: #ffffff;
+              color: #000000;
+              box-shadow: 0 0 10px rgba(0,0,0,0.1);
               page-break-after: always;
-              position: relative;
+              display: flex;
+              flex-direction: column;
+              box-sizing: border-box;
             }
-            .page:last-child { page-break-after: auto; }
+            
+            .work-order-page:last-child {
+              page-break-after: avoid;
+            }
+            
             .header {
               display: flex;
               justify-content: space-between;
-              align-items: flex-start;
-              margin-bottom: 20px;
-              border-bottom: 2px solid #000;
+              align-items: center;
+              margin-bottom: 15px;
               padding-bottom: 10px;
+              border-bottom: 3px solid #000000;
+              flex-shrink: 0;
             }
+            
+            .logo-section {
+              display: flex;
+              align-items: center;
+              flex: 1;
+            }
+            
             .logo {
-              font-size: 28px;
-              font-weight: bold;
-              color: #274290;
+              height: 40px;
+              width: auto;
             }
-            .work-order-title {
+            
+            .furniture-group-title {
+              flex: 2;
+              text-align: center;
+            }
+            
+            .furniture-group-title h2 {
+              font-size: 1.8rem;
+              font-weight: bold;
+              color: #000000;
+              margin: 0;
+              text-transform: uppercase;
+            }
+            
+            .furniture-details {
+              font-size: 0.9rem;
+              color: #666666;
+              margin-top: 5px;
+              text-align: center;
+            }
+            
+            .material-code {
+              font-weight: 600;
+              color: #000000;
+            }
+            
+            .foam-details {
+              font-size: 0.8rem;
+              color: #888888;
+              margin-top: 2px;
+            }
+            
+            .deadline-display {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #cc0000;
+              margin-top: 8px;
+              text-align: center;
+            }
+            
+            .order-details {
+              flex: 1;
               text-align: right;
             }
-            .work-order-title h1 {
+            
+            .order-details .invoice-number {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #000000;
+              margin: 0 0 3px 0;
+            }
+            
+            .order-details .customer-name {
+              font-size: 0.9rem;
+              color: #000000;
+              margin: 0 0 3px 0;
+              font-weight: 500;
+            }
+            
+            .order-details .order-date {
+              font-size: 0.9rem;
+              color: #666666;
               margin: 0;
-              font-size: 28px;
-              color: #000;
             }
-            .work-order-title .invoice-number {
-              font-size: 20px;
-              font-weight: bold;
-              color: #f27921;
-              margin-top: 5px;
-            }
-            .section {
-              margin-bottom: 20px;
-              border: 1px solid #ccc;
-              padding: 15px;
-              border-radius: 5px;
-            }
-            .section-title {
-              font-weight: bold;
-              font-size: 16px;
-              margin-bottom: 10px;
-              color: #274290;
-              text-transform: uppercase;
-              border-bottom: 1px solid #eee;
-              padding-bottom: 5px;
-            }
-            .info-grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 10px 20px;
-            }
-            .info-item {
+            
+            
+            .furniture-section {
+              flex: 1;
               display: flex;
               flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              text-align: center;
             }
-            .info-label {
-              font-size: 12px;
-              color: #666;
-              margin-bottom: 2px;
+            
+            
+            .work-area {
+              width: 100%;
+              flex: 1;
+              background-color: #ffffff;
+              margin-top: 15px;
             }
-            .info-value {
-              font-size: 14px;
-              font-weight: 500;
-              color: #000;
-              min-height: 18px;
-              border-bottom: 1px solid #eee;
-              padding-bottom: 2px;
+            
+            
+            
+            .upholstery-type-section {
+              margin-bottom: 15px;
+              padding: 10px;
+              background-color: #f8f9fa;
+              border-radius: 8px;
+              display: flex;
+              align-items: stretch;
+              gap: 20px;
+              flex-shrink: 0;
             }
-            .large-text {
-              min-height: 60px;
-              border: 1px solid #ddd;
+            
+            .upholstery-box {
+              background-color: #ffffff;
+              border: 1px solid #000000;
+              border-radius: 4px;
               padding: 8px;
-              border-radius: 3px;
-              background-color: #fafafa;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              min-height: 120px;
+            }
+            
+            .upholstery-content {
+              display: flex;
+              align-items: flex-start;
+              gap: 15px;
+            }
+            
+            .section-title {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #000000;
+              white-space: nowrap;
+            }
+            
+            .right-column {
+              display: flex;
+              flex-direction: column;
+              gap: 15px;
+              flex: 1;
+            }
+            
+            .section-titles-row {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              gap: 20px;
+            }
+            
+            .measurement-title-section {
+              background-color: #ffffff;
+              border: 1px solid #000000;
+              border-radius: 4px;
+              padding: 8px;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: flex-start;
+              min-height: 120px;
+            }
+            
+            .measurement-section-title {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #000000;
+              margin-bottom: 5px;
+            }
+            
+            .notes-section {
+              margin-bottom: 15px;
+              padding: 0;
+              display: flex;
+              flex-direction: row;
+              gap: 20px;
+              flex-shrink: 0;
+              width: 100%;
+            }
+            
+            .note-box {
+              background-color: transparent;
+              border: none;
+              padding: 0;
+              min-height: auto;
+              flex: 1;
+              width: 50%;
+            }
+            
+            .note-title {
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #000000;
+              margin-bottom: 3px;
+              border-bottom: 1px solid #000000;
+              padding-bottom: 3px;
+            }
+            
+            .note-content {
+              font-size: 0.8rem;
+              color: #333333;
+              line-height: 1.3;
+              min-height: auto;
               white-space: pre-wrap;
+              margin-bottom: 10px;
             }
-            .checklist {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 8px 20px;
+            
+            .upholstery-options {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
             }
-            .checklist-item {
+            
+            .upholstery-option {
               display: flex;
               align-items: center;
               gap: 8px;
-              font-size: 14px;
             }
-            .checkbox {
+            
+            .measurement-box {
+              padding: 8px;
+              background-color: #ffffff;
+              border: 1px solid #000000;
+              border-radius: 4px;
+              min-height: 60px;
+            }
+            
+            .measurement-box-title {
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #000000;
+              margin-bottom: 5px;
+            }
+            
+            .check-box {
+              width: 20px;
+              height: 20px;
+              border: 2px solid #000000;
+              border-radius: 3px;
+              background-color: #ffffff;
+              position: relative;
+            }
+            
+            .option-text {
+              font-size: 0.9rem;
+              color: #333333;
+              font-weight: 500;
+              line-height: 1.2;
+            }
+            
+            .measurement-section {
+              margin-bottom: 15px;
+              padding: 10px;
+              background-color: #f8f9fa;
+              border: 2px solid #000000;
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              flex-shrink: 0;
+            }
+            
+            .measurement-notes {
+              flex: 1;
+              height: 80px;
+              border: 1px solid #000000;
+              border-radius: 4px;
+              background-color: #ffffff;
+              padding: 8px;
+              font-size: 0.9rem;
+              color: #333333;
+            }
+            
+            .measurement-title {
+              font-size: 1rem;
+              font-weight: bold;
+              color: #000000;
+              text-align: right;
+              white-space: nowrap;
+            }
+            
+            .measurement-table {
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              margin-bottom: 15px;
+              border: 2px solid #000000;
+              border-radius: 8px;
+              overflow: hidden;
+              flex-shrink: 0;
+            }
+            
+            .measurement-table th {
+              background-color: #f0f0f0;
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
+              padding: 8px;
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #000000;
+              text-align: center;
+              font-family: Arial, sans-serif;
+            }
+            
+            .measurement-table th:first-child {
+              border-left: 2px solid #000000;
+            }
+            
+            .measurement-table th:last-child {
+              border-right: 2px solid #000000;
+            }
+            
+            .measurement-table td {
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
+              padding: 4px;
+              font-size: 0.8rem;
+              color: #333333;
+              text-align: center;
+              height: 25px;
+              font-family: Arial, sans-serif;
+            }
+            
+            .measurement-table td:first-child {
+              border-left: 2px solid #000000;
+            }
+            
+            .measurement-table td:last-child {
+              border-right: 2px solid #000000;
+            }
+            
+            .measurement-table tr:first-child th {
+              border-top: 2px solid #000000;
+            }
+            
+            .measurement-table tr:first-child th:first-child {
+              border-top-left-radius: 6px;
+            }
+            
+            .measurement-table tr:first-child th:last-child {
+              border-top-right-radius: 6px;
+            }
+            
+            .measurement-table tr:last-child td {
+              border-bottom: 2px solid #000000;
+            }
+            
+            .measurement-table tr:last-child td:first-child {
+              border-bottom-left-radius: 6px;
+            }
+            
+            .measurement-table tr:last-child td:last-child {
+              border-bottom-right-radius: 6px;
+            }
+            
+            .notes-table {
+              width: 100%;
+              border-collapse: separate;
+              border-spacing: 0;
+              margin-bottom: 0;
+              border: 2px solid #000000;
+              border-radius: 8px;
+              overflow: hidden;
+              flex: 1;
+            }
+            
+            .notes-table th {
+              background-color: #f0f0f0;
+              border-right: 1px solid #000000;
+              border-bottom: 1px solid #000000;
+              padding: 8px;
+              font-size: 0.9rem;
+              font-weight: bold;
+              color: #000000;
+              text-align: center;
+              font-family: Arial, sans-serif;
+            }
+            
+            .notes-table th:first-child {
+              border-left: 2px solid #000000;
+            }
+            
+            .notes-table th:last-child {
+              border-right: 2px solid #000000;
+            }
+            
+            .notes-table td {
+              border-right: 1px solid #000000;
+              padding: 8px;
+              font-size: 0.9rem;
+              color: #333333;
+              text-align: left;
+              font-family: Arial, sans-serif;
+              background-color: #ffffff;
+              vertical-align: top;
+            }
+            
+            .notes-table td:first-child {
+              border-left: 2px solid #000000;
+              width: 50%;
+            }
+            
+            .notes-table td:last-child {
+              border-right: 2px solid #000000;
+              width: 50%;
+            }
+            
+            .notes-table tr:first-child th {
+              border-top: 2px solid #000000;
+            }
+            
+            .notes-table tr:first-child th:first-child {
+              border-top-left-radius: 6px;
+            }
+            
+            .notes-table tr:first-child th:last-child {
+              border-top-right-radius: 6px;
+            }
+            
+            .notes-table tr:last-child td {
+              border-bottom: 2px solid #000000;
+            }
+            
+            .notes-table tr:last-child td:first-child {
+              border-bottom-left-radius: 6px;
+            }
+            
+            .notes-table tr:last-child td:last-child {
+              border-bottom-right-radius: 6px;
+            }
+            
+            .cushion-note-item {
+              display: flex;
+              align-items: flex-start;
+              gap: 8px;
+            }
+            
+            .cushion-checkbox {
               width: 16px;
               height: 16px;
-              border: 2px solid #000;
-              display: inline-block;
+              border: 1px solid #000000;
+              border-radius: 2px;
+              background-color: #ffffff;
+              flex-shrink: 0;
+              margin-top: 2px;
             }
-            .footer {
-              position: absolute;
-              bottom: 20px;
-              left: 20px;
-              right: 20px;
-              display: flex;
-              justify-content: space-between;
-              font-size: 12px;
-              color: #666;
-              border-top: 1px solid #eee;
-              padding-top: 10px;
+            
+            .cushion-note-text {
+              font-size: 0.9rem;
+              color: #333333;
+              line-height: 1.4;
             }
+            
+            .measurement-table td:first-child,
+            .measurement-table td:nth-child(2) {
+              background-color: #ffffff;
+            }
+            
+            .measurement-table td:last-child {
+              background-color: #f8f9fa;
+              font-weight: 600;
+              font-size: 1rem;
+            }
+            
             @media print {
-              body { background-color: white; }
-              .page { min-height: auto; padding: 10px; }
+              body {
+                margin: 0;
+                padding: 0;
+                zoom: 1;
+              }
+              
+              .work-order-page {
+                box-shadow: none;
+                margin: 0;
+                padding: 10mm;
+                width: 100%;
+                min-height: 100vh;
+                height: auto;
+              }
+              
+              @page {
+                margin: 0;
+                size: auto;
+              }
+            }
+            
+            @media screen {
+              body {
+                padding: 20px;
+                background-color: #f5f5f5;
+              }
+              
+              .work-order-page {
+                transform: scale(0.75);
+                transform-origin: top center;
+              }
             }
           </style>
         </head>
         <body>
-          ${furnitureGroups.map((group, groupIndex) => {
-            const isEnabled = workOrderPrintToggles[groupIndex] !== false;
-            if (!isEnabled) return '';
-
-            const formType = workOrderSelections[groupIndex] || 'furniture';
-            const titleSuffix = formType === 'cushion' ? 'Cushion Form' : 'Furniture Form';
-
-            const customerName =
-              selectedOrder.corporateCustomer?.corporateName ||
-              selectedOrder.contactPerson?.name ||
-              'Corporate Customer';
-
-            const customerPhone =
-              selectedOrder.contactPerson?.phone ||
-              selectedOrder.corporateCustomer?.phone ||
-              '';
-
-            const customerEmail =
-              selectedOrder.contactPerson?.email ||
-              selectedOrder.corporateCustomer?.email ||
-              '';
-
-            const customerAddress =
-              selectedOrder.corporateCustomer?.address ||
-              '';
-
-            return `
-              <div class="page">
-                <div class="header">
-                  <div class="logo">JL Upholstery</div>
-                  <div class="work-order-title">
-                    <h1>Work Order</h1>
-                    <div class="invoice-number">#${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
-                    <div style="margin-top: 6px; font-size: 14px; font-weight: 600;">${titleSuffix} • Group ${groupIndex + 1}</div>
+          ${furnitureGroups.map((group, index) => {
+            const formType = workOrderSelections[index] || 'furniture';
+            const shouldPrint = workOrderPrintToggles[index] !== false; // Default to true if not set
+            const workOrderId = `WO-${selectedOrder.id}-${index + 1}`;
+            
+            // Only generate HTML if print is enabled for this group
+            if (!shouldPrint) {
+              return '';
+            }
+            
+                            if (formType === 'cushion') {
+                                return `
+                                    <div class="work-order-page">
+                                        <div class="header">
+                                            <div class="logo-section">
+                                                <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo">
+                                            </div>
+                                            <div class="furniture-group-title">
+                                                <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                                                ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
+                                                <div class="furniture-details">
+                                                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialJLQnty ? ` ${group.materialJLQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
+                                                    ${(group.foamThickness || group.foamNote) ? `
+                                                        <div class="foam-details">
+                                                            Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                            <div class="order-details">
+                                                <div class="invoice-number">${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                                                <div class="customer-name">${selectedOrder.corporateCustomer?.corporateName || selectedOrder.contactPerson?.name || 'Corporate Customer'}</div>
+                                                <div class="order-date">${formatDate(selectedOrder.createdAt)}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="notes-section">
+                                            <div class="note-box">
+                                                <div class="note-title">General Note</div>
+                                                <div class="note-content">${selectedOrder.orderDetails?.note?.value || ''}</div>
+                                            </div>
+                                            <div class="note-box">
+                                                <div class="note-title">Furniture Note</div>
+                                                <div class="note-content">${group.customerNote || ''}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <table class="notes-table" style="width: 100%; height: calc(100vh - 300px); margin-top: 20px;">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cushions Notes<br/>ملاحظات الفرشات</th>
+                                                    <th>General Note<br/>ملاحظات عامة</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>
+                                                        <div class="cushion-note-item">
+                                                            <div class="cushion-checkbox"></div>
+                                                            <div class="cushion-note-text">- التأكد من اتجاه قماش الفرشات</div>
+                                                        </div>
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div style="border: 2px solid #000000; border-radius: 8px; padding: 12px; margin-top: 15px; background-color: #ffffff;">
+                                            <div style="font-weight: bold; font-size: 0.95rem;">Extra Fabric - قماش مطلوب :</div>
+                                        </div>
+                                    </div>`;
+            } else {
+              return `
+            <div class="work-order-page">
+              <div class="header">
+                <div class="logo-section">
+                  <img src="/assets/images/logo-001.png" alt="JL Upholstery Logo" class="logo">
+                </div>
+                <div class="furniture-group-title">
+                  <h2>${group.furnitureType || 'Furniture Group'}</h2>
+                  ${deadlineFormatted ? `<div class="deadline-display">Deadline: ${deadlineFormatted}</div>` : ''}
+                  <div class="furniture-details">
+                    ${group.materialCode ? `<div class="material-code">${group.materialCode}${group.materialJLQnty ? ` ${group.materialJLQnty} ${group.unit === 'SQF' ? 'sq' : (group.unit === 'Yard' ? 'yard' : (group.unit || 'yard'))}` : ''}</div>` : ''}
+                    ${(group.foamThickness || group.foamNote) ? `
+                      <div class="foam-details">
+                        Foam${group.foamThickness ? ` (${group.foamThickness}")` : ''}${group.foamNote ? ` - ${group.foamNote}` : ''}
+                      </div>
+                    ` : ''}
                   </div>
                 </div>
-
-                <div class="section">
-                  <div class="section-title">Customer Information</div>
-                  <div class="info-grid">
-                    <div class="info-item">
-                      <div class="info-label">Customer</div>
-                      <div class="info-value">${customerName}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Date</div>
-                      <div class="info-value">${formatDateOnly(selectedOrder.createdAt) || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Phone</div>
-                      <div class="info-value">${customerPhone}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Email</div>
-                      <div class="info-value">${customerEmail}</div>
-                    </div>
-                    <div class="info-item" style="grid-column: 1 / span 2;">
-                      <div class="info-label">Address</div>
-                      <div class="info-value">${customerAddress}</div>
-                    </div>
-                    <div class="info-item" style="grid-column: 1 / span 2;">
-                      <div class="info-label">Deadline</div>
-                      <div class="info-value">${deadlineFormatted || ''}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="section">
-                  <div class="section-title">Furniture Group</div>
-                  <div class="info-grid">
-                    <div class="info-item">
-                      <div class="info-label">Furniture Type</div>
-                      <div class="info-value">${group.furnitureType || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Treatment</div>
-                      <div class="info-value">${group.treatment || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Material Company</div>
-                      <div class="info-value">${group.materialCompany || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Material Code</div>
-                      <div class="info-value">${group.materialCode || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Unit</div>
-                      <div class="info-value">${group.unit || ''}</div>
-                    </div>
-                    <div class="info-item">
-                      <div class="info-label">Quantity</div>
-                      <div class="info-value">${group.quantity || ''}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="section">
-                  <div class="section-title">Notes</div>
-                  <div class="info-item">
-                    <div class="info-label">Labour Note</div>
-                    <div class="large-text">${group.labourNote || ''}</div>
-                  </div>
-                  <div class="info-item" style="margin-top: 10px;">
-                    <div class="info-label">Customer Note</div>
-                    <div class="large-text">${group.customerNote || ''}</div>
-                  </div>
-                  <div class="info-item" style="margin-top: 10px;">
-                    <div class="info-label">Foam Note</div>
-                    <div class="large-text">${group.foamNote || ''}</div>
-                  </div>
-                  <div class="info-item" style="margin-top: 10px;">
-                    <div class="info-label">Painting Note</div>
-                    <div class="large-text">${group.paintingNote || ''}</div>
-                  </div>
-                </div>
-
-                <div class="section">
-                  <div class="section-title">Checklist</div>
-                  <div class="checklist">
-                    <div class="checklist-item"><span class="checkbox"></span> Material Confirmed</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Measurements Confirmed</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Foam Confirmed</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Painting Confirmed</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Cutting Complete</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Sewing Complete</div>
-                    <div class="checklist-item"><span class="checkbox"></span> Upholstery Complete</div>
-                    <div class="checklist-item"><span class="checkbox"></span> QC Complete</div>
-                  </div>
-                </div>
-
-                <div class="footer">
-                  <div>JL Upholstery • Work Order</div>
-                  <div>Invoice #${selectedOrder.orderDetails?.billInvoice || 'N/A'} • Group ${groupIndex + 1}</div>
+                <div class="order-details">
+                  <div class="invoice-number">${selectedOrder.orderDetails?.billInvoice || 'N/A'}</div>
+                  <div class="customer-name">${selectedOrder.corporateCustomer?.corporateName || selectedOrder.contactPerson?.name || 'Corporate Customer'}</div>
+                  <div class="order-date">${formatDate(selectedOrder.createdAt)}</div>
                 </div>
               </div>
-            `;
-          }).join('')}
+              
+              <div class="notes-section">
+                <div class="note-box">
+                  <div class="note-title">General Note</div>
+                  <div class="note-content">${selectedOrder.orderDetails?.note?.value || ''}</div>
+                </div>
+                <div class="note-box">
+                  <div class="note-title">Furniture Note</div>
+                  <div class="note-content">${group.customerNote || ''}</div>
+                </div>
+              </div>
+              
+              <div class="upholstery-type-section">
+                <div class="upholstery-box">
+                  <div class="upholstery-content">
+                    <div class="section-title">Upholstery Type<br/>نوع الخياطة</div>
+                    <div class="upholstery-options">
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Plain ساده</div>
+                      </div>
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Top Stitch سلفنة</div>
+                      </div>
+                      <div class="upholstery-option">
+                        <div class="check-box"></div>
+                        <div class="option-text">Piping بايبنغ</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="measurement-title-section">
+                  <div class="measurement-section-title">Inner Measurement<br/>قياس الداخلي</div>
+                </div>
+              </div>
+              
+              <table class="measurement-table">
+                <thead>
+                  <tr>
+                    <th>JL Qnty<br/>الكمية</th>
+                    <th>Measurements<br/>القياس</th>
+                    <th>Details<br/>تفاصيل الكنبة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>قاعدة</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>يد</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>جنب</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>ظهر</td>
+                  </tr>
+                  <tr>
+                    <td></td>
+                    <td></td>
+                    <td>خلفية</td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <table class="notes-table">
+                <thead>
+                  <tr>
+                    <th>Cushions Notes<br/>ملاحظات الفرشات</th>
+                    <th>General Note<br/>ملاحظات عامة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <div class="cushion-note-item">
+                        <div class="cushion-checkbox"></div>
+                        <div class="cushion-note-text">- التأكد من اتجاه قماش الفرشات</div>
+                      </div>
+                    </td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <div style="border: 2px solid #000000; border-radius: 8px; padding: 12px; margin-top: 15px; background-color: #ffffff;">
+                  <div style="font-weight: bold; font-size: 0.95rem;">Extra Fabric - قماش مطلوب :</div>
+              </div>
+            </div>`;
+            }
+          }).join('') || '<div class="work-order-page"><div class="furniture-section"><div class="furniture-title">No Furniture Groups Found</div></div></div>'}
         </body>
         </html>
       `;

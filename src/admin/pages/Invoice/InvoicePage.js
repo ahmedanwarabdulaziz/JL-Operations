@@ -920,6 +920,10 @@ const InvoicePage = () => {
                                                 </tr>
                                             </tbody>
                                         </table>
+                                        
+                                        <div style="border: 2px solid #000000; border-radius: 8px; padding: 12px; margin-top: 15px; background-color: #ffffff;">
+                                            <div style="font-weight: bold; font-size: 0.95rem;">Extra Fabric - قماش مطلوب :</div>
+                                        </div>
                                     </div>`;
             } else {
               return `
@@ -1040,6 +1044,9 @@ const InvoicePage = () => {
                 </tbody>
               </table>
               
+              <div style="border: 2px solid #000000; border-radius: 8px; padding: 12px; margin-top: 15px; background-color: #ffffff;">
+                  <div style="font-weight: bold; font-size: 0.95rem;">Extra Fabric - قماش مطلوب :</div>
+              </div>
             </div>`;
             }
           }).join('') || '<div class="work-order-page"><div class="furniture-section"><div class="furniture-title">No Furniture Groups Found</div></div></div>'}
