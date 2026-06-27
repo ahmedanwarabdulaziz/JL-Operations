@@ -51,7 +51,7 @@ const menuItems = [
   { text: 'Dashboard', path: '/admin', icon: <DashboardIcon /> },
   { text: 'Orders', path: '/admin/orders', icon: <ReceiptIcon /> },
   { text: 'Workshop', path: '/admin/workshop', icon: <BuildIcon /> },
-  { text: 'Material Request', path: '/admin/material-request', icon: <InventoryIcon /> },
+  { text: 'Material Track', path: '/admin/material-track', icon: <InventoryIcon /> },
   { text: 'Invoices', path: '/admin/invoices', icon: <DescriptionIcon /> },
   { text: 'Customer Invoices', path: '/admin/customer-invoices', icon: <DescriptionIcon /> },
   { text: 'Finance', path: '/admin/finance', icon: <AccountBalanceIcon /> },

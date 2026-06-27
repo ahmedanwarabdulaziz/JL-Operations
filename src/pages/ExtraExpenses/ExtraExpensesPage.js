@@ -522,7 +522,7 @@ const ExtraExpensesPage = () => {
 
   const handleViewOrder = (orderId, orderType) => {
     if (orderId === 'general') {
-      navigate('/material-request');
+      navigate('/admin/material-track');
     } else if (orderId === 'business') {
       // Business expenses don't have a separate page, do nothing or show a message
       showError('Business expenses can only be managed from this page');

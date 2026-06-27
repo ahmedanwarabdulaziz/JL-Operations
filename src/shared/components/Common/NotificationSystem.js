@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import {
   Snackbar,
   Alert,
@@ -34,23 +34,23 @@ export const NotificationProvider = ({ children }) => {
     onConfirm: null
   });
 
-  const showSuccess = (message) => {
+  const showSuccess = useCallback((message) => {
     setSnackbar({
       open: true,
       message,
       severity: 'success'
     });
-  };
+  }, []);
 
-  const showError = (message) => {
+  const showError = useCallback((message) => {
     setSnackbar({
       open: true,
       message,
       severity: 'error'
     });
-  };
+  }, []);
 
-  const showConfirm = (title, message) => {
+  const showConfirm = useCallback((title, message) => {
     return new Promise((resolve) => {
       setConfirmDialog({
         open: true,
@@ -59,7 +59,7 @@ export const NotificationProvider = ({ children }) => {
         onConfirm: resolve
       });
     });
-  };
+  }, []);
 
   const handleSnackbarClose = () => {
     setSnackbar(prev => ({ ...prev, open: false }));
@@ -79,12 +79,12 @@ export const NotificationProvider = ({ children }) => {
     setConfirmDialog(prev => ({ ...prev, open: false }));
   };
 
-  const value = {
+  const value = useMemo(() => ({
     showSuccess,
     showError,
     showConfirm,
     confirmDialogOpen: confirmDialog.open
-  };
+  }), [showSuccess, showError, showConfirm, confirmDialog.open]);
 
   return (
     <NotificationContext.Provider value={value}>

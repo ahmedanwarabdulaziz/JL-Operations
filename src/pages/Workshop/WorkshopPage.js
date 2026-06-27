@@ -80,7 +80,7 @@ import { sendEmailWithConfig, sendDepositEmailWithConfig, sendDepositReminderEma
 import useMaterialCompanies from '../../hooks/useMaterialCompanies';
 import { usePlatforms } from '../../hooks/usePlatforms';
 import { useTreatments } from '../../hooks/useTreatments';
-import { collection, getDocs, updateDoc, doc, query, orderBy, where, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, updateDoc, doc, query, orderBy, where, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateOrderTotal, calculateOrderCost, calculateOrderProfit, calculateOrderTax, calculatePickupDeliveryCost, normalizePaymentData, validatePaymentData, getOrderCostBreakdown } from '../../utils/orderCalculations';
 import { fetchMaterialCompanyTaxRates } from '../../utils/materialTaxRates';
@@ -2222,18 +2222,28 @@ const WorkshopPage = () => {
       // Auto-saving furniture data
       // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
       const orderRef = getOrderRef(selectedOrder);
-      const updateData = selectedOrder.orderType === 'corporate' 
-        ? { furnitureGroups: editingFurnitureData.groups }
-        : { furnitureData: editingFurnitureData };
+
+      // See handleSaveFurnitureGroup: don't let a stale local snapshot clobber tracking
+      // fields (`ordered`/`received`) that another page may have written in the meantime.
+      const liveSnap = await getDoc(orderRef);
+      const liveGroups = selectedOrder.orderType === 'corporate'
+        ? (liveSnap.data()?.furnitureGroups || [])
+        : (liveSnap.data()?.furnitureData?.groups || []);
+      const mergedGroups = mergeTrackingFields(editingFurnitureData.groups, liveGroups);
+      const mergedFurnitureData = { ...editingFurnitureData, groups: mergedGroups };
+
+      const updateData = selectedOrder.orderType === 'corporate'
+        ? { furnitureGroups: mergedGroups }
+        : { furnitureData: mergedFurnitureData };
 
       await updateDoc(orderRef, updateData);
 
       // Update local state
-      const updatedOrder = { 
-        ...selectedOrder, 
-        ...(selectedOrder.orderType === 'corporate' 
-          ? { furnitureGroups: editingFurnitureData.groups }
-          : { furnitureData: editingFurnitureData }
+      const updatedOrder = {
+        ...selectedOrder,
+        ...(selectedOrder.orderType === 'corporate'
+          ? { furnitureGroups: mergedGroups }
+          : { furnitureData: mergedFurnitureData }
         )
       };
       setSelectedOrder(updatedOrder);
@@ -2258,6 +2268,34 @@ const WorkshopPage = () => {
     }
   };
 
+  // Carry forward Material Track's `ordered`/`received` fields from the live Firestore groups
+  // onto the groups about to be saved. Workshop never adds/removes/reorders groups, so index
+  // alignment holds; the company+code check is a sanity fallback in case it ever doesn't.
+  const mergeTrackingFields = (groupsToSave, liveGroups) => {
+    if (!liveGroups || liveGroups.length === 0) return groupsToSave;
+    return groupsToSave.map((group, idx) => {
+      let live = liveGroups[idx];
+      const matchesAtIndex = live
+        && live.materialCompany === group.materialCompany
+        && live.materialCode === group.materialCode;
+      if (!matchesAtIndex) {
+        live = liveGroups.find(g =>
+          g.materialCompany === group.materialCompany && g.materialCode === group.materialCode
+        );
+      }
+      if (!live) return group;
+      // Firestore rejects literal `undefined` field values, so only set a key when
+      // either side actually has a value — never write `ordered`/`received: undefined`
+      // onto groups that have never been touched by Material Track.
+      const merged = { ...group };
+      const orderedValue = live.ordered ?? group.ordered;
+      const receivedValue = live.received ?? group.received;
+      if (orderedValue !== undefined) merged.ordered = orderedValue;
+      if (receivedValue !== undefined) merged.received = receivedValue;
+      return merged;
+    });
+  };
+
   // Save furniture data for a specific group or all groups
   const handleSaveFurnitureGroup = async (groupIndex) => {
     try {
@@ -2272,13 +2310,23 @@ const WorkshopPage = () => {
         // Regular orders have furnitureData with groups property
         furnitureDataToSave = selectedOrder.furnitureData || { groups: [] };
       }
-      
+
       // Ensure groups array exists
       if (!furnitureDataToSave.groups) {
         furnitureDataToSave.groups = [];
       }
-      
+
       const orderRef = getOrderRef(selectedOrder);
+
+      // Workshop's local copy can be stale relative to Firestore (e.g. Material Track wrote
+      // `ordered`/`received` on these same groups after this order was loaded here). Re-fetch
+      // live data and carry those tracking fields forward so this save doesn't wipe them out.
+      const liveSnap = await getDoc(orderRef);
+      const liveGroups = selectedOrder.orderType === 'corporate'
+        ? (liveSnap.data()?.furnitureGroups || [])
+        : (liveSnap.data()?.furnitureData?.groups || []);
+      furnitureDataToSave.groups = mergeTrackingFields(furnitureDataToSave.groups, liveGroups);
+
       // Handle both regular orders (furnitureData) and corporate orders (furnitureGroups)
       const updateData = selectedOrder.orderType === 'corporate' 
         ? { furnitureGroups: furnitureDataToSave.groups }
@@ -2329,6 +2377,15 @@ const WorkshopPage = () => {
       let furnitureDataToSave = editingFurnitureData;
       if (!furnitureDataToSave.groups) furnitureDataToSave = { ...furnitureDataToSave, groups: [] };
       const orderRef = getOrderRef(selectedOrder);
+
+      // See handleSaveFurnitureGroup: don't let a stale local snapshot clobber tracking
+      // fields (`ordered`/`received`) that another page may have written in the meantime.
+      const liveSnap = await getDoc(orderRef);
+      const liveGroups = selectedOrder.orderType === 'corporate'
+        ? (liveSnap.data()?.furnitureGroups || [])
+        : (liveSnap.data()?.furnitureData?.groups || []);
+      furnitureDataToSave = { ...furnitureDataToSave, groups: mergeTrackingFields(furnitureDataToSave.groups, liveGroups) };
+
       const updateData = selectedOrder.orderType === 'corporate'
         ? { furnitureGroups: furnitureDataToSave.groups }
         : { furnitureData: furnitureDataToSave };
@@ -3469,12 +3526,12 @@ const WorkshopPage = () => {
             </Button>
           </Box>
           
-          {/* Material Request Button */}
+          {/* Material Track Button */}
           <Button
             variant="contained"
             fullWidth
             startIcon={<InventoryIcon />}
-            onClick={async () => { await saveCurrentEdits(); navigate('/admin/material-request'); }}
+            onClick={async () => { await saveCurrentEdits(); navigate('/admin/material-track'); }}
             sx={{
               mb: 2,
               background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3487,7 +3544,7 @@ const WorkshopPage = () => {
               }
             }}
           >
-            Material Request Management
+            Material Track
           </Button>
           
           {/* Search */}

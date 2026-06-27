@@ -43,7 +43,7 @@ import StandaloneLeadForm from './pages/StandaloneLeadForm/StandaloneLeadForm';
 import PublicLeadForm from './pages/PublicLeadForm/PublicLeadForm';
 import LeadsManagement from './pages/LeadsManagement/LeadsManagement';
 import TestingFinancialPage from './pages/Finance/TestingFinancialPage';
-import MaterialRequestPage from './admin/pages/MaterialRequest/MaterialRequestPage';
+import MaterialTrackPage from './admin/pages/MaterialTrack/MaterialTrackPage';
 import ExtraExpensesPage from './pages/ExtraExpenses/ExtraExpensesPage';
 import ExtraIncomePage from './pages/ExtraIncome/ExtraIncomePage';
 import ControlPage from './admin/pages/Control/ControlPage';
@@ -204,8 +204,10 @@ const AppContent = () => {
           <Route path="/admin/orders/corporate" element={<CorporateOrderPage />} />
           <Route path="/workshop" element={<Navigate to="/admin/workshop" replace />} />
           <Route path="/admin/workshop" element={<WorkshopPage />} />
-          <Route path="/material-request" element={<Navigate to="/admin/material-request" replace />} />
-          <Route path="/admin/material-request" element={<MaterialRequestPage />} />
+          <Route path="/material-request" element={<Navigate to="/admin/material-track" replace />} />
+          <Route path="/admin/material-request" element={<Navigate to="/admin/material-track" replace />} />
+          <Route path="/material-track" element={<Navigate to="/admin/material-track" replace />} />
+          <Route path="/admin/material-track" element={<MaterialTrackPage />} />
           <Route path="/treatment" element={<Navigate to="/admin/treatment" replace />} />
           <Route path="/admin/treatment" element={<TreatmentPage />} />
           <Route path="/material-companies" element={<Navigate to="/admin/material-companies" replace />} />

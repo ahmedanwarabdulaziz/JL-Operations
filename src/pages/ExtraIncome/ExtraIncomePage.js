@@ -522,7 +522,7 @@ const ExtraIncomesPage = () => {
 
   const handleViewOrder = (orderId, orderType) => {
     if (orderId === 'general') {
-      navigate('/material-request');
+      navigate('/admin/material-track');
     } else if (orderId === 'business') {
       // Business incomes don't have a separate page, do nothing or show a message
       showError('Business incomes can only be managed from this page');
