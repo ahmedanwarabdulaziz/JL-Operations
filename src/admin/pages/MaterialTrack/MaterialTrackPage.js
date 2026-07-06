@@ -56,6 +56,10 @@ const MaterialTrackPage = () => {
   // so the same company can be collapsed in one column independently of the others.
   const [collapsedCompanies, setCollapsedCompanies] = useState(new Set());
 
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteForm, setNoteForm] = useState({ item: null, text: '' });
+  const [savingNote, setSavingNote] = useState(false);
+
   // General Expenses (manually-entered materials not tied to any order) state
   const [generalExpenseDialogOpen, setGeneralExpenseDialogOpen] = useState(false);
   const [generalExpenseForm, setGeneralExpenseForm] = useState({
@@ -158,11 +162,15 @@ const MaterialTrackPage = () => {
               totalQty: 0,
               totalOrdered: 0,
               totalReceived: 0,
-              unit: group.unit || 'Yard'
+              unit: group.unit || 'Yard',
+              trackNote: group.trackNote || ''
             });
           }
           
           const row = mergeMap.get(mergeKey);
+          if (!row.trackNote && group.trackNote) {
+            row.trackNote = group.trackNote;
+          }
           row.totalQty += jlQty;
           row.totalOrdered += (Number(group.ordered) || 0);
           row.totalReceived += (Number(group.received) || 0);
@@ -205,6 +213,7 @@ const MaterialTrackPage = () => {
           materialName: expense.materialCode,
           customerName: expense.description || 'General Expense',
           unit: '',
+          trackNote: expense.trackNote || '',
           totalQty,
           totalOrdered,
           totalReceived,
@@ -460,9 +469,11 @@ const MaterialTrackPage = () => {
     let newTotalQty = 0;
     let newTotalOrdered = 0;
     let newTotalReceived = 0;
+    let newTrackNote = mergeKeyObj.trackNote;
 
     latestGroups.forEach(group => {
       if (group.materialCompany === mergeKeyObj.materialCompany && group.materialCode === mergeKeyObj.materialCode) {
+        if (group.trackNote !== undefined) newTrackNote = group.trackNote;
         const jlQty = Number(group.materialJLQnty) || 0;
         if (jlQty > 0) {
           newTotalQty += jlQty;
@@ -483,7 +494,8 @@ const MaterialTrackPage = () => {
       totalReceived: newTotalReceived,
       pendingToOrder,
       waitingToReceive,
-      alreadyReceived
+      alreadyReceived,
+      trackNote: newTrackNote
     };
 
     // Update To Order List
@@ -527,7 +539,8 @@ const MaterialTrackPage = () => {
       totalReceived,
       pendingToOrder,
       waitingToReceive,
-      alreadyReceived
+      alreadyReceived,
+      trackNote: latestExpenseData.trackNote || ''
     };
 
     setMaterialsToOrder(prev => {
@@ -665,6 +678,61 @@ const MaterialTrackPage = () => {
       showError('Failed to revert receive mark');
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const openNoteDialog = (item) => {
+    setNoteForm({ item, text: item.trackNote || '' });
+    setNoteDialogOpen(true);
+  };
+
+  const closeNoteDialog = () => {
+    setNoteDialogOpen(false);
+    setNoteForm({ item: null, text: '' });
+  };
+
+  const saveNote = async () => {
+    if (!noteForm.item) return;
+    try {
+      setSavingNote(true);
+      const { item, text } = noteForm;
+      if (item.orderType === 'general') {
+        const ref = doc(db, 'generalExpenses', item.expenseId);
+        await updateDoc(ref, { trackNote: text });
+        recomputeGeneralExpenseRow({ ...item.rawExpense, trackNote: text }, item);
+      } else {
+        const collectionName = item.orderType === 'corporate' ? 'corporate-orders' : 'orders';
+        const orderRef = doc(db, collectionName, item.orderId);
+        const orderDoc = await getDoc(orderRef);
+        if (!orderDoc.exists()) return;
+
+        const orderData = orderDoc.data();
+        const groups = item.orderType === 'corporate' ? (orderData.furnitureGroups || []) : (orderData.furnitureData?.groups || []);
+        let hasChanges = false;
+        const updatedGroups = [...groups];
+
+        groups.forEach((group, idx) => {
+          if (group.materialCompany === item.materialCompany && group.materialCode === item.materialCode) {
+            updatedGroups[idx] = { ...updatedGroups[idx], trackNote: text };
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          const updateData = item.orderType === 'corporate' 
+            ? { furnitureGroups: updatedGroups }
+            : { 'furnitureData.groups': updatedGroups };
+          await updateDoc(orderRef, updateData);
+          recomputeMergeKey(updatedGroups, { ...item, trackNote: text });
+        }
+      }
+      showSuccess('Note saved successfully');
+      closeNoteDialog();
+    } catch (e) {
+      console.error(e);
+      showError('Failed to save note');
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -1011,7 +1079,7 @@ const MaterialTrackPage = () => {
                         </Box>
                       )}
 
-                      <Grid container spacing={1} sx={{ mb: columnType !== 'Received' ? 1.5 : 0 }}>
+                      <Grid container spacing={1} sx={{ mb: 1 }}>
                         <Grid item xs={6}>
                           <Typography variant="caption" color="text.secondary" display="block">Invoice</Typography>
                           <Typography variant="body2">{item.invoiceNo}</Typography>
@@ -1021,6 +1089,18 @@ const MaterialTrackPage = () => {
                           <Typography variant="body2" noWrap title={item.customerName}>{item.customerName}</Typography>
                         </Grid>
                       </Grid>
+
+                      <Box sx={{ mb: columnType !== 'Received' ? 1.5 : 0, p: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <Box sx={{ flex: 1, mr: 1, overflow: 'hidden' }}>
+                          <Typography variant="caption" color="text.secondary" display="block">Note</Typography>
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', color: item.trackNote ? '#e0e0e0' : '#777', fontStyle: item.trackNote ? 'normal' : 'italic', wordBreak: 'break-word' }}>
+                            {item.trackNote || 'No note added'}
+                          </Typography>
+                        </Box>
+                        <IconButton size="small" onClick={() => openNoteDialog(item)} sx={{ color: '#b98f33', mt: 0.5 }}>
+                          <EditIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </Box>
 
                       {columnType === 'ToOrder' && (
                         <Button
@@ -1345,6 +1425,46 @@ const MaterialTrackPage = () => {
             }}
           >
             {updating ? 'Deleting...' : 'Delete Expense'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Note Dialog */}
+      <Dialog open={noteDialogOpen} onClose={closeNoteDialog} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{
+          background: 'linear-gradient(135deg, #b98f33 0%, #9a7625 100%)',
+          color: '#ffffff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1
+        }}>
+          <EditIcon />
+          {noteForm.item ? `Note: ${noteForm.item.materialCode}` : 'Edit Note'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          <TextField
+            fullWidth
+            multiline
+            rows={4}
+            variant="outlined"
+            placeholder="Add a note for this material track record..."
+            value={noteForm.text}
+            onChange={(e) => setNoteForm({ ...noteForm, text: e.target.value })}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button onClick={closeNoteDialog} sx={buttonStyles.cancelButton}>
+            Cancel
+          </Button>
+          <Button
+            onClick={saveNote}
+            variant="contained"
+            disabled={savingNote}
+            startIcon={savingNote ? <CircularProgress size={16} sx={{ color: '#000000' }} /> : <SaveIcon sx={{ color: '#000000' }} />}
+            sx={{ ...buttonStyles.primaryButton, backgroundColor: '#b98f33', '&:hover': { backgroundColor: '#9a7625' } }}
+          >
+            {savingNote ? 'Saving...' : 'Save Note'}
           </Button>
         </DialogActions>
       </Dialog>
