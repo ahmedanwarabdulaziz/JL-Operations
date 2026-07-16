@@ -132,9 +132,12 @@ const CorporateOrderPage = () => {
           const matchedContact = (matched.contactPersons || []).find(
             cp => cp.id === srcContact?.id || cp.name === srcContact?.name
           );
-          if (matchedContact) {
-            setSelectedContactPerson(matchedContact);
-          }
+          setSelectedContactPerson(matchedContact || srcContact || null);
+        } else if (srcCorp) {
+          // Not found in the corporateCustomers collection (e.g. a temporary
+          // "quote customer") — fall back to the data already provided.
+          setSelectedCustomer(srcCorp);
+          setSelectedContactPerson(srcContact || null);
         }
         // Pre-fill invoice number (keep same)
         if (sourceOrderData.orderDetails?.billInvoice) {
@@ -165,9 +168,12 @@ const CorporateOrderPage = () => {
           const matchedContact = (matched.contactPersons || []).find(
             cp => cp.id === srcContact?.id || cp.name === srcContact?.name
           );
-          if (matchedContact) {
-            setSelectedContactPerson(matchedContact);
-          }
+          setSelectedContactPerson(matchedContact || srcContact || null);
+        } else if (srcCorp) {
+          // Not found in the corporateCustomers collection (e.g. a temporary
+          // "quote customer") — fall back to the data already provided.
+          setSelectedCustomer(srcCorp);
+          setSelectedContactPerson(srcContact || null);
         }
         // Pre-fill furniture and payment
         setOrderData(prev => ({
@@ -480,6 +486,11 @@ const CorporateOrderPage = () => {
 
   const handleSubmit = async () => {
     try {
+      if (!selectedCustomer || !selectedContactPerson) {
+        showError('Missing customer or contact person information');
+        return;
+      }
+
       // Validate invoice number format
       if (!invoiceNumber || !invoiceNumber.startsWith('T-')) {
         showError('Invoice number must be in T-XXXXXX format');
