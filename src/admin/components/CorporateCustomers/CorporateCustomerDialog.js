@@ -15,6 +15,8 @@ import { db } from '../../../firebase/config';
 
 const defaultFormState = {
   corporateName: '',
+  email: '',
+  phone: '',
   address: '',
   notes: ''
 };
@@ -46,6 +48,8 @@ const CorporateCustomerDialog = ({
     if (open) {
       setFormValues({
         corporateName: customer?.corporateName || '',
+        email: customer?.email || '',
+        phone: customer?.phone || '',
         address: customer?.address || '',
         notes: customer?.notes || ''
       });
@@ -207,6 +211,53 @@ const CorporateCustomerDialog = ({
             required
             error={Boolean(errors.corporateName)}
             helperText={errors.corporateName}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d4af5a'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d4af5a',
+                  borderWidth: 2
+                }
+              },
+              '& .MuiInputLabel-root': {
+                '&.Mui-focused': {
+                  color: '#d4af5a'
+                }
+              }
+            }}
+          />
+
+          <TextField
+            fullWidth
+            label="Corporate Email"
+            type="email"
+            value={formValues.email}
+            onChange={handleInputChange('email')}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d4af5a'
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d4af5a',
+                  borderWidth: 2
+                }
+              },
+              '& .MuiInputLabel-root': {
+                '&.Mui-focused': {
+                  color: '#d4af5a'
+                }
+              }
+            }}
+          />
+
+          <TextField
+            fullWidth
+            label="Corporate Phone"
+            value={formValues.phone}
+            onChange={handleInputChange('phone')}
             sx={{
               '& .MuiOutlinedInput-root': {
                 '&:hover .MuiOutlinedInput-notchedOutline': {
