@@ -96,6 +96,7 @@ const WorkshopPage = () => {
   const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [corporateCustomersById, setCorporateCustomersById] = useState({});
   const [selectedOrder, setSelectedOrder] = useState(null);
   const listContainerRef = useRef(null);
   const selectedOrderIdRef = useRef(null);
@@ -1476,10 +1477,42 @@ const WorkshopPage = () => {
     }
   }, [showError, sendingEmail, processingDeposit]);
 
+  const fetchCorporateCustomersLookup = useCallback(async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'corporateCustomers'));
+      const byId = {};
+      snapshot.docs.forEach((docSnap) => {
+        byId[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+      });
+      setCorporateCustomersById(byId);
+    } catch (error) {
+      console.error('Error fetching corporate customers lookup:', error);
+    }
+  }, []);
+
+  // Corporate orders store a snapshot of the customer/contact at the time
+  // they were created or converted. Look up the live corporateCustomers
+  // record so edits made on the Corporate Customers page are reflected here
+  // instead of the stale snapshot.
+  const getLiveCorporateDetails = useCallback((order) => {
+    const fallback = { company: order?.corporateCustomer || {}, contact: order?.contactPerson || {} };
+    if (!order || order.orderType !== 'corporate') return fallback;
+
+    const liveCustomer = corporateCustomersById[order.corporateCustomer?.id];
+    if (!liveCustomer) return fallback;
+
+    const liveContact = (liveCustomer.contactPersons || []).find(
+      (cp) => cp.id === order.contactPerson?.id
+    ) || fallback.contact;
+
+    return { company: liveCustomer, contact: liveContact };
+  }, [corporateCustomersById]);
+
   useEffect(() => {
     fetchOrders();
     fetchInvoiceStatuses();
     fetchMaterialCompanyTaxRates().then(setMaterialTaxRates);
+    fetchCorporateCustomersLookup();
   }, []); // Empty dependency array to run only once on mount
 
   // Handle URL parameter for order selection
@@ -3636,8 +3669,8 @@ const WorkshopPage = () => {
                                 fontSize: '0.9rem'
                               }}
                             >
-                              {order.orderType === 'corporate' 
-                                ? (order.corporateCustomer?.corporateName || 'Corporate Customer')
+                              {order.orderType === 'corporate'
+                                ? (getLiveCorporateDetails(order).company?.corporateName || 'Corporate Customer')
                                 : (order.personalInfo?.customerName || 'No Name')
                               }
                             </Typography>
@@ -3691,8 +3724,8 @@ const WorkshopPage = () => {
                 <Box>
                   <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
                     Order Details • <span style={{ color: '#ffffff' }}>
-                      {selectedOrder.orderType === 'corporate' 
-                        ? selectedOrder.corporateCustomer?.corporateName || 'Corporate Customer'
+                      {selectedOrder.orderType === 'corporate'
+                        ? getLiveCorporateDetails(selectedOrder).company?.corporateName || 'Corporate Customer'
                         : selectedOrder.personalInfo?.customerName || 'Customer'
                       }
                     </span>
@@ -4191,7 +4224,9 @@ const WorkshopPage = () => {
                   {/* Content */}
                   {personalInfoExpanded && (
                     <Box sx={{ p: 3 }}>
-                      {selectedOrder.orderType === 'corporate' ? (
+                      {selectedOrder.orderType === 'corporate' ? (() => {
+                        const { company: liveCompany, contact: liveContact } = getLiveCorporateDetails(selectedOrder);
+                        return (
                         <>
                           {/* Corporate Customer Information */}
                           <Box sx={{ mb: 2 }}>
@@ -4199,16 +4234,16 @@ const WorkshopPage = () => {
                               🏢 Company Name
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem' }}>
-                              {selectedOrder.corporateCustomer?.corporateName || 'N/A'}
+                              {liveCompany?.corporateName || 'N/A'}
                             </Typography>
                           </Box>
-                          
+
                           <Box sx={{ mb: 2 }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                               📞 Company Phone
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2 }}>
-                              {selectedOrder.corporateCustomer?.phone || 'N/A'}
+                              {liveCompany?.phone || 'N/A'}
                             </Typography>
                           </Box>
 
@@ -4217,7 +4252,7 @@ const WorkshopPage = () => {
                               ✉️ Company Email
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2 }}>
-                              {selectedOrder.corporateCustomer?.email || 'N/A'}
+                              {liveCompany?.email || 'N/A'}
                             </Typography>
                           </Box>
 
@@ -4226,7 +4261,7 @@ const WorkshopPage = () => {
                               📍 Company Address
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2 }}>
-                              {selectedOrder.corporateCustomer?.address || 'N/A'}
+                              {liveCompany?.address || 'N/A'}
                             </Typography>
                           </Box>
 
@@ -4236,16 +4271,16 @@ const WorkshopPage = () => {
                               👤 Contact Name
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem' }}>
-                              {selectedOrder.contactPerson?.name || 'N/A'}
+                              {liveContact?.name || 'N/A'}
                             </Typography>
                           </Box>
-                          
+
                           <Box sx={{ mb: 2 }}>
                             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5 }}>
                               📞 Contact Phone
                             </Typography>
                             <Typography variant="body1" sx={{ mb: 2 }}>
-                              {selectedOrder.contactPerson?.phone || 'N/A'}
+                              {liveContact?.phone || 'N/A'}
                             </Typography>
                           </Box>
 
@@ -4254,11 +4289,12 @@ const WorkshopPage = () => {
                               ✉️ Contact Email
                             </Typography>
                             <Typography variant="body1">
-                              {selectedOrder.contactPerson?.email || 'N/A'}
+                              {liveContact?.email || 'N/A'}
                             </Typography>
                           </Box>
                         </>
-                      ) : (
+                        );
+                      })() : (
                         <>
                           {/* Regular Customer Information */}
                     <Box sx={{ mb: 2 }}>
