@@ -1088,8 +1088,9 @@ const WorkshopPage = () => {
 
       // Open completion email dialog if the completed order has a valid customer email
       const completedIsCorporate = completedOrder.orderType === 'corporate';
+      const completedLiveDetails = getLiveCorporateDetails(completedOrder);
       const completedCustomerEmail = completedIsCorporate
-        ? (completedOrder.contactPerson?.email || completedOrder.corporateCustomer?.email)
+        ? (completedLiveDetails.contact?.email || completedLiveDetails.company?.email)
         : completedOrder.personalInfo?.email;
 
       if (completedCustomerEmail && completedCustomerEmail.includes('@')) {
@@ -2559,10 +2560,11 @@ const WorkshopPage = () => {
       return;
     }
 
-    const customerEmail = selectedOrder.orderType === 'corporate' 
-      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+    const liveDetails = getLiveCorporateDetails(selectedOrder);
+    const customerEmail = selectedOrder.orderType === 'corporate'
+      ? liveDetails.contact?.email || liveDetails.company?.email
       : selectedOrder.personalInfo?.email;
-      
+
     if (!customerEmail) {
       showError('No email address found for this customer');
       return;
@@ -2574,15 +2576,15 @@ const WorkshopPage = () => {
       // Prepare order data in the same format as NewOrderPage
       const isCorporate = selectedOrder.orderType === 'corporate';
       const corporateDisplayName =
-        selectedOrder.contactPerson?.name ||
-        selectedOrder.corporateCustomer?.corporateName ||
+        liveDetails.contact?.name ||
+        liveDetails.company?.corporateName ||
         'Customer';
 
       const orderDataForEmail = isCorporate
         ? {
             // Keep these for other templates / future use
-            corporateCustomer: selectedOrder.corporateCustomer,
-            contactPerson: selectedOrder.contactPerson,
+            corporateCustomer: liveDetails.company,
+            contactPerson: liveDetails.contact,
 
             // Normalized fields expected by generateOrderEmailTemplate
             personalInfo: {
@@ -2636,8 +2638,9 @@ const WorkshopPage = () => {
       showError('No order selected');
       return;
     }
+    const liveDetails = getLiveCorporateDetails(selectedOrder);
     const customerEmail = selectedOrder.orderType === 'corporate'
-      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      ? liveDetails.contact?.email || liveDetails.company?.email
       : selectedOrder.personalInfo?.email;
     if (!customerEmail) {
       showError('No email address found for this customer');
@@ -2649,8 +2652,8 @@ const WorkshopPage = () => {
       paymentData: paymentData || selectedOrder.paymentDetails,
       paymentDetails: paymentData || selectedOrder.paymentDetails,
       personalInfo: selectedOrder.personalInfo,
-      corporateCustomer: selectedOrder.corporateCustomer,
-      contactPerson: selectedOrder.contactPerson,
+      corporateCustomer: liveDetails.company,
+      contactPerson: liveDetails.contact,
     };
     try {
       setSendingDepositReminderEmail(true);
@@ -2751,22 +2754,23 @@ const WorkshopPage = () => {
 
   const handleSendPickupReadyEmail = async () => {
     if (!selectedOrder) return;
+    const liveDetails = getLiveCorporateDetails(selectedOrder);
     const customerEmail = selectedOrder.orderType === 'corporate'
-      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+      ? liveDetails.contact?.email || liveDetails.company?.email
       : selectedOrder.personalInfo?.email;
     if (!customerEmail) {
       showError('No email address found for this customer');
       return;
     }
     let balanceVal = parseFloat(pickupRemainingBalance) || 0;
-    
+
     // Round the balance to nearest integer if payment method is cash
     if (pickupPaymentMethod === 'cash') {
       balanceVal = Math.round(balanceVal);
     }
 
     const pickupOptions = {
-      customerName: selectedOrder.personalInfo?.customerName || selectedOrder.contactPerson?.name || 'Customer',
+      customerName: selectedOrder.personalInfo?.customerName || liveDetails.contact?.name || 'Customer',
       pickupDate: formatPickupDateForEmail(pickupEmailDate),
       timeStart: pickupTimeStart || '12:00 PM',
       timeEnd: pickupTimeEnd || '2:00 PM',
@@ -2796,8 +2800,9 @@ const WorkshopPage = () => {
     }
 
     // Get customer email
-    const customerEmail = selectedOrder.orderType === 'corporate' 
-      ? selectedOrder.contactPerson?.email || selectedOrder.corporateCustomer?.email
+    const liveDetails = getLiveCorporateDetails(selectedOrder);
+    const customerEmail = selectedOrder.orderType === 'corporate'
+      ? liveDetails.contact?.email || liveDetails.company?.email
       : selectedOrder.personalInfo?.email;
 
     // Check if customer has a valid email for sending
@@ -2841,8 +2846,8 @@ const WorkshopPage = () => {
 
       // Prepare order data for email
       const orderDataForEmail = selectedOrder.orderType === 'corporate' ? {
-        corporateCustomer: selectedOrder.corporateCustomer,
-        contactPerson: selectedOrder.contactPerson,
+        corporateCustomer: liveDetails.company,
+        contactPerson: liveDetails.contact,
         orderDetails: selectedOrder.orderDetails,
         paymentDetails: updatedPaymentData
       } : {
@@ -3269,8 +3274,9 @@ const WorkshopPage = () => {
 
   // Completion Email Functions
   const handleSendCompletionEmail = () => {
-    const customerEmail = selectedOrder?.orderType === 'corporate' 
-      ? selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email
+    const liveDetails = getLiveCorporateDetails(selectedOrder);
+    const customerEmail = selectedOrder?.orderType === 'corporate'
+      ? liveDetails.contact?.email || liveDetails.company?.email
       : selectedOrder?.personalInfo?.email;
       
     if (!customerEmail) {
@@ -3291,16 +3297,17 @@ const WorkshopPage = () => {
     // otherwise fall back to selectedOrder (for the manual "Send Completion Email" button)
     const orderToEmail = completedOrderForEmail || selectedOrder;
     const includeReview = completionEmailDialog.includeReview;
+    const liveDetails = getLiveCorporateDetails(orderToEmail);
 
     try {
       setSendingCompletionEmail(true);
       setCompletionEmailDialog({ open: false, sendEmail: false, includeReview: false });
       setCompletedOrderForEmail(null);
-      
+
       // Prepare order data for email — handle both corporate and regular orders
       const orderDataForEmail = orderToEmail.orderType === 'corporate' ? {
-        corporateCustomer: orderToEmail.corporateCustomer,
-        contactPerson: orderToEmail.contactPerson,
+        corporateCustomer: liveDetails.company,
+        contactPerson: liveDetails.contact,
         orderDetails: orderToEmail.orderDetails,
         furnitureData: {
           groups: orderToEmail.furnitureData?.groups || orderToEmail.furnitureGroups || []
@@ -3316,8 +3323,8 @@ const WorkshopPage = () => {
       };
 
       // Get customer email
-      const customerEmail = orderToEmail.orderType === 'corporate' 
-        ? orderToEmail.contactPerson?.email || orderToEmail.corporateCustomer?.email
+      const customerEmail = orderToEmail.orderType === 'corporate'
+        ? liveDetails.contact?.email || liveDetails.company?.email
         : orderToEmail.personalInfo?.email;
 
       // Progress callback for email sending
@@ -3782,8 +3789,9 @@ const WorkshopPage = () => {
                     <IconButton
                       size="small"
                       onClick={() => {
+                        const liveDetails = getLiveCorporateDetails(selectedOrder);
                         const rawEmail = selectedOrder?.orderType === 'corporate'
-                          ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email || '')
+                          ? (liveDetails.contact?.email || liveDetails.company?.email || '')
                           : (selectedOrder?.personalInfo?.email || '');
                         const email = (rawEmail || '').trim();
                         const bill = selectedOrder?.orderDetails?.billInvoice || selectedOrder?.id || 'N/A';
@@ -3795,7 +3803,7 @@ const WorkshopPage = () => {
                         });
                       }}
                       disabled={sendingEmail || !(selectedOrder?.orderType === 'corporate'
-                        ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                        ? (getLiveCorporateDetails(selectedOrder).contact?.email || getLiveCorporateDetails(selectedOrder).company?.email)
                         : selectedOrder?.personalInfo?.email)}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
@@ -3973,7 +3981,7 @@ const WorkshopPage = () => {
                       size="small"
                       onClick={handleSendCompletionEmail}
                       disabled={sendingCompletionEmail || selectedOrder?.orderType === 'corporate' || !(selectedOrder?.orderType === 'corporate'
-                        ? (selectedOrder?.contactPerson?.email || selectedOrder?.corporateCustomer?.email)
+                        ? (getLiveCorporateDetails(selectedOrder).contact?.email || getLiveCorporateDetails(selectedOrder).company?.email)
                         : selectedOrder?.personalInfo?.email)}
                       sx={{
                         background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
