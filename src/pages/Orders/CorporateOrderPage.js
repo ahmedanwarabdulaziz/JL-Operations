@@ -514,11 +514,41 @@ const CorporateOrderPage = () => {
 
       const finalInvoiceNumber = `T-${finalNumberPart}`;
 
+      // If the selected customer isn't an actual corporateCustomers document
+      // (e.g. a temporary "quote customer" carried over from a converted
+      // quote), promote it into the corporateCustomers collection now so it
+      // shows up on the Corporate Customers page.
+      let customerId = selectedCustomer.id;
+      let contactPersonId = selectedContactPerson.id;
+      const existsInCorporateCustomers = corporateCustomers.some((c) => c.id === customerId);
+
+      if (!existsInCorporateCustomers) {
+        const contactPersonsToSave = selectedCustomer.contactPersons?.length
+          ? selectedCustomer.contactPersons
+          : [selectedContactPerson];
+
+        const newCustomerRef = await addDoc(collection(db, 'corporateCustomers'), {
+          corporateName: selectedCustomer.corporateName || '',
+          email: selectedCustomer.email || '',
+          phone: selectedCustomer.phone || '',
+          address: selectedCustomer.address || '',
+          contactPersons: contactPersonsToSave,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+        customerId = newCustomerRef.id;
+        const matchedContact = contactPersonsToSave.find(
+          (cp) => cp.id === selectedContactPerson.id || cp.name === selectedContactPerson.name
+        );
+        contactPersonId = matchedContact?.id || selectedContactPerson.id;
+      }
+
       // Build the shared order payload
       const corporateOrderData = {
         // Corporate customer info
         corporateCustomer: {
-          id: selectedCustomer.id,
+          id: customerId,
           corporateName: selectedCustomer.corporateName || '',
           email: selectedCustomer.email || '',
           phone: selectedCustomer.phone || '',
@@ -526,7 +556,7 @@ const CorporateOrderPage = () => {
         },
         // Contact person info
         contactPerson: {
-          id: selectedContactPerson.id,
+          id: contactPersonId,
           name: selectedContactPerson.name || '',
           email: selectedContactPerson.email || '',
           phone: selectedContactPerson.phone || '',
