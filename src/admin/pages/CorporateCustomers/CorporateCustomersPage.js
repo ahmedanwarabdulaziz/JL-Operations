@@ -341,23 +341,36 @@ const CorporateCustomersPage = () => {
                       </TableCell>
                       <TableCell>
                         {primaryContact ? (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <PersonIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
-                            <Typography variant="body2">{primaryContact.name}</Typography>
-                            {primaryContact.isPrimary && (
-                              <Chip
-                                label="Primary"
-                                size="small"
-                                sx={{
-                                  backgroundColor: '#d4af5a',
-                                  color: '#000000',
-                                  fontSize: '0.7rem',
-                                  height: '20px',
-                                  fontWeight: 'bold'
-                                }}
-                              />
-                            )}
-                          </Box>
+                          <Tooltip title="Edit contact person">
+                            <Box
+                              onClick={() => handleOpenContactPersonDialog(customer, primaryContact)}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                                cursor: 'pointer',
+                                width: 'fit-content',
+                                '&:hover': { color: '#b98f33' }
+                              }}
+                            >
+                              <PersonIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
+                              <Typography variant="body2">{primaryContact.name}</Typography>
+                              {primaryContact.isPrimary && (
+                                <Chip
+                                  label="Primary"
+                                  size="small"
+                                  sx={{
+                                    backgroundColor: '#d4af5a',
+                                    color: '#000000',
+                                    fontSize: '0.7rem',
+                                    height: '20px',
+                                    fontWeight: 'bold'
+                                  }}
+                                />
+                              )}
+                              <EditIcon sx={{ fontSize: 14, color: '#bbbbbb' }} />
+                            </Box>
+                          </Tooltip>
                         ) : (
                           <Typography variant="body2" sx={{ color: '#999999', fontStyle: 'italic' }}>
                             No contact person
