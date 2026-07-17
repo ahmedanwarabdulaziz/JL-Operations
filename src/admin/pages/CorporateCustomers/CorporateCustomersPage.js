@@ -10,15 +10,13 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Collapse,
   IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Grid,
-  Card,
-  CardContent,
   Chip,
   Tooltip,
   Alert,
@@ -28,10 +26,6 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Divider,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   List,
   ListItem,
   ListItemButton,
@@ -49,7 +43,8 @@ import {
   Phone as PhoneIcon,
   LocationOn as LocationIcon,
   MoreVert as MoreVertIcon,
-  ExpandMore as ExpandMoreIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  KeyboardArrowUp as KeyboardArrowUpIcon,
   PersonAdd as PersonAddIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
@@ -71,6 +66,11 @@ const CorporateCustomersPage = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
+  const [expandedRows, setExpandedRows] = useState({});
+
+  const toggleRowExpanded = (customerId) => {
+    setExpandedRows((prev) => ({ ...prev, [customerId]: !prev[customerId] }));
+  };
 
   // Corporate Customer Form State
   // Contact Person Form State
@@ -294,294 +294,191 @@ const CorporateCustomersPage = () => {
           <CircularProgress sx={{ color: '#d4af5a' }} />
         </Box>
       ) : (
-        <Grid container spacing={3}>
-          {corporateCustomers.map((customer) => (
-            <Grid item xs={12} md={6} lg={4} key={customer.id} sx={{ display: 'flex', minWidth: 0 }}>
-              <Card sx={{ 
-                width: '100%',
-                maxWidth: '100%',
-                minWidth: 0,
-                minHeight: '450px',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                borderRadius: 2,
-                boxShadow: 2,
-                boxSizing: 'border-box',
-                '&:hover': {
-                  boxShadow: 4
-                }
-              }}>
-                <CardContent sx={{ flexGrow: 1, p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
-                      {customer.corporateName}
-                    </Typography>
-                    <IconButton
-                      onClick={(e) => handleMenuClick(e, customer)}
-                      sx={{ 
-                        color: '#d4af5a',
-                        backgroundColor: 'rgba(212, 175, 90, 0.1)',
-                        border: '2px solid #d4af5a',
-                        '&:hover': {
-                          backgroundColor: 'rgba(212, 175, 90, 0.2)',
-                          borderColor: '#b98f33',
-                          boxShadow: '0 2px 4px rgba(212, 175, 90, 0.3)'
-                        }
-                      }}
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
-                  </Box>
+        <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 2 }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: 'rgba(212, 175, 90, 0.08)' }}>
+                <TableCell sx={{ width: 48 }} />
+                <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>Company</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>Primary Contact</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }}>Phone</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', color: '#b98f33' }} align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {corporateCustomers.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#999999', fontStyle: 'italic' }}>
+                    No corporate customers yet
+                  </TableCell>
+                </TableRow>
+              )}
+              {corporateCustomers.map((customer) => {
+                const contactPersons = customer.contactPersons || [];
+                const primaryContact = contactPersons.find(cp => cp.isPrimary) || contactPersons[0] || null;
+                const otherContacts = contactPersons.filter(cp => cp.id !== primaryContact?.id);
+                const isExpanded = Boolean(expandedRows[customer.id]);
+                const hasExpandableContent = otherContacts.length > 0 || Boolean(customer.address);
 
-                  {/* Primary Contact Person */}
-                  <Divider sx={{ my: 2 }} />
-                  {customer.contactPersons && customer.contactPersons.length > 0 ? (
-                    (() => {
-                      const primaryContact = customer.contactPersons.find(cp => cp.isPrimary) || customer.contactPersons[0];
-                      return (
-                        <Box sx={{ 
-                          mb: 2,
-                          p: 2.5,
-                          border: '2px solid #d4af5a',
-                          borderRadius: 2,
-                          backgroundColor: 'rgba(212, 175, 90, 0.05)',
-                          position: 'relative',
-                          boxShadow: '0 2px 8px rgba(212, 175, 90, 0.15)',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: '3px',
-                            background: 'linear-gradient(90deg, #b98f33 0%, #d4af5a 50%, #b98f33 100%)',
-                            borderRadius: '2px 2px 0 0'
-                          }
-                        }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            <PersonIcon sx={{ fontSize: 20, color: '#d4af5a' }} />
-                            <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#d4af5a' }}>
-                              {primaryContact.name}
-                            </Typography>
+                return (
+                  <React.Fragment key={customer.id}>
+                    <TableRow
+                      hover
+                      sx={{ '& > *': { borderBottom: isExpanded ? 'unset' : undefined } }}
+                    >
+                      <TableCell>
+                        {hasExpandableContent && (
+                          <IconButton size="small" onClick={() => toggleRowExpanded(customer.id)}>
+                            {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                          </IconButton>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#b98f33' }}>
+                          {customer.corporateName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        {primaryContact ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <PersonIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
+                            <Typography variant="body2">{primaryContact.name}</Typography>
                             {primaryContact.isPrimary && (
-                              <Chip 
-                                label="Primary" 
-                                size="small" 
-                                sx={{ 
-                                  backgroundColor: '#d4af5a', 
+                              <Chip
+                                label="Primary"
+                                size="small"
+                                sx={{
+                                  backgroundColor: '#d4af5a',
                                   color: '#000000',
                                   fontSize: '0.7rem',
                                   height: '20px',
                                   fontWeight: 'bold'
-                                }} 
+                                }}
                               />
                             )}
                           </Box>
-                          {primaryContact.position && (
-                            <Typography variant="body2" sx={{ color: '#666666', mb: 1.5, ml: 4 }}>
-                              {primaryContact.position}
-                            </Typography>
-                          )}
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, ml: 4 }}>
-                            {primaryContact.email && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <EmailIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
-                                <Typography variant="body2" color="text.secondary">
-                                  {primaryContact.email}
-                                </Typography>
-                              </Box>
-                            )}
-                            {primaryContact.phone && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <PhoneIcon sx={{ fontSize: 16, color: '#d4af5a' }} />
-                                <Typography variant="body2" color="text.secondary">
-                                  {primaryContact.phone}
-                                </Typography>
-                              </Box>
-                            )}
-                          </Box>
-                        </Box>
-                      );
-                    })()
-                  ) : (
-                    <Box sx={{ 
-                      mb: 2, 
-                      textAlign: 'center', 
-                      py: 2,
-                      border: '2px dashed #d4af5a',
-                      borderRadius: 2,
-                      backgroundColor: 'rgba(212, 175, 90, 0.03)'
-                    }}>
-                      <Typography variant="body2" sx={{ color: '#999999', fontStyle: 'italic' }}>
-                        No contact person added yet
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Other Contact Persons (if more than one) */}
-                  {customer.contactPersons && customer.contactPersons.length > 1 && (
-                    <Accordion sx={{ boxShadow: 'none', '&:before': { display: 'none' }, mb: 2 }}>
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon sx={{ color: '#d4af5a' }} />}
-                        sx={{ 
-                          minHeight: 'auto',
-                          '&.Mui-expanded': { minHeight: 'auto' },
-                          '& .MuiAccordionSummary-content': { margin: '8px 0' }
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold' }}>
-                          Other Contacts ({customer.contactPersons.length - 1})
+                        ) : (
+                          <Typography variant="body2" sx={{ color: '#999999', fontStyle: 'italic' }}>
+                            No contact person
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {primaryContact?.email || '—'}
                         </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0 }}>
-                        <List dense>
-                          {customer.contactPersons
-                            .filter(cp => {
-                              const primaryContact = customer.contactPersons.find(c => c.isPrimary) || customer.contactPersons[0];
-                              return cp.id !== primaryContact.id;
-                            })
-                            .map((contactPerson) => (
-                            <ListItem key={contactPerson.id} sx={{ px: 0 }}>
-                              <ListItemButton
-                                onClick={() => handleOpenContactPersonDialog(customer, contactPerson)}
-                                sx={{ 
-                                  borderRadius: 1,
-                                  '&:hover': { backgroundColor: '#f5f5f5' }
-                                }}
-                              >
-                                <MuiListItemText
-                                  primary={
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                        {contactPerson.name}
-                                      </Typography>
-                                      {contactPerson.isPrimary && (
-                                        <Chip 
-                                          label="Primary" 
-                                          size="small" 
-                                          sx={{ 
-                                            backgroundColor: '#d4af5a', 
-                                            color: '#000000',
-                                            fontSize: '0.7rem',
-                                            height: '20px'
-                                          }} 
-                                        />
-                                      )}
-                                    </Box>
-                                  }
-                                  secondary={
-                                    <Box>
-                                      <Typography variant="caption" sx={{ color: '#666666' }}>
-                                        {contactPerson.position}
-                                      </Typography>
-                                      <br />
-                                      <Typography variant="caption" sx={{ color: '#666666' }}>
-                                        {contactPerson.email} • {contactPerson.phone}
-                                      </Typography>
-                                    </Box>
-                                  }
-                                />
-                              </ListItemButton>
-                              <ListItemSecondaryAction>
-                                <MuiIconButton
-                                  edge="end"
-                                  onClick={() => handleDeleteContactPerson(customer.id, contactPerson.id)}
-                                  sx={{ color: '#ff4444' }}
-                                  size="small"
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </MuiIconButton>
-                              </ListItemSecondaryAction>
-                            </ListItem>
-                          ))}
-                        </List>
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-
-                  {/* Address (if exists) */}
-                  {customer.address && (
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 2 }}>
-                      <LocationIcon sx={{ fontSize: 16, color: 'text.secondary', mt: 0.5 }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {customer.address}
-                      </Typography>
-                    </Box>
-                  )}
-
-                  {/* Action Buttons - Always at bottom */}
-                  <Box sx={{ mt: 'auto', pt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Button
-                      startIcon={<ReceiptIcon />}
-                      onClick={() => navigate(`/admin/corporate-customers/${customer.id}/invoices`)}
-                      variant="contained"
-                      sx={{
-                        width: '100%',
-                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                        color: '#000000',
-                        border: '3px solid #4CAF50',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                        position: 'relative',
-                        fontWeight: 'bold',
-                        '&:hover': {
-                          background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                          border: '3px solid #45a049',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-                        },
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: '50%',
-                          background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                          borderRadius: '4px 4px 0 0',
-                          pointerEvents: 'none'
-                        }
-                      }}
-                    >
-                      View Invoices
-                    </Button>
-                    <Button
-                      startIcon={<PersonAddIcon />}
-                      onClick={() => handleOpenContactPersonDialog(customer)}
-                      variant="contained"
-                      sx={{
-                        width: '100%',
-                        background: 'linear-gradient(145deg, #d4af5a 0%, #b98f33 50%, #8b6b1f 100%)',
-                        color: '#000000',
-                        border: '3px solid #4CAF50',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.3)',
-                        position: 'relative',
-                        fontWeight: 'bold',
-                        '&:hover': {
-                          background: 'linear-gradient(145deg, #e6c47a 0%, #d4af5a 50%, #b98f33 100%)',
-                          border: '3px solid #45a049',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 12px rgba(0,0,0,0.4)'
-                        },
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          height: '50%',
-                          background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 100%)',
-                          borderRadius: '4px 4px 0 0',
-                          pointerEvents: 'none'
-                        }
-                      }}
-                    >
-                      Add Contact Person
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" color="text.secondary">
+                          {primaryContact?.phone || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          <Tooltip title="View Invoices">
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(`/admin/corporate-customers/${customer.id}/invoices`)}
+                              sx={{ color: '#d4af5a' }}
+                            >
+                              <ReceiptIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Add Contact Person">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenContactPersonDialog(customer)}
+                              sx={{ color: '#d4af5a' }}
+                            >
+                              <PersonAddIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleMenuClick(e, customer)}
+                            sx={{ color: '#d4af5a' }}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                    {hasExpandableContent && (
+                      <TableRow>
+                        <TableCell sx={{ py: 0 }} colSpan={6}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ py: 2, px: 2 }}>
+                              {customer.address && (
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: otherContacts.length > 0 ? 2 : 0 }}>
+                                  <LocationIcon sx={{ fontSize: 16, color: 'text.secondary', mt: 0.3 }} />
+                                  <Typography variant="body2" color="text.secondary">
+                                    {customer.address}
+                                  </Typography>
+                                </Box>
+                              )}
+                              {otherContacts.length > 0 && (
+                                <>
+                                  <Typography variant="body2" sx={{ color: '#d4af5a', fontWeight: 'bold', mb: 1 }}>
+                                    Other Contacts ({otherContacts.length})
+                                  </Typography>
+                                  <List dense sx={{ py: 0 }}>
+                                    {otherContacts.map((contactPerson) => (
+                                      <ListItem key={contactPerson.id} sx={{ px: 0 }}>
+                                        <ListItemButton
+                                          onClick={() => handleOpenContactPersonDialog(customer, contactPerson)}
+                                          sx={{
+                                            borderRadius: 1,
+                                            '&:hover': { backgroundColor: '#f5f5f5' }
+                                          }}
+                                        >
+                                          <MuiListItemText
+                                            primary={
+                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                                  {contactPerson.name}
+                                                </Typography>
+                                              </Box>
+                                            }
+                                            secondary={
+                                              <Box>
+                                                <Typography variant="caption" sx={{ color: '#666666' }}>
+                                                  {contactPerson.position}
+                                                </Typography>
+                                                <br />
+                                                <Typography variant="caption" sx={{ color: '#666666' }}>
+                                                  {contactPerson.email} • {contactPerson.phone}
+                                                </Typography>
+                                              </Box>
+                                            }
+                                          />
+                                        </ListItemButton>
+                                        <ListItemSecondaryAction>
+                                          <MuiIconButton
+                                            edge="end"
+                                            onClick={() => handleDeleteContactPerson(customer.id, contactPerson.id)}
+                                            sx={{ color: '#ff4444' }}
+                                            size="small"
+                                          >
+                                            <DeleteIcon fontSize="small" />
+                                          </MuiIconButton>
+                                        </ListItemSecondaryAction>
+                                      </ListItem>
+                                    ))}
+                                  </List>
+                                </>
+                              )}
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       <CorporateCustomerDialog
